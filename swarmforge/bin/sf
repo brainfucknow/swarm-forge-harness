@@ -322,7 +322,34 @@ cmd_new() {
   set_stage "$id" "$(first_in_route "$route")"
   branch="$(branch_of "$id")"
   (cd "$(repo_root)" && git branch "$branch" >/dev/null)
+  comment "$id" <<EOF
+type: created
+from: operator
+branch: $branch
+commit: $(cd "$(repo_root)" && git rev-parse --short "$branch")
+route: $route
+EOF
   echo "$short"
+}
+
+# The commit the last record on the task named: the previous handoff, review,
+# or the branch point from `created`.
+last_recorded_commit() { bug show "$1" | sed -n 's/^ *commit: //p' | tail -n 1; }
+
+# Files changed on the task branch since the last recorded commit, as one
+# comma-separated header value, or - when nothing changed.
+files_since_last_record() {
+  local id="$1" dir="$2" prev files count
+  prev="$(last_recorded_commit "$id")"
+  [ -n "$prev" ] && (cd "$dir" && git rev-parse --verify --quiet "$prev^{commit}" >/dev/null) || { echo "-"; return 0; }
+  files="$(cd "$dir" && git diff --name-only "$prev..HEAD")"
+  [ -n "$files" ] || { echo "-"; return 0; }
+  count="$(echo "$files" | wc -l | tr -d ' ')"
+  if [ "$count" -gt 40 ]; then
+    echo "$(echo "$files" | head -n 40 | paste -sd ',' -),+$((count - 40)) more"
+  else
+    echo "$files" | paste -sd ',' -
+  fi
 }
 
 cmd_route() {
@@ -423,12 +450,14 @@ cmd_handoff() {
   [ "$branch" = "$(branch_of "$id")" ] || die "worktree is on '$branch', expected '$(branch_of "$id")'"
   head="$(cd "$dir" && git rev-parse --short HEAD)"
   [ -n "$summary" ] || summary="$from work complete"
+  local files; files="$(files_since_last_record "$id" "$dir")"
   comment "$id" <<EOF
 type: handoff
 from: $from
 to: $to
 branch: $branch
 commit: $head
+files: $files
 summary: $summary
 EOF
   set_stage "$id" "$to"
@@ -468,10 +497,12 @@ cmd_review() {
   local dirty; dirty="$(cd "$dir" && git status --porcelain)"
   [ -z "$dirty" ] || die "uncommitted changes in $dir; commit first"
   local head; head="$(cd "$dir" && git rev-parse --short HEAD)"
+  local files; files="$(files_since_last_record "$id" "$dir")"
   comment "$id" <<EOF
 type: review
 from: $(acting_role "$id")
 commit: $head
+files: $files
 summary: $summary
 EOF
   add_label "$id" "needs:approval"

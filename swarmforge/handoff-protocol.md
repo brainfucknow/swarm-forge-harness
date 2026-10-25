@@ -28,13 +28,26 @@ Every record is a comment with `key: value` headers. Later roles read them
 from `sf start`; the operator reads them from `sf show`.
 
 ```text
+type: created
+from: operator
+branch: swarm/3d9502c
+commit: 1c0ffee
+route: specifier,coder,cleaner,architect,hardener,qa
+```
+
+```text
 type: handoff
 from: coder
 to: cleaner
 branch: swarm/3d9502c
 commit: 9f1c2ab
+files: src/Login.cs,test/LoginTest.cs
 summary: login scenarios pass
 ```
+
+`files` lists what changed on the branch since the previous record's
+`commit` (the branch point for the first one), capped at forty names, or `-`
+when nothing changed. `review` records carry the same header.
 
 ```text
 type: question
@@ -52,6 +65,7 @@ answer: argon2id
 type: review
 from: specifier
 commit: 4e21d0c
+files: features/login.feature,qa/login.md
 summary: login spec and QA procedure
 ```
 

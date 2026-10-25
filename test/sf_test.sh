@@ -58,6 +58,8 @@ full="specifier,coder,cleaner,architect,hardener,qa"
 assert_eq "new defaults to the feature route" "$(sf route "$id")" "$full"
 assert_eq "new creates the task branch" "$(git branch --list "swarm/$id" | tr -d ' *')" "swarm/$id"
 assert_match "show prints the body" "$(sf show "$id")" "email and password"
+assert_match "new records the branch point" "$(sf show "$id")" "type: created"
+assert_match "created names the base commit" "$(sf show "$id")" "commit: $(git rev-parse --short main)"
 
 # next
 assert_eq "next finds the task for its stage" "$(sf next specifier)" "$id"
@@ -99,6 +101,7 @@ git -C ".worktrees/$id" reset -q --hard "$sha"
 # review and approval gate
 out="$(sf review "$id" -m "spec ready")"
 assert_match "review asks for approval" "$out" "waits for operator approval"
+assert_match "review lists the files since the branch point" "$(sf show "$id")" "^ *files: login.feature$"
 assert_match "review labels needs:approval" "$(sf ls --needs)" "^$id	specifier	approval	"
 assert_fails "handoff while waiting for approval" sf handoff "$id"
 assert_eq "next skips tasks waiting on the operator" "$(sf next specifier)" "NO_TASK"
@@ -110,6 +113,12 @@ out="$(sf approve "$id")"
 assert_match "approve hands off to the next stage" "$out" "^HANDOFF: $id specifier -> coder at $sha$"
 assert_eq "approve moves the stage" "$(sf stage "$id")" "coder"
 assert_match "handoff comment records the commit" "$(sf show "$id")" "commit: $sha"
+assert_match "handoff with no new commits lists no files" "$(sf show "$id")" "^ *files: -$"
+echo "Feature: logout" > ".worktrees/$id/logout.feature"
+echo "Feature: login v2" > ".worktrees/$id/login.feature"
+git -C ".worktrees/$id" add -A && git -C ".worktrees/$id" commit -q -m "Add logout"
+SWARMFORGE_ROLE=coder sf handoff "$id" --to coder >/dev/null
+assert_match "handoff lists files since the previous record" "$(sf show "$id")" "^ *files: login.feature,logout.feature$"
 assert_fails "approve when not waiting" sf approve "$id"
 
 # questions
