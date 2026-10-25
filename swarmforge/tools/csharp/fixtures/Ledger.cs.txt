@@ -1,0 +1,26 @@
+namespace Bank
+{
+    public class Ledger
+    {
+        public void Deposit(int amount)
+        {
+            total += amount;
+        }
+
+        [Obsolete("use Withdraw(int, bool)")]
+        public bool Withdraw(int amount,
+                             bool allowOverdraft)
+        {
+            if (amount > total && !allowOverdraft) { return false; }
+            total -= amount;
+            return true;
+        }
+
+        public int Balance()
+        {
+            return total;
+        }
+
+        private int total;
+    }
+}

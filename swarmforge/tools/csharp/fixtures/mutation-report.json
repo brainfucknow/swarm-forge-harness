@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1",
+  "thresholds": { "high": 80, "low": 60 },
+  "files": {
+    "Bank/Ledger.cs": {
+      "language": "cs",
+      "source": "",
+      "mutants": [
+        { "id": "1", "mutatorName": "Arithmetic mutation", "replacement": "total -= amount", "location": { "start": { "line": 7, "column": 13 }, "end": { "line": 7, "column": 28 } }, "status": "Killed" },
+        { "id": "2", "mutatorName": "Equality mutation", "replacement": "amount >= total", "location": { "start": { "line": 14, "column": 17 }, "end": { "line": 14, "column": 31 } }, "status": "Survived", "description": "> replaced with >=" },
+        { "id": "3", "mutatorName": "Boolean mutation", "replacement": "true", "location": { "start": { "line": 14, "column": 59 }, "end": { "line": 14, "column": 64 } }, "status": "NoCoverage" },
+        { "id": "4", "mutatorName": "Block removal", "replacement": "{}", "location": { "start": { "line": 20, "column": 9 }, "end": { "line": 22, "column": 10 } }, "status": "Ignored" }
+      ]
+    },
+    "Bank/Audit.cs": {
+      "language": "cs",
+      "source": "",
+      "mutants": [
+        { "id": "5", "mutatorName": "Statement mutation", "replacement": ";", "location": { "start": { "line": 5, "column": 13 }, "end": { "line": 5, "column": 40 } }, "status": "Timeout" }
+      ]
+    }
+  }
+}

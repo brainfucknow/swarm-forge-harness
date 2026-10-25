@@ -1,0 +1,26 @@
+{
+  "statistics": { "total": { "clones": 3 } },
+  "duplicates": [
+    {
+      "format": "csharp",
+      "lines": 3,
+      "tokens": 64,
+      "firstFile": { "name": "Bank/Ledger.cs", "start": 13, "end": 15 },
+      "secondFile": { "name": "Bank/Legacy.cs", "start": 30, "end": 32 }
+    },
+    {
+      "format": "csharp",
+      "lines": 5,
+      "tokens": 80,
+      "firstFile": { "name": "Bank/Legacy.cs", "start": 1, "end": 5 },
+      "secondFile": { "name": "Bank/Older.cs", "start": 1, "end": 5 }
+    },
+    {
+      "format": "csharp",
+      "lines": 2,
+      "tokens": 52,
+      "firstFile": { "name": "/nonexistent/checkout/Bank/Audit.cs", "start": 4, "end": 5 },
+      "secondFile": { "name": "Bank\\Older.cs", "start": 9, "end": 10 }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<coverage line-rate="0.7" branch-rate="0.5" version="1.9" timestamp="1792900000" lines-covered="7" lines-valid="10" branches-covered="2" branches-valid="4">
+  <sources>
+    <source>/nonexistent/checkout/</source>
+  </sources>
+  <packages>
+    <package name="Bank" line-rate="0.7" branch-rate="0.5" complexity="6">
+      <classes>
+        <class name="Bank.Ledger" filename="Bank/Ledger.cs" line-rate="0.7" branch-rate="0.5" complexity="6">
+          <methods>
+            <method name="Deposit" signature="(System.Int32)" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="6" hits="4" branch="False" />
+                <line number="7" hits="4" branch="False" />
+                <line number="8" hits="4" branch="False" />
+              </lines>
+            </method>
+            <method name="Withdraw" signature="(System.Int32,System.Boolean)" line-rate="0.25" branch-rate="0" complexity="4">
+              <lines>
+                <line number="13" hits="1" branch="False" />
+                <line number="14" hits="0" branch="True" condition-coverage="0% (0/4)" />
+                <line number="15" hits="0" branch="False" />
+                <line number="16" hits="0" branch="False" />
+                <line number="17" hits="0" branch="False" />
+              </lines>
+            </method>
+            <method name="Balance" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="20" hits="2" branch="False" />
+                <line number="21" hits="2" branch="False" />
+                <line number="22" hits="2" branch="False" />
+              </lines>
+            </method>
+            <method name=".ctor" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+              </lines>
+            </method>
+          </methods>
+          <lines>
+            <line number="6" hits="4" branch="False" />
+          </lines>
+        </class>
+        <class name="Bank.Audit&lt;T&gt;" filename="Bank/Audit.cs" line-rate="0" branch-rate="0" complexity="2">
+          <methods>
+            <method name="Record" signature="(T)" line-rate="0" branch-rate="0" complexity="2">
+              <lines>
+                <line number="4" hits="0" branch="False" />
+                <line number="5" hits="0" branch="True" condition-coverage="0% (0/2)" />
+              </lines>
+            </method>
+          </methods>
+          <lines>
+            <line number="4" hits="0" branch="False" />
+          </lines>
+        </class>
+      </classes>
+    </package>
+  </packages>
+</coverage>
