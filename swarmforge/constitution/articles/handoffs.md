@@ -14,7 +14,7 @@ record formats.
 
 ## Sending Work
 - Commit first. `sf handoff` refuses an uncommitted worktree.
-- `sf handoff <id> -m "<one line>"` records your HEAD and moves the task to the next role in `swarmforge/roles.conf`. After the last role it moves the task to `stage:done`.
+- `sf handoff <id> -m "<one line>"` records your HEAD and moves the task to the next role on its route (`ROUTE:` from `sf start`). After the last role on the route it moves the task to `stage:done`. A role not on the route is not consulted; do not do its work for it.
 - Always hand off after completing a task, regardless of what changed. Formatting-only, manifest-only, audit-only, and other non-functional churn still move forward.
 - Pass `--to <role>` only when your role prompt says so. Do not send work backwards.
 - Do not write long handoff summaries. One line. The commits are the content.

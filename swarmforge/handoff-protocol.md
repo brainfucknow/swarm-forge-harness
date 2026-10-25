@@ -12,7 +12,8 @@ is the only writer.
 |---|---|---|
 | Title | issue title | Short stable task name. |
 | Body | first comment | The operator's request, in their words. |
-| `stage:<role>` | label, exactly one | The role that owns the task now. `stage:done` after the last role. |
+| `route:<role>,<role>,…` | label, exactly one | The roles this task visits, in catalogue order. Set by `sf new --route`, changed by `sf route`. |
+| `stage:<role>` | label, exactly one | The role that owns the task now. `stage:done` after the last role on the route. |
 | `needs:operator` | label | A role asked a question. Nothing moves until `sf answer`. |
 | `needs:approval` | label | The specifier asked for approval. Nothing moves until `sf approve` or `sf reject`. |
 | `swarm/<id>` | git branch | All work for the task, every role in sequence. |
@@ -66,6 +67,12 @@ reason: split the lockout scenarios into their own feature
 ```
 
 ```text
+type: route
+from: operator
+route: specifier,coder,cleaner,qa
+```
+
+```text
 type: finished
 from: operator
 merged-into: main
@@ -89,10 +96,16 @@ sf new ──► stage:<first role>
          needs:operator ──sf answer──► same stage           closed, merged
 ```
 
+- `sf new` records the route (`--route`, else `SWARMFORGE_ROUTE`, else
+  `feature` from `swarmforge/routes.conf`, else every role) and sets the stage
+  to its first role. A route is any subset of `swarmforge/roles.conf` in that
+  file's order.
 - `sf handoff` requires a clean worktree on the task branch and no `needs:*`
-  label. It records HEAD and moves the stage to the next role in
-  `swarmforge/roles.conf`, or to `done` after the last one. `--to <role>` jumps
-  elsewhere; role prompts say when that is allowed.
+  label. It records HEAD and moves the stage to the next role on the task's
+  route, or to `done` after the last one. `--to <role>` jumps elsewhere; role
+  prompts say when that is allowed.
+- `sf route <id> <route>` changes an open task's route; the new route must
+  contain the current stage. The change is recorded as `type: route`.
 - `sf next <role>` lists open tasks at that stage with no `needs:*` label, so a
   blocked task is invisible to the role until the operator acts.
 - `sf finish` merges `swarm/<id>` into the base branch with `--no-ff`, removes

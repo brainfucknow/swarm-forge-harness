@@ -13,7 +13,9 @@ usage: sf <command> [args]
 
 Operator commands
   init                           create the git-bug identity if none exists
-  new <title> [-m text | -F file] create a task at the first pipeline stage; prints its id
+  new <title> [-m text | -F file] [--route NAME|a,b,c]
+                                  create a task on a route; prints its id
+  route <id> [NAME|a,b,c]         print or change the task's route
   ls [--stage ROLE] [--needs]     list open tasks
   show <id>                       show a task with all comments
   answer <id> <text>              answer a role's question and clear needs:operator
@@ -29,14 +31,16 @@ Role commands
   ask <id> <text>                 record a question and stop: labels needs:operator
   review <id> [-m text]           ask the operator to approve the specification
 
-Pipeline commands
-  pipeline                        print the roles in forward order
+Catalogue commands
+  roles                           print the role catalogue in canonical order
+  routes                          print the named routes
   stage <id>                      print the task's current stage
   dispatch <role> <id> [backend]  run a role headlessly (claude, codex, copilot)
   run <id> [backend]              dispatch stage after stage until done or blocked
   adapters                        regenerate .claude/.codex/.github agent files
 
 Environment
+  SWARMFORGE_ROUTE     default route for `new` (default: feature, else every role)
   SWARMFORGE_ROLE      role name used for `from:` (default: the task's stage)
   SWARMFORGE_BACKEND   default backend for dispatch/run
   SWARMFORGE_GIT_BUG   git-bug executable (default: git-bug)
@@ -70,16 +74,61 @@ tier_field() {
   conf_lines "$(conf_dir)/tiers.conf" | awk -v t="$tier" -v c="$column" '$1==t {print $c}'
 }
 
-first_role() { pipeline | head -n 1; }
-
-next_role_after() {
-  local role="$1"
-  pipeline | awk -v r="$role" 'found {print; exit} $1==r {found=1}'
-}
-
 require_role() {
   local role="$1"
   pipeline | grep -qx "$role" || die "unknown role '$role' (see swarmforge/roles.conf)"
+}
+
+routes_conf() { echo "$(conf_dir)/routes.conf"; }
+
+named_routes() { [ -f "$(routes_conf)" ] && conf_lines "$(routes_conf)" || true; }
+
+route_named() { named_routes | awk -v n="$1" '$1==n {print $2}'; }
+
+# resolve_route <name | role,role,...>: prints the comma-separated role list.
+# Roles must exist and appear in catalogue order.
+resolve_route() {
+  local spec="$1" list
+  list="$(route_named "$spec")"
+  [ -n "$list" ] || list="$spec"
+  local role last=0 index
+  IFS=',' read -r -a roles <<< "$list"
+  [ "${#roles[@]}" -gt 0 ] || die "empty route"
+  for role in "${roles[@]}"; do
+    index="$(pipeline | awk -v r="$role" '$1==r {print NR}')"
+    [ -n "$index" ] || die "unknown role '$role' in route '$spec' (see swarmforge/roles.conf)"
+    [ "$index" -gt "$last" ] || die "route '$spec' is out of order; follow swarmforge/roles.conf: $(pipeline | paste -sd ',' -)"
+    last="$index"
+  done
+  echo "$list"
+}
+
+default_route() {
+  if [ -n "${SWARMFORGE_ROUTE:-}" ]; then resolve_route "$SWARMFORGE_ROUTE"
+  elif [ -n "$(route_named feature)" ]; then resolve_route feature
+  else pipeline | paste -sd ',' -
+  fi
+}
+
+route_of() {
+  local list
+  list="$(labels_of "$1" | sed -n 's/^route://p' | head -n 1)"
+  [ -n "$list" ] && echo "$list" || pipeline | paste -sd ',' -
+}
+
+set_route() {
+  local id="$1" route="$2" old
+  old="$(labels_of "$id" | sed -n 's/^route://p' | head -n 1)"
+  [ "$old" = "$route" ] && return 0
+  [ -n "$old" ] && bug label rm "$id" "route:$old" >/dev/null
+  bug label new "$id" "route:$route" >/dev/null
+}
+
+first_in_route() { echo "$1" | cut -d, -f1; }
+
+next_in_route() {
+  local route="$1" role="$2"
+  echo "$route" | tr ',' '\n' | awk -v r="$role" 'found {print; exit} $1==r {found=1}'
 }
 
 bug() { "$GIT_BUG" bug "$@"; }
@@ -152,21 +201,50 @@ cmd_init() {
     echo "identity: $name (created)"
   fi
   mkdir -p "$(repo_root)/$WORKTREE_DIR"
-  echo "pipeline: $(pipeline | tr '\n' ' ')"
+  echo "roles: $(pipeline | paste -sd ' ' -)"
+  echo "routes: $(named_routes | awk '{print $1}' | paste -sd ' ' -)"
 }
 
 cmd_new() {
   local title="${1:-}"; [ -n "$title" ] || die "new needs a title"; shift
-  local body; body="$(read_message "$title" "$@")"
+  local body="$title" route=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -m) [ $# -ge 2 ] || die "-m needs a value"; body="$2"; shift 2 ;;
+      -F) [ $# -ge 2 ] || die "-F needs a file"; body="$(cat "$2")"; shift 2 ;;
+      --route) [ $# -ge 2 ] || die "--route needs a value"; route="$(resolve_route "$2")"; shift 2 ;;
+      *) die "unknown new option '$1'" ;;
+    esac
+  done
+  [ -n "$route" ] || route="$(default_route)"
   local out id short branch
   out="$(bug new --non-interactive -t "$title" -m "$body" 2>/dev/null)"
   short="$(echo "$out" | awk '/created/ {print $1}')"
   [ -n "$short" ] || die "git-bug did not create the task: $out"
   id="$(bug_id "$short")"
-  set_stage "$id" "$(first_role)"
+  set_route "$id" "$route"
+  set_stage "$id" "$(first_in_route "$route")"
   branch="$(branch_of "$id")"
   (cd "$(repo_root)" && git branch "$branch" >/dev/null)
   echo "$short"
+}
+
+cmd_route() {
+  local id; id="$(bug_id "${1:-}")"; shift
+  local spec="${1:-}"
+  if [ -z "$spec" ]; then route_of "$id"; return 0; fi
+  [ "$(status_of "$id")" = "open" ] || die "task is closed"
+  local stage route; stage="$(stage_of "$id")"; route="$(resolve_route "$spec")"
+  if [ "$stage" != "done" ]; then
+    echo "$route" | tr ',' '\n' | grep -qx "$stage" || die "route '$route' does not contain the current stage '$stage'"
+  fi
+  comment "$id" <<EOF
+type: route
+from: operator
+route: $route
+EOF
+  set_route "$id" "$route"
+  echo "ROUTE: $(short_id "$id") $route"
 }
 
 cmd_ls() {
@@ -186,7 +264,7 @@ cmd_ls() {
     [ -n "$stage" ] && [ "$s" != "$stage" ] && continue
     [ "$needs" = 1 ] && [ -z "$n" ] && continue
     t="$(title_of "$id")"
-    printf '%s\t%s\t%s\t%s\n' "$(short_id "$id")" "${s:-?}" "${n:-}" "$t"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$(short_id "$id")" "${s:-?}" "${n:-}" "$(route_of "$id")" "$t"
   done
 }
 
@@ -216,6 +294,7 @@ cmd_start() {
   echo "TASK: $(short_id "$id")"
   echo "TITLE: $(title_of "$id")"
   echo "STAGE: $(stage_of "$id")"
+  echo "ROUTE: $(route_of "$id")"
   echo "BRANCH: $branch"
   echo "DIR: $dir"
   echo "---"
@@ -235,7 +314,7 @@ cmd_handoff() {
   local needs; needs="$(needs_of "$id")"
   [ -z "$needs" ] || die "task is waiting on the operator (needs:$needs); handoff refused"
   local from stage; stage="$(stage_of "$id")"; from="$(acting_role "$id")"
-  [ -n "$to" ] || to="$(next_role_after "$stage")"
+  [ -n "$to" ] || to="$(next_in_route "$(route_of "$id")" "$stage")"
   [ -n "$to" ] || to="done"
   [ "$to" = "done" ] || require_role "$to"
   local dir; dir="$(worktree_of "$id")"
@@ -351,7 +430,9 @@ EOF
   echo "FINISHED: $(short_id "$id") merged into $into"
 }
 
-cmd_pipeline() { pipeline; }
+cmd_roles() { pipeline; }
+
+cmd_routes() { named_routes | awk '{printf "%-10s %s\n", $1, $2}'; }
 
 role_prompt() {
   local role="$1" short="$2"
@@ -493,6 +574,7 @@ main() {
   case "$cmd" in
     init) cmd_init "$@" ;;
     new) cmd_new "$@" ;;
+    route) cmd_route "$@" ;;
     ls) cmd_ls "$@" ;;
     show) cmd_show "$@" ;;
     next) cmd_next "$@" ;;
@@ -505,7 +587,8 @@ main() {
     approve) cmd_approve "$@" ;;
     reject) cmd_reject "$@" ;;
     finish) cmd_finish "$@" ;;
-    pipeline) cmd_pipeline "$@" ;;
+    roles|pipeline) cmd_roles "$@" ;;
+    routes) cmd_routes "$@" ;;
     dispatch) cmd_dispatch "$@" ;;
     run) cmd_run "$@" ;;
     adapters) cmd_adapters "$@" ;;

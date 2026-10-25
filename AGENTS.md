@@ -1,7 +1,8 @@
 # Agent instructions
 
-This repository is a SwarmForge pack: a pipeline of AI roles that pass work
-through git-bug tasks. Read `swarmforge/README.md` for the model.
+This repository runs SwarmForge: AI roles that pass work through git-bug
+tasks, each task on its own route through the role catalogue. Read
+`swarmforge/README.md` for the model.
 
 - The operator's session is the orchestrator. Follow
   `swarmforge/roles/orchestrator.md` when asked to swarm, specify, or forge a

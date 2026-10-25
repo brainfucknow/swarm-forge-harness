@@ -1,8 +1,8 @@
 # Project Rules
 
 ## Project Shape
-- This project runs SwarmForge roles as harness agents. `swarmforge/roles.conf` lists the active roles in pipeline order; `swarmforge/tiers.conf` maps each role's tier to a model per harness.
-- Project language: set this when installing the pack (for example Babashka, Go, or Java). Until it is set, infer the language from the repository and say which one you inferred in your report.
+- This project runs SwarmForge roles as harness agents. `swarmforge/roles.conf` is the role catalogue in canonical order; `swarmforge/routes.conf` names the routes a task can take through it; `swarmforge/tiers.conf` maps each role's tier to a model per harness.
+- Project language: set this after installing (for example Babashka, Go, Java, or C#). Until it is set, infer the language from the repository and say which one you inferred in your report.
 
 ## Local Configuration
 - Keep SwarmForge configuration under `swarmforge/`, task worktrees under `.worktrees/`, and task state in git-bug (`refs/bugs/*`). Nothing else is swarm state.

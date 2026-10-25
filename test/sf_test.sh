@@ -30,13 +30,16 @@ export PATH="$repo/swarmforge/bin:$PATH"
 # init
 out="$(sf init)"
 assert_match "init creates identity" "$out" "identity: operator \(created\)"
-assert_match "init reports pipeline" "$out" "pipeline: specifier coder cleaner architect hardener qa"
+assert_match "init reports the catalogue" "$out" "roles: specifier coder cleaner architect hardener qa"
+assert_match "init reports the routes" "$out" "routes: feature bugfix refactor harden spike"
 assert_eq "init is idempotent" "$(sf init | head -n 1)" "identity: operator"
 
 # new
 id="$(sf new "Add login" -m "Users can log in with email and password.")"
 assert_match "new prints a short id" "$id" '^[0-9a-f]{7}$'
 assert_eq "new puts the task at the first stage" "$(sf stage "$id")" "specifier"
+full="specifier,coder,cleaner,architect,hardener,qa"
+assert_eq "new defaults to the feature route" "$(sf route "$id")" "$full"
 assert_eq "new creates the task branch" "$(git branch --list "swarm/$id" | tr -d ' *')" "swarm/$id"
 assert_match "show prints the body" "$(sf show "$id")" "email and password"
 
@@ -44,12 +47,13 @@ assert_match "show prints the body" "$(sf show "$id")" "email and password"
 assert_eq "next finds the task for its stage" "$(sf next specifier)" "$id"
 assert_eq "next prints NO_TASK for other stages" "$(sf next coder)" "NO_TASK"
 assert_fails "next with unknown role" sf next janitor
-assert_match "ls lists the task" "$(sf ls)" "^$id	specifier		Add login$"
+assert_match "ls lists the task with its route" "$(sf ls)" "^$id	specifier		$full	Add login$"
 
 # start
 out="$(sf start "$id")"
 assert_match "start prints the task id" "$out" "^TASK: $id$"
 assert_match "start prints the worktree" "$out" "^DIR: $repo/.worktrees/$id$"
+assert_match "start prints the route" "$out" "^ROUTE: $full$"
 assert_eq "start checks out the task branch" "$(git -C ".worktrees/$id" rev-parse --abbrev-ref HEAD)" "swarm/$id"
 assert_match "start is idempotent" "$(sf start "$id")" "^DIR: "
 
@@ -62,7 +66,7 @@ sha="$(git -C ".worktrees/$id" rev-parse --short HEAD)"
 # review and approval gate
 out="$(sf review "$id" -m "spec ready")"
 assert_match "review asks for approval" "$out" "waits for operator approval"
-assert_match "review labels needs:approval" "$(sf ls --needs)" "^$id	specifier	approval"
+assert_match "review labels needs:approval" "$(sf ls --needs)" "^$id	specifier	approval	"
 assert_fails "handoff while waiting for approval" sf handoff "$id"
 assert_eq "next skips tasks waiting on the operator" "$(sf next specifier)" "NO_TASK"
 assert_match "reject keeps the stage" "$(sf reject "$id" "split the scenarios")" "stays at stage:specifier"
@@ -102,11 +106,31 @@ assert_eq "finish deletes the branch" "$(git branch --list "swarm/$id")" ""
 assert_eq "finish closes the task" "$(sf ls)" ""
 assert_eq "closed task is not next" "$(sf next done 2>/dev/null || echo NO_TASK)" "NO_TASK"
 
-# pipeline follows roles.conf
-cp swarmforge/packs/two-pack.conf swarmforge/roles.conf
-assert_eq "pipeline reads roles.conf" "$(sf pipeline | tr '\n' ' ')" "coder cleaner "
-id2="$(sf new "Tidy" -m "x")"
-assert_eq "new uses the first configured role" "$(sf stage "$id2")" "coder"
+# routes
+assert_eq "routes lists the presets" "$(sf routes | awk '{print $1}' | paste -sd ' ' -)" "feature bugfix refactor harden spike"
+id2="$(sf new "Fix rounding" -m "x" --route bugfix)"
+assert_eq "named route sets the label" "$(sf route "$id2")" "specifier,coder,qa"
+sf start "$id2" >/dev/null
+git -C ".worktrees/$id2" commit -q --allow-empty -m "Spec. By specifier."
+sf review "$id2" >/dev/null && sf approve "$id2" >/dev/null
+assert_match "handoff follows the route" "$(sf handoff "$id2")" "coder -> qa"
+assert_fails "route change must contain the current stage" sf route "$id2" refactor
+assert_match "route change at the current stage" "$(sf route "$id2" "coder,cleaner,qa")" "^ROUTE: $id2 coder,cleaner,qa$"
+assert_match "route change is recorded" "$(sf show "$id2")" "route: coder,cleaner,qa"
+assert_match "handoff follows the changed route" "$(sf handoff "$id2")" "qa -> done"
+assert_fails "route in the wrong order" sf new "Bad" -m x --route "qa,coder"
+assert_fails "route with an unknown role" sf new "Bad" -m x --route "janitor"
+id3="$(sf new "Tidy" -m "x" --route "cleaner,architect")"
+assert_eq "explicit route starts at its first role" "$(sf stage "$id3")" "cleaner"
+assert_eq "SWARMFORGE_ROUTE sets the default" "$(SWARMFORGE_ROUTE=spike sf new "Idea" -m x | xargs sf route)" "specifier"
+
+# without routes.conf the route is the whole catalogue
+rm swarmforge/routes.conf
+printf 'coder strong subagent\ncleaner fast subagent\n' > swarmforge/roles.conf
+assert_eq "roles reads roles.conf" "$(sf roles | paste -sd ' ' -)" "coder cleaner"
+id4="$(sf new "Tidy" -m "x")"
+assert_eq "new uses the first catalogue role" "$(sf stage "$id4")" "coder"
+assert_eq "default route is the catalogue" "$(sf route "$id4")" "coder,cleaner"
 
 # adapters
 printf 'specifier frontier session\ncoder frontier subagent\ncleaner fast subagent\n' > swarmforge/roles.conf

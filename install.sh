@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
-# Install the SwarmForge harness pack into a project.
+# Install the SwarmForge harness into a project.
 #
-#   install.sh [pack] [target-dir]
+#   install.sh [target-dir]
 #
-# pack        six-pack (default), four-pack, or two-pack
 # target-dir  the project to install into (default: current directory)
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-pack="${1:-six-pack}"
-target="$(cd "${2:-.}" && pwd)"
+target="$(cd "${1:-.}" && pwd)"
 
-[ -f "$HERE/swarmforge/packs/$pack.conf" ] || { echo "unknown pack '$pack'" >&2; exit 1; }
 [ -d "$target/.git" ] || { echo "$target is not a git repository" >&2; exit 1; }
 
 copy_tree() {
@@ -23,7 +20,6 @@ copy_tree() {
 copy_tree "$HERE/swarmforge" "$target/swarmforge"
 copy_tree "$HERE/.claude/skills" "$target/.claude/skills"
 copy_tree "$HERE/.agents/skills" "$target/.agents/skills"
-cp "$HERE/swarmforge/packs/$pack.conf" "$target/swarmforge/roles.conf"
 
 append_once() {
   local file="$1" line="$2"
@@ -43,8 +39,9 @@ append_once "$target/.gitignore" "tmp/"
 (cd "$target" && ./swarmforge/bin/sf adapters >/dev/null && ./swarmforge/bin/sf init)
 
 cat <<EOF
-Installed $pack into $target.
-  swarmforge/roles.conf       pipeline (edit, then: swarmforge/bin/sf adapters)
+Installed SwarmForge into $target.
+  swarmforge/roles.conf       role catalogue (edit, then: swarmforge/bin/sf adapters)
+  swarmforge/routes.conf      named routes a task can take
   swarmforge/tiers.conf       model per tier per harness
   .claude/agents, .codex/agents, .github/agents   generated role agents
   /swarm <request>            start a task from Claude Code, Codex, or Copilot

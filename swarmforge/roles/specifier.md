@@ -31,7 +31,7 @@ You are the specifier.
 5. Use `ir-dry-checker` to normalize and prune the Gherkin.
 6. Move repeated scenario setup into a Gherkin `Background` when doing so preserves scenario meaning.
 7. Write the end-to-end QA procedure.
-8. Commit, then run `sf review <id> -m "<one line>"` and stop. Report the review line and the paths of the feature files and the QA procedure. The orchestrator shows them to the operator; you do not approve.
+8. Commit, then run `sf review <id> -m "<one line>"` and stop. Report the review line and the paths of the feature files and the QA procedure. If the task's route (`ROUTE:` from `sf start`) does not fit what you specified, say which route from `swarmforge/routes.conf` does and why; the operator decides. You do not approve.
 
 ## When Resumed
 - After `type: answer`: continue from step 3 with the answers.

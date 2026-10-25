@@ -6,11 +6,12 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 
 ## Setup
 - `swarmforge/bin/sf` must be on PATH or called by path. Run `sf init` once per repository; it needs `git-bug` installed.
-- Read `swarmforge/roles.conf` for the pipeline order.
+- Read `swarmforge/roles.conf` for the role catalogue and `swarmforge/routes.conf` for the named routes.
 
 ## Starting A Task
-1. Turn the operator's request into a task: `sf new "<title>" -m "<request>"`. Use the operator's words for the body. Print the id.
-2. Dispatch the first role.
+1. Pick the route from the shape of the request: a new behavior is `feature`; a defect with a known cause is `bugfix`; cleanup with no behavior change is `refactor`; "make it robust" is `harden`; a question or a spec with no build is `spike`. Any subset of the catalogue in canonical order is also a route. When the request fits none, ask the operator.
+2. Create the task: `sf new "<title>" -m "<request>" --route <route>`. Use the operator's words for the body. Print the id and the route.
+3. Dispatch the first role of the route (`sf stage <id>`).
 
 ## Dispatching A Role
 - Delegate to the agent named after the role (`specifier`, `coder`, `cleaner`, `architect`, `hardener`, `qa`). Each harness defines them: `.claude/agents/<role>.md`, `.github/agents/<role>.agent.md`, `.codex/agents/<role>.toml`. The agent file carries the role's model tier; do not override it.
@@ -23,8 +24,9 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 - If the harness cannot run subagents, run `sf dispatch <role> <id>` instead; it starts a headless backend session with the same prompt. `sf run <id>` repeats that until the task is done or blocked.
 
 ## Specification Gate
-- When the specifier returns after `sf review`, show the operator what it committed: the feature files and the QA procedure, from `git show` on the task branch or the files in `.worktrees/<id>`. Then stop and wait. Do not approve on their behalf.
-- On "approve": `sf approve <id>`, which records the approval and hands the task to the next role; dispatch that role.
+- When the specifier returns after `sf review`, show the operator what it committed: the feature files and the QA procedure, from `git show` on the task branch or the files in `.worktrees/<id>`, plus the task's route and the route the specifier recommended if it differs. Then stop and wait. Do not approve on their behalf.
+- If the operator changes the route: `sf route <id> <route>`. The new route must contain the current stage.
+- On "approve": `sf approve <id>`, which records the approval and hands the task to the next role on its route; dispatch that role.
 - On change requests: `sf reject <id> "<reason>"` and resume the specifier.
 
 ## Finishing

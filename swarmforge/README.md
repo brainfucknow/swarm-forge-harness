@@ -1,20 +1,23 @@
-# SwarmForge pack
+# SwarmForge
 
-This directory is a SwarmForge pack installed into the project. It runs a
-pipeline of AI roles as harness agents in Claude Code, Codex, or Copilot CLI.
-Roles pass work through git-bug tasks stored in this repository.
+This directory is SwarmForge installed into the project. It runs AI roles as
+harness agents in Claude Code, Codex, or Copilot CLI. Each task takes a route
+through the role catalogue, and roles pass work through git-bug tasks stored
+in this repository.
 
 ```text
-operator ──► session: orchestrator ──► subagents: specifier → coder → cleaner → architect → hardener → qa
+operator ──► session: orchestrator ──► subagents on the task's route, e.g.
+                        │                feature: specifier → coder → cleaner → architect → hardener → qa
+                        │                bugfix:  specifier → coder → qa
                         │ git-bug task, branch swarm/<id>, worktree .worktrees/<id>
                         └─ sf review ─► operator approves ─► sf approve ─► … ─► sf finish
 ```
 
 | File | Purpose |
 |---|---|
-| `roles.conf` | Active roles in pipeline order, each with a model tier. All run as subagents unless marked `session`. |
+| `roles.conf` | The role catalogue in canonical order, each with a model tier. All run as subagents unless marked `session`. |
+| `routes.conf` | Named routes: which roles a task visits. `feature` is the default. |
 | `tiers.conf` | Model per tier per harness. |
-| `packs/*.conf` | Presets for `roles.conf`. |
 | `constitution.md`, `constitution/articles/` | Rules every role obeys. |
 | `roles/*.md` | What each role owns, verifies, and hands off. `orchestrator.md` is the session's own role. |
 | `bin/sf` | The only writer of task state. `sf --help` lists the commands. |
@@ -27,11 +30,12 @@ on PATH. Run `swarmforge/bin/sf init` once per clone.
 Start a task from the harness with `/swarm <feature request>`, or by hand:
 
 ```sh
-sf new "Add login" -m "Users log in with email and password."   # prints the id
+sf new "Add login" -m "Users log in with email and password." --route feature   # prints the id
 sf start <id>      # worktree and task text, run by the role that owns the stage
 sf review <id>     # specifier stops for approval
-sf approve <id>    # operator; moves the task to the coder
-sf ls              # id, stage, needs, title
+sf route <id> specifier,coder,qa   # operator narrows the route at the gate
+sf approve <id>    # operator; moves the task to the next role on the route
+sf ls              # id, stage, needs, route, title
 sf finish <id>     # after stage:done: merge, close
 ```
 

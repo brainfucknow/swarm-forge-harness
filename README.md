@@ -29,7 +29,7 @@ project repository, and they talk to you in chat.
 ```sh
 git clone https://github.com/brainfucknow/swarm-forge-harness
 cd your-project
-../swarm-forge-harness/install.sh six-pack     # or four-pack, two-pack
+../swarm-forge-harness/install.sh
 ```
 
 The installer copies `swarmforge/` and the `swarm` skill into the project,
@@ -48,19 +48,22 @@ Open the project in your harness and ask:
 
 The session becomes the orchestrator:
 
-1. `sf new` creates the task and its branch. The `specifier` subagent, on your
+1. The orchestrator picks a route for the request from `swarmforge/routes.conf`
+   (`feature`, `bugfix`, `refactor`, `harden`, `spike`, or any subset of the
+   roles in order) and `sf new --route` creates the task and its branch with
+   that route on it. The `specifier` subagent, on your
    session's model, writes Gherkin and a QA procedure in `.worktrees/<id>`,
    commits, runs `sf review`, and returns. If the request is ambiguous it runs
    `sf ask` with its questions first and returns; you answer in chat.
-2. The orchestrator shows you the committed spec. You say approve, or ask for
-   changes.
+2. The orchestrator shows you the committed spec and the route. You say
+   approve, ask for changes, or change the route (`sf route <id> ...`).
 3. `sf approve` hands the task to the `coder` subagent. Each subagent reads the
    constitution and its role, works on the task branch, commits, and runs
    `sf handoff`. The orchestrator dispatches the next role.
 4. A role that is blocked runs `sf ask` and stops. The question appears in chat.
    Your answer goes back with `sf answer` and the same role resumes.
-5. After `qa`, the task is `stage:done`. `sf finish` merges the branch into
-   your base branch and closes the task.
+5. After the last role on the route, the task is `stage:done`. `sf finish`
+   merges the branch into your base branch and closes the task.
 
 `sf ls` shows every open task with its stage and whether it is waiting on you.
 `sf show <id>` prints the whole history. Both work in any clone that has
@@ -89,9 +92,22 @@ headless `claude -p`, `codex exec`, or `copilot -p` session, and
 you. Headless runs need tool permissions you grant yourself; pass them in
 `SWARMFORGE_CLAUDE_ARGS`, `SWARMFORGE_CODEX_ARGS`, or `SWARMFORGE_COPILOT_ARGS`.
 
-## Model tiers
+## Roles, routes, and model tiers
 
-`swarmforge/roles.conf` (six-pack default):
+There is no pack to choose. `swarmforge/roles.conf` is the catalogue of roles
+in canonical order; each task picks a route through it, so a bug fix can skip
+the cleaner, architect, and hardener while a feature visits all six. Named
+routes live in `swarmforge/routes.conf`:
+
+| Route | Roles |
+|---|---|
+| `feature` (default) | specifier, coder, cleaner, architect, hardener, qa |
+| `bugfix` | specifier, coder, qa |
+| `refactor` | cleaner, architect, hardener |
+| `harden` | hardener, qa |
+| `spike` | specifier |
+
+The catalogue:
 
 | Role | Tier | Runs as |
 |---|---|---|
@@ -128,12 +144,12 @@ on Node, which jscpd needs anyway.
 ## Layout
 
 ```text
-install.sh                       copy the pack into a project
+install.sh                       copy SwarmForge into a project
 swarmforge/
   bin/sf                         git-bug task helper
   bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers
   languages/csharp.md            what each sf-cs command runs and prints
-  roles.conf  tiers.conf  packs/ pipeline and models
+  roles.conf  routes.conf  tiers.conf   catalogue, routes, models
   constitution.md  constitution/articles/
   roles/                         specifier, coder, cleaner, architect, hardener, qa, orchestrator
   handoff-protocol.md            labels, records, lifecycle
