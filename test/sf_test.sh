@@ -73,11 +73,25 @@ assert_match "start prints the route" "$out" "^ROUTE: $full$"
 assert_eq "start checks out the task branch" "$(git -C ".worktrees/$id" rev-parse --abbrev-ref HEAD)" "swarm/$id"
 assert_match "start is idempotent" "$(sf start "$id")" "^DIR: "
 
-# handoff
+# commit byline hook
+hook="$repo/.git/hooks/commit-msg"
+assert_eq "init installs the commit-msg hook" "$(test -x "$hook" && echo installed)" "installed"
 echo "Feature: login" > ".worktrees/$id/login.feature"
 assert_fails "handoff with uncommitted work" sf handoff "$id"
 git -C ".worktrees/$id" add -A && git -C ".worktrees/$id" commit -q -m "Specify login"
 sha="$(git -C ".worktrees/$id" rev-parse --short HEAD)"
+assert_eq "hook appends the stage byline" "$(git -C ".worktrees/$id" log -1 --format=%B | grep -v "^$" | tail -1)" "By specifier."
+git -C ".worktrees/$id" commit -q --allow-empty -m "$(printf 'Already signed\n\nBy specifier.')"
+assert_eq "hook does not duplicate a byline" "$(git -C ".worktrees/$id" log -1 --format=%B | grep -c '^By specifier\.$')" "1"
+SWARMFORGE_ROLE=coder git -C ".worktrees/$id" commit -q --allow-empty -m "Forced role"
+assert_eq "SWARMFORGE_ROLE overrides the stage" "$(git -C ".worktrees/$id" log -1 --format=%B | grep -v "^$" | tail -1)" "By coder."
+git commit -q --allow-empty -m "On main checkout"
+assert_eq "hook leaves commits outside task worktrees alone" "$(git log -1 --format=%B)" "On main checkout"
+cp "$hook" "$scratch/our-hook" && printf '#!/bin/sh\nexit 0\n' > "$hook"
+assert_match "start leaves a foreign hook alone" "$(sf start "$id")" "^HOOK: existing commit-msg hook left alone"
+assert_eq "foreign hook is unchanged" "$(cat "$hook")" "$(printf '#!/bin/sh\nexit 0')"
+cp "$scratch/our-hook" "$hook"
+git -C ".worktrees/$id" reset -q --hard "$sha"
 
 # review and approval gate
 out="$(sf review "$id" -m "spec ready")"
