@@ -241,6 +241,45 @@ read_message() {
   esac
 }
 
+HOOK_MARKER='# swarmforge commit-msg hook'
+
+commit_hook_body() {
+  cat <<EOF
+#!/usr/bin/env bash
+$HOOK_MARKER
+# Appends "By <role>." to a commit made in a task worktree, where <role> is
+# the task's current stage, or SWARMFORGE_ROLE when set.
+msg="\$1"
+role="\${SWARMFORGE_ROLE:-}"
+if [ -z "\$role" ]; then
+  top="\$(git rev-parse --show-toplevel)"
+  common="\$(git rev-parse --path-format=absolute --git-common-dir)"
+  root="\$(cd "\$common/.." && pwd)"
+  case "\$top" in
+    "\$root/\${SWARMFORGE_WORKTREE_DIR:-$WORKTREE_DIR}"/*) role="\$("\$root/swarmforge/bin/sf" stage "\$(basename "\$top")" 2>/dev/null || true)" ;;
+  esac
+fi
+[ -n "\$role" ] && [ "\$role" != done ] || exit 0
+grep -q "^By \$role\\.\$" "\$msg" && exit 0
+printf '%s\\n\\nBy %s.\\n' "\$(cat "\$msg")" "\$role" > "\$msg"
+EOF
+}
+
+install_commit_hook() {
+  local root="$1" hooks hook
+  hooks="$(cd "$root" && git config --get core.hooksPath || true)"
+  if [ -n "$hooks" ]; then echo "HOOK: core.hooksPath is set; add the 'By <role>.' byline yourself"; return 0; fi
+  hooks="$(cd "$root" && git rev-parse --path-format=absolute --git-common-dir)/hooks"
+  hook="$hooks/commit-msg"
+  if [ -f "$hook" ] && ! grep -qF "$HOOK_MARKER" "$hook"; then
+    echo "HOOK: existing commit-msg hook left alone; add the 'By <role>.' byline yourself"
+    return 0
+  fi
+  mkdir -p "$hooks"
+  commit_hook_body > "$hook"
+  chmod 755 "$hook"
+}
+
 cmd_init() {
   command -v "$GIT_BUG" >/dev/null || die "git-bug not found on PATH (https://github.com/git-bug/git-bug)"
   if "$GIT_BUG" user show >/dev/null 2>&1; then
@@ -251,6 +290,7 @@ cmd_init() {
     echo "identity: $name (created)"
   fi
   mkdir -p "$(repo_root)/$WORKTREE_DIR"
+  install_commit_hook "$(repo_root)"
   echo "roles: $(pipeline | paste -sd ' ' -)"
   echo "routes: $(named_routes | awk '{print $1}' | paste -sd ' ' -)"
 }
@@ -341,6 +381,7 @@ cmd_start() {
   if [ ! -d "$dir" ]; then
     (cd "$root" && git worktree add --quiet "$dir" "$branch")
   fi
+  install_commit_hook "$root"
   echo "TASK: $(short_id "$id")"
   echo "TITLE: $(title_of "$id")"
   echo "STAGE: $(stage_of "$id")"
