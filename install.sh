@@ -34,6 +34,7 @@ append_once "$target/CLAUDE.md" "@AGENTS.md"
 mkdir -p "$target/.github"
 append_once "$target/.github/copilot-instructions.md" "Follow AGENTS.md at the repository root."
 append_once "$target/.gitignore" ".worktrees/"
+append_once "$target/.gitignore" ".swarmforge/"
 append_once "$target/.gitignore" "tmp/"
 
 (cd "$target" && ./swarmforge/bin/sf adapters >/dev/null && ./swarmforge/bin/sf init)

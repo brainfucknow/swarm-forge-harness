@@ -147,6 +147,7 @@ on Node, which jscpd needs anyway.
 install.sh                       copy SwarmForge into a project
 swarmforge/
   bin/sf                         git-bug task helper
+  bin/sf-tool  tools.conf        constitution tool installer and catalogue (sf tool ...)
   bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers
   languages/csharp.md            what each sf-cs command runs and prints
   roles.conf  routes.conf  tiers.conf   catalogue, routes, models
@@ -162,9 +163,11 @@ test/sf_test.sh                  behavioral tests for sf (needs git-bug)
 
 ```sh
 bash test/sf_test.sh
+bash test/sf_tool_test.sh
 node --test swarmforge/tools/csharp/csharp.test.mjs
 ```
 
-The first drives `sf` against a real git-bug in a scratch repository. The
-second drives `sf-cs` against fixture reports and a fake `dotnet`. Neither
-pins prompt wording.
+The first drives `sf` against a real git-bug in a scratch repository, the
+second drives `sf tool` against a local tool source and a fake `bb`, and the
+third drives `sf-cs` against fixture reports and a fake `dotnet`. None pins
+prompt wording.
