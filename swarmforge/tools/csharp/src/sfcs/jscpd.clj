@@ -1,0 +1,35 @@
+(ns sfcs.jscpd
+  (:require [sfcs.changes :as changes]))
+
+(defn- side [fragment]
+  {:file (get fragment "name") :start (get fragment "start") :end (get fragment "end")})
+
+(defn parse-clones
+  "Flattens a jscpd JSON report into clones with both sides' file and range."
+  [report]
+  (mapv (fn [duplicate]
+          {:tokens (get duplicate "tokens")
+           :lines (get duplicate "lines")
+           :sides [(side (get duplicate "firstFile")) (side (get duplicate "secondFile"))]})
+        (get report "duplicates")))
+
+(defn clones-touching-changes
+  "Marks each side that touches a changed line; keeps clones with such a side."
+  [clones changed root]
+  (->> clones
+       (map (fn [clone]
+              (update clone :sides
+                      (fn [sides]
+                        (mapv (fn [{:keys [file start end] :as s}]
+                                (let [matched (changes/to-changed-path file changed root)]
+                                  (assoc s
+                                         :file (or matched file)
+                                         :changed (boolean (and matched (changes/overlaps? matched start end changed))))))
+                              sides)))))
+       (filter #(some :changed (:sides %)))
+       vec))
+
+(defn format-clone [{:keys [tokens sides]}]
+  (let [one (fn [{:keys [file start end changed]}]
+              (str file ":" start "-" end (when changed " (changed)")))]
+    (str tokens " tokens  " (one (first sides)) "  ==  " (one (second sides)))))

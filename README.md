@@ -22,6 +22,8 @@ project repository, and they talk to you in chat.
 - `git`, `bash`
 - [`git-bug`](https://github.com/git-bug/git-bug) on PATH (release binaries are
   single files)
+- [Babashka](https://babashka.org) (`bb`) for the C# tool wrapper and the
+  Clojure constitution tools
 - One of Claude Code, Codex CLI, or Copilot CLI
 
 ## Install into a project
@@ -141,8 +143,9 @@ The constitution's tool table covers Go, Clojure, Java, and C#. For C#,
 | `sf-cs mutate` | Stryker.NET on changed files, survivors listed |
 
 Each exits 0 when clean, 1 on a finding, 2 on a usage error. See
-`swarmforge/languages/csharp.md` for the output formats. The report readers run
-on Node, which jscpd needs anyway.
+`swarmforge/languages/csharp.md` for the output formats. The report readers are
+Babashka, like the rest of the SwarmForge family; jscpd itself still runs on
+Node.
 
 ## Layout
 
@@ -151,7 +154,7 @@ install.sh                       copy SwarmForge into a project
 swarmforge/
   bin/sf                         git-bug task helper
   bin/sf-tool  tools.conf        constitution tool installer and catalogue (sf tool ...)
-  bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers
+  bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers (Babashka)
   languages/csharp.md            what each sf-cs command runs and prints
   roles.conf  routes.conf  tiers.conf   catalogue, routes, models
   constitution.md  constitution/articles/
@@ -167,7 +170,7 @@ test/sf_test.sh                  behavioral tests for sf (needs git-bug)
 ```sh
 bash test/sf_test.sh
 bash test/sf_tool_test.sh
-node --test swarmforge/tools/csharp/csharp.test.mjs
+bb --config swarmforge/tools/csharp/bb.edn test
 ```
 
 The first drives `sf` against a real git-bug in a scratch repository, the
