@@ -120,6 +120,11 @@ sf new ──► stage:<first role>
   prompts say when that is allowed.
 - `sf route <id> <route>` changes an open task's route; the new route must
   contain the current stage. The change is recorded as `type: route`.
+- For a role flagged `audit` in `roles.conf`, the first `sf handoff` or
+  `sf review` at a given HEAD exits 3 with `AUDIT_REQUIRED` and a self-review
+  checklist, recording nothing; the next attempt at the same HEAD goes
+  through. A new commit starts a new audit. State lives in
+  `.swarmforge/audit/<id>` and is removed when the record is written.
 - `sf next <role>` lists open tasks at that stage with no `needs:*` label, so a
   blocked task is invisible to the role until the operator acts.
 - `sf finish` merges `swarm/<id>` into the base branch with `--no-ff`, removes

@@ -186,6 +186,31 @@ id3="$(sf new "Tidy" -m "x" --route "cleaner,architect")"
 assert_eq "explicit route starts at its first role" "$(sf stage "$id3")" "cleaner"
 assert_eq "SWARMFORGE_ROUTE sets the default" "$(SWARMFORGE_ROUTE=spike sf new "Idea" -m x | xargs sf route)" "specifier"
 
+# audit gate
+sed -i 's/^coder     strong   subagent$/coder strong subagent audit/' swarmforge/roles.conf
+assert_match "check accepts the audit flag" "$(sf check)" "^CHECK: ok"
+id5="$(sf new "Audited" -m "x" --route "coder,qa")"
+sf start "$id5" >/dev/null
+git -C ".worktrees/$id5" commit -q --allow-empty -m "Coder work"
+head5="$(git -C ".worktrees/$id5" rev-parse --short HEAD)"
+set +e; out="$(sf handoff "$id5")"; rc=$?; set -e
+assert_eq "first handoff of an audited role exits 3" "$rc" "3"
+assert_match "first handoff prints the checklist" "$out" "^AUDIT_REQUIRED: $id5 at $head5; nothing was recorded"
+assert_eq "refused handoff leaves the stage" "$(sf stage "$id5")" "coder"
+assert_match "second handoff at the same commit is recorded" "$(sf handoff "$id5")" "^HANDOFF: $id5 coder -> qa at $head5$"
+assert_eq "audit state is cleared after the record" "$(test -e ".swarmforge/audit/$id5" && echo kept || echo cleared)" "cleared"
+assert_match "unaudited role hands off at once" "$(sf handoff "$id5")" "^HANDOFF: $id5 qa -> done"
+id6="$(sf new "Audited twice" -m "x" --route "coder")"
+sf start "$id6" >/dev/null
+git -C ".worktrees/$id6" commit -q --allow-empty -m "First"
+sf handoff "$id6" >/dev/null || true
+git -C ".worktrees/$id6" commit -q --allow-empty -m "Second"
+set +e; sf handoff "$id6" >/dev/null; rc=$?; set -e
+assert_eq "a new commit restarts the audit" "$rc" "3"
+sed -i 's/^coder strong subagent audit$/coder strong subagent bogus/' swarmforge/roles.conf
+assert_fails "check rejects an unknown role flag" sf check
+cp "$HERE/swarmforge/roles.conf" swarmforge/roles.conf
+
 # without routes.conf the route is the whole catalogue
 rm swarmforge/routes.conf
 printf 'coder strong subagent\ncleaner fast subagent\n' > swarmforge/roles.conf
@@ -224,7 +249,7 @@ check_fails() {
 echo "qa strong subagent" >> swarmforge/roles.conf
 check_fails "check rejects a duplicate role" "CHECK: roles.conf: role 'qa' listed twice"
 echo "janitor strong" >> swarmforge/roles.conf
-check_fails "check rejects a short role line" "CHECK: roles.conf: 'janitor' needs exactly"
+check_fails "check rejects a short role line" "CHECK: roles.conf: 'janitor' needs <role>"
 echo "Big_Role strong subagent" >> swarmforge/roles.conf
 check_fails "check rejects a bad role name" "CHECK: roles.conf: role name 'Big_Role'"
 echo "done strong subagent" >> swarmforge/roles.conf

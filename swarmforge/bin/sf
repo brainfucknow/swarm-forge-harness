@@ -246,10 +246,11 @@ check_problems=()
 problem() { check_problems+=("$1"); }
 
 check_roles() {
-  local file="$(conf_dir)/roles.conf" seen="" role tier runs extra
+  local file="$(conf_dir)/roles.conf" seen="" role tier runs flag extra
   [ -f "$file" ] || { problem "roles.conf: missing"; return 0; }
-  while read -r role tier runs extra; do
-    if [ -z "$runs" ] || [ -n "$extra" ]; then problem "roles.conf: '$role' needs exactly <role> <tier> <runs-as>"; continue; fi
+  while read -r role tier runs flag extra; do
+    if [ -z "$runs" ] || [ -n "$extra" ]; then problem "roles.conf: '$role' needs <role> <tier> <runs-as> [audit]"; continue; fi
+    case "$flag" in ""|audit) ;; *) problem "roles.conf: '$role' has unknown flag '$flag' (only audit)" ;; esac
     echo "$role" | grep -Eq '^[a-z][a-z0-9-]*$' || problem "roles.conf: role name '$role' must be lowercase letters, digits, and hyphens"
     case "$role" in done|operator) problem "roles.conf: '$role' is reserved" ;; esac
     echo "$seen" | grep -qx "$role" && problem "roles.conf: role '$role' listed twice"
@@ -304,6 +305,35 @@ cmd_check() {
     die "${#check_problems[@]} configuration problem(s) in $(conf_dir)"
   fi
   echo "CHECK: ok ($(pipeline | wc -l | tr -d ' ') roles, $(named_routes | wc -l | tr -d ' ') routes)"
+}
+
+role_audits() { [ "$(role_field "$1" 4)" = "audit" ]; }
+
+audit_file() { echo "$(repo_root)/.swarmforge/audit/$(short_id "$1")"; }
+
+# For roles flagged `audit` in roles.conf, the first handoff or review attempt
+# at a given HEAD is refused with a self-review checklist; the next attempt at
+# the same HEAD goes through. Returns 1 when the attempt was refused.
+audit_gate() {
+  local id="$1" role="$2" head="$3" file
+  role_audits "$role" || return 0
+  file="$(audit_file "$id")"
+  if [ -f "$file" ] && [ "$(cat "$file")" = "$head" ]; then
+    rm -f "$file"
+    return 0
+  fi
+  mkdir -p "$(dirname "$file")"
+  echo "$head" > "$file"
+  cat <<EOF
+AUDIT_REQUIRED: $(short_id "$id") at $head; nothing was recorded
+Before running this command again:
+- Re-read the task as sf start prints it: the request, every answer, and the record you received.
+- Check every requirement and constraint against the committed work, including boundaries, failure cases, and what must not happen.
+- For each requirement, name the test or check that covers it, or call it a gap. Passing tools alone do not make the task complete.
+- Read the whole diff since the previous record (git diff $(last_recorded_commit "$id")..HEAD), the tests, and anything generated or left in the working tree.
+- Fix every finding, commit, rerun the checks, then run this command again. It records the handoff when HEAD is still $head; a new commit starts a new audit.
+EOF
+  return 1
 }
 
 HOOK_MARKER='# swarmforge commit-msg hook'
@@ -525,6 +555,7 @@ cmd_handoff() {
   branch="$(cd "$dir" && git rev-parse --abbrev-ref HEAD)"
   [ "$branch" = "$(branch_of "$id")" ] || die "worktree is on '$branch', expected '$(branch_of "$id")'"
   head="$(cd "$dir" && git rev-parse --short HEAD)"
+  audit_gate "$id" "$from" "$head" || exit 3
   [ -n "$summary" ] || summary="$from work complete"
   summary="$(one_line "$summary")"
   local files; files="$(files_since_last_record "$id" "$dir")"
@@ -574,6 +605,7 @@ cmd_review() {
   local dirty; dirty="$(cd "$dir" && git status --porcelain)"
   [ -z "$dirty" ] || die "uncommitted changes in $dir; commit first"
   local head; head="$(cd "$dir" && git rev-parse --short HEAD)"
+  audit_gate "$id" "$(acting_role "$id")" "$head" || exit 3
   local files; files="$(files_since_last_record "$id" "$dir")"
   comment "$id" <<EOF
 type: review
@@ -765,7 +797,7 @@ cmd_adapters() {
   mkdir -p .claude/agents .github/agents .codex/agents
   rm -f .claude/agents/*.md .github/agents/*.agent.md .codex/agents/*.toml
   local role tier runs summary
-  while read -r role tier runs; do
+  while read -r role tier runs _; do
     [ "$runs" = "subagent" ] || continue
     summary="$(role_summary "$role")"
     write_claude_agent "$role" "$tier" "$summary"

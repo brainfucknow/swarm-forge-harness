@@ -122,7 +122,10 @@ The catalogue:
 Code and Copilot, and to reasoning effort for Codex. Edit either file and run
 `sf adapters`. Setting a role to `session` instead of `subagent` makes the
 orchestrator play it in chat, which suits co-writing a specification turn by
-turn at the cost of a fuller session context.
+turn at the cost of a fuller session context. Adding `audit` to a role's line
+makes its first `sf handoff` at any commit come back with a self-review
+checklist instead of a record; the second attempt at the same commit records
+it. It is off by default.
 
 ## Languages
 
