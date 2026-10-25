@@ -39,6 +39,7 @@ Catalogue commands
   run <id> [backend]              dispatch stage after stage until done or blocked
   adapters                        regenerate .claude/.codex/.github agent files
   tool require|ensure|list|bin    install constitution tools project-locally (sf tool --help)
+  check                           validate roles.conf, tiers.conf, routes.conf, tools.conf, role prompts
 
 Environment
   SWARMFORGE_ROUTE     default route for `new` (default: feature, else every role)
@@ -241,6 +242,66 @@ read_message() {
   esac
 }
 
+check_problems=()
+problem() { check_problems+=("$1"); }
+
+check_roles() {
+  local file="$(conf_dir)/roles.conf" seen="" role tier runs extra
+  [ -f "$file" ] || { problem "roles.conf: missing"; return 0; }
+  while read -r role tier runs extra; do
+    if [ -z "$runs" ] || [ -n "$extra" ]; then problem "roles.conf: '$role' needs exactly <role> <tier> <runs-as>"; continue; fi
+    echo "$role" | grep -Eq '^[a-z][a-z0-9-]*$' || problem "roles.conf: role name '$role' must be lowercase letters, digits, and hyphens"
+    case "$role" in done|operator) problem "roles.conf: '$role' is reserved" ;; esac
+    echo "$seen" | grep -qx "$role" && problem "roles.conf: role '$role' listed twice"
+    seen="$seen"$'\n'"$role"
+    [ -n "$(tier_field "$tier" 2)" ] || problem "roles.conf: '$role' uses unknown tier '$tier' (see tiers.conf)"
+    case "$runs" in subagent|session) ;; *) problem "roles.conf: '$role' runs-as must be subagent or session, not '$runs'" ;; esac
+    [ -f "$(conf_dir)/roles/$role.md" ] || problem "roles/$role.md: missing role prompt for '$role'"
+  done < <(conf_lines "$file")
+  [ -n "$(pipeline)" ] || problem "roles.conf: no roles"
+}
+
+check_tiers() {
+  local file="$(conf_dir)/tiers.conf" tier a b c extra
+  [ -f "$file" ] || { problem "tiers.conf: missing"; return 0; }
+  while read -r tier a b c extra; do
+    if [ -z "$c" ] || [ -n "$extra" ]; then problem "tiers.conf: '$tier' needs exactly <tier> <claude-model> <codex-effort> <copilot-model>"; fi
+  done < <(conf_lines "$file")
+}
+
+check_routes() {
+  local file; file="$(routes_conf)"
+  [ -f "$file" ] || return 0
+  local name list extra seen="" err
+  while read -r name list extra; do
+    if [ -z "$list" ] || [ -n "$extra" ]; then problem "routes.conf: '$name' needs exactly <name> <role,role,...>"; continue; fi
+    echo "$seen" | grep -qx "$name" && problem "routes.conf: route '$name' listed twice"
+    seen="$seen"$'\n'"$name"
+    err="$( (resolve_route "$list" >/dev/null) 2>&1 || true)"
+    [ -z "$err" ] || problem "routes.conf: $name: ${err#sf: }"
+  done < <(conf_lines "$file")
+}
+
+check_tools() {
+  local file="$(conf_dir)/tools.conf" name kind source task rewrite needs extra
+  [ -f "$file" ] || return 0
+  while read -r name kind source task rewrite needs extra; do
+    if [ -z "$needs" ] || [ -n "$extra" ]; then problem "tools.conf: '$name' needs exactly <name> <kind> <source> <task> <rewrite> <needs>"; continue; fi
+    case "$kind" in bb|clj|local) ;; *) problem "tools.conf: '$name' has unknown kind '$kind'" ;; esac
+    case "$rewrite" in mutate|gherkin|-) ;; *) problem "tools.conf: '$name' has unknown rewrite '$rewrite'" ;; esac
+  done < <(conf_lines "$file")
+}
+
+cmd_check() {
+  check_problems=()
+  check_tiers; check_roles; check_routes; check_tools
+  if [ "${#check_problems[@]}" -gt 0 ]; then
+    printf 'CHECK: %s\n' "${check_problems[@]}" >&2
+    die "${#check_problems[@]} configuration problem(s) in $(conf_dir)"
+  fi
+  echo "CHECK: ok ($(pipeline | wc -l | tr -d ' ') roles, $(named_routes | wc -l | tr -d ' ') routes)"
+}
+
 HOOK_MARKER='# swarmforge commit-msg hook'
 
 commit_hook_body() {
@@ -288,6 +349,7 @@ install_commit_hook() {
 
 cmd_init() {
   command -v "$GIT_BUG" >/dev/null || die "git-bug not found on PATH (https://github.com/git-bug/git-bug)"
+  cmd_check >/dev/null
   if "$GIT_BUG" user show >/dev/null 2>&1; then
     echo "identity: $("$GIT_BUG" user show --field name)"
   else
@@ -695,6 +757,7 @@ write_codex_agent() {
 
 cmd_adapters() {
   cd "$(repo_root)"
+  cmd_check >/dev/null
   mkdir -p .claude/agents .github/agents .codex/agents
   rm -f .claude/agents/*.md .github/agents/*.agent.md .codex/agents/*.toml
   local role tier runs summary
@@ -732,6 +795,7 @@ main() {
     run) cmd_run "$@" ;;
     adapters) cmd_adapters "$@" ;;
     tool) exec "$(cd "$(dirname "$0")" && pwd)/sf-tool" "$@" ;;
+    check) cmd_check "$@" ;;
     -h|--help|help|"") usage ;;
     *) die "unknown command '$cmd' (try sf --help)" ;;
   esac

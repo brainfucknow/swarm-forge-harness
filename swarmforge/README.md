@@ -43,5 +43,7 @@ Without harness subagents, `sf run <id>` dispatches each stage to a headless
 `claude`, `codex`, or `copilot` process until the task is done or needs the
 operator.
 
-After editing `roles.conf` or `tiers.conf`, run `sf adapters` to regenerate the
-agent files under `.claude/agents/`, `.codex/agents/`, and `.github/agents/`.
+After editing `roles.conf`, `routes.conf`, or `tiers.conf`, run `sf adapters`
+to regenerate the agent files under `.claude/agents/`, `.codex/agents/`, and
+`.github/agents/`. `sf check` validates the configuration files and the role
+prompts; `sf init` and `sf adapters` run it first and refuse a broken setup.
