@@ -1,0 +1,18 @@
+name: test
+on:
+  push:
+  pull_request:
+jobs:
+  sf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install git-bug
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -sSL -o "$HOME/bin/git-bug" \
+            https://github.com/git-bug/git-bug/releases/latest/download/git-bug_linux_amd64
+          chmod +x "$HOME/bin/git-bug"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Test
+        run: bash test/sf_test.sh

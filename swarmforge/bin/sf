@@ -1,0 +1,517 @@
+#!/usr/bin/env bash
+# sf: SwarmForge task helper. Tasks are git-bug issues; roles hand work to each
+# other by committing on the task branch and recording a handoff comment.
+set -euo pipefail
+
+GIT_BUG="${SWARMFORGE_GIT_BUG:-git-bug}"
+BRANCH_PREFIX="${SWARMFORGE_BRANCH_PREFIX:-swarm/}"
+WORKTREE_DIR="${SWARMFORGE_WORKTREE_DIR:-.worktrees}"
+
+usage() {
+  cat <<'EOF'
+usage: sf <command> [args]
+
+Operator commands
+  init                           create the git-bug identity if none exists
+  new <title> [-m text | -F file] create a task at the first pipeline stage; prints its id
+  ls [--stage ROLE] [--needs]     list open tasks
+  show <id>                       show a task with all comments
+  answer <id> <text>              answer a role's question and clear needs:operator
+  approve <id>                    accept the specification and hand it to the next role
+  reject <id> <text>              send the specification back to the specifier
+  finish <id> [--into BRANCH]     merge the task branch into BRANCH (default: current) and close
+
+Role commands
+  next <role>                     print ids of tasks waiting at stage:<role>, or NO_TASK
+  start <id>                      create or enter the task worktree; print the task
+  handoff <id> [--to ROLE] [-m text]
+                                  record HEAD and move the task to the next stage
+  ask <id> <text>                 record a question and stop: labels needs:operator
+  review <id> [-m text]           ask the operator to approve the specification
+
+Pipeline commands
+  pipeline                        print the roles in forward order
+  stage <id>                      print the task's current stage
+  dispatch <role> <id> [backend]  run a role headlessly (claude, codex, copilot)
+  run <id> [backend]              dispatch stage after stage until done or blocked
+  adapters                        regenerate .claude/.codex/.github agent files
+
+Environment
+  SWARMFORGE_ROLE      role name used for `from:` (default: the task's stage)
+  SWARMFORGE_BACKEND   default backend for dispatch/run
+  SWARMFORGE_GIT_BUG   git-bug executable (default: git-bug)
+  SWARMFORGE_CLAUDE_ARGS, SWARMFORGE_CODEX_ARGS, SWARMFORGE_COPILOT_ARGS
+                       extra arguments for the headless backend, for example
+                       the permission flags an unattended run needs
+EOF
+}
+
+die() { echo "sf: $*" >&2; exit 1; }
+
+repo_root() {
+  local common
+  common="$(git rev-parse --path-format=absolute --git-common-dir)"
+  (cd "$common/.." && pwd)
+}
+
+conf_dir() { echo "$(repo_root)/swarmforge"; }
+
+conf_lines() { grep -Ev '^\s*(#|$)' "$1"; }
+
+pipeline() { conf_lines "$(conf_dir)/roles.conf" | awk '{print $1}'; }
+
+role_field() {
+  local role="$1" column="$2"
+  conf_lines "$(conf_dir)/roles.conf" | awk -v r="$role" -v c="$column" '$1==r {print $c}'
+}
+
+tier_field() {
+  local tier="$1" column="$2"
+  conf_lines "$(conf_dir)/tiers.conf" | awk -v t="$tier" -v c="$column" '$1==t {print $c}'
+}
+
+first_role() { pipeline | head -n 1; }
+
+next_role_after() {
+  local role="$1"
+  pipeline | awk -v r="$role" 'found {print; exit} $1==r {found=1}'
+}
+
+require_role() {
+  local role="$1"
+  pipeline | grep -qx "$role" || die "unknown role '$role' (see swarmforge/roles.conf)"
+}
+
+bug() { "$GIT_BUG" bug "$@"; }
+
+bug_id() {
+  local id="$1" full
+  [ -n "$id" ] || die "task id required"
+  full="$(bug show "$id" --field id 2>/dev/null || true)"
+  [ -n "$full" ] || die "no task '$id'"
+  echo "$full"
+}
+
+short_id() { bug show "$1" --field humanId; }
+
+labels_of() { bug show "$1" --field labels; }
+
+stage_of() { labels_of "$1" | sed -n 's/^stage://p' | head -n 1; }
+
+needs_of() { labels_of "$1" | sed -n 's/^needs://p'; }
+
+title_of() { bug show "$1" --field title; }
+
+status_of() { bug show "$1" --field status; }
+
+branch_of() { echo "${BRANCH_PREFIX}$(short_id "$1")"; }
+
+worktree_of() { echo "$(repo_root)/$WORKTREE_DIR/$(short_id "$1")"; }
+
+set_stage() {
+  local id="$1" stage="$2" old
+  old="$(stage_of "$id")"
+  [ "$old" = "$stage" ] && return 0
+  [ -n "$old" ] && bug label rm "$id" "stage:$old" >/dev/null
+  bug label new "$id" "stage:$stage" >/dev/null
+}
+
+add_label() { labels_of "$1" | grep -qx "$2" || bug label new "$1" "$2" >/dev/null; }
+
+rm_label() { labels_of "$1" | grep -qx "$2" && bug label rm "$1" "$2" >/dev/null || true; }
+
+comment() { bug comment new "$1" -F - >/dev/null; }
+
+acting_role() {
+  local id="$1"
+  if [ -n "${SWARMFORGE_ROLE:-}" ]; then
+    echo "$SWARMFORGE_ROLE"
+  else
+    stage_of "$id"
+  fi
+}
+
+read_message() {
+  # read_message <default> [-m text | -F file]
+  local default="$1"; shift
+  case "${1:-}" in
+    -m) [ $# -ge 2 ] || die "-m needs a value"; echo "$2" ;;
+    -F) [ $# -ge 2 ] || die "-F needs a file"; cat "$2" ;;
+    "") echo "$default" ;;
+    *) echo "$*" ;;
+  esac
+}
+
+cmd_init() {
+  command -v "$GIT_BUG" >/dev/null || die "git-bug not found on PATH (https://github.com/git-bug/git-bug)"
+  if "$GIT_BUG" user show >/dev/null 2>&1; then
+    echo "identity: $("$GIT_BUG" user show --field name)"
+  else
+    local name="${SWARMFORGE_USER:-operator}"
+    "$GIT_BUG" user new --non-interactive -n "$name" -e "${SWARMFORGE_EMAIL:-$name@swarmforge.local}" >/dev/null
+    echo "identity: $name (created)"
+  fi
+  mkdir -p "$(repo_root)/$WORKTREE_DIR"
+  echo "pipeline: $(pipeline | tr '\n' ' ')"
+}
+
+cmd_new() {
+  local title="${1:-}"; [ -n "$title" ] || die "new needs a title"; shift
+  local body; body="$(read_message "$title" "$@")"
+  local out id short branch
+  out="$(bug new --non-interactive -t "$title" -m "$body" 2>/dev/null)"
+  short="$(echo "$out" | awk '/created/ {print $1}')"
+  [ -n "$short" ] || die "git-bug did not create the task: $out"
+  id="$(bug_id "$short")"
+  set_stage "$id" "$(first_role)"
+  branch="$(branch_of "$id")"
+  (cd "$(repo_root)" && git branch "$branch" >/dev/null)
+  echo "$short"
+}
+
+cmd_ls() {
+  local stage="" needs=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --stage) stage="$2"; shift 2 ;;
+      --needs) needs=1; shift ;;
+      *) die "unknown ls option '$1'" ;;
+    esac
+  done
+  local id
+  for id in $(bug -s open --format id); do
+    local s n t
+    s="$(stage_of "$id")"
+    n="$(needs_of "$id" | paste -sd ' ' -)"
+    [ -n "$stage" ] && [ "$s" != "$stage" ] && continue
+    [ "$needs" = 1 ] && [ -z "$n" ] && continue
+    t="$(title_of "$id")"
+    printf '%s\t%s\t%s\t%s\n' "$(short_id "$id")" "${s:-?}" "${n:-}" "$t"
+  done
+}
+
+cmd_show() { bug show "$(bug_id "${1:-}")"; }
+
+cmd_next() {
+  local role="${1:-}"; [ -n "$role" ] || die "next needs a role"
+  require_role "$role"
+  local found=0 id
+  for id in $(bug -s open -l "stage:$role" --format id); do
+    [ -z "$(needs_of "$id")" ] || continue
+    short_id "$id"; found=1
+  done
+  [ "$found" = 1 ] || echo "NO_TASK"
+}
+
+cmd_stage() { stage_of "$(bug_id "${1:-}")"; }
+
+cmd_start() {
+  local id; id="$(bug_id "${1:-}")"
+  [ "$(status_of "$id")" = "open" ] || die "task is closed"
+  local branch dir root
+  branch="$(branch_of "$id")"; dir="$(worktree_of "$id")"; root="$(repo_root)"
+  if [ ! -d "$dir" ]; then
+    (cd "$root" && git worktree add --quiet "$dir" "$branch")
+  fi
+  echo "TASK: $(short_id "$id")"
+  echo "TITLE: $(title_of "$id")"
+  echo "STAGE: $(stage_of "$id")"
+  echo "BRANCH: $branch"
+  echo "DIR: $dir"
+  echo "---"
+  bug show "$id"
+}
+
+cmd_handoff() {
+  local id; id="$(bug_id "${1:-}")"; shift
+  local to="" summary=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --to) to="$2"; shift 2 ;;
+      -m) summary="$2"; shift 2 ;;
+      *) die "unknown handoff option '$1'" ;;
+    esac
+  done
+  local needs; needs="$(needs_of "$id")"
+  [ -z "$needs" ] || die "task is waiting on the operator (needs:$needs); handoff refused"
+  local from stage; stage="$(stage_of "$id")"; from="$(acting_role "$id")"
+  [ -n "$to" ] || to="$(next_role_after "$stage")"
+  [ -n "$to" ] || to="done"
+  [ "$to" = "done" ] || require_role "$to"
+  local dir; dir="$(worktree_of "$id")"
+  [ -d "$dir" ] || die "task worktree missing; run: sf start $(short_id "$id")"
+  local dirty; dirty="$(cd "$dir" && git status --porcelain)"
+  [ -z "$dirty" ] || die "uncommitted changes in $dir; commit first"
+  local branch head
+  branch="$(cd "$dir" && git rev-parse --abbrev-ref HEAD)"
+  [ "$branch" = "$(branch_of "$id")" ] || die "worktree is on '$branch', expected '$(branch_of "$id")'"
+  head="$(cd "$dir" && git rev-parse --short HEAD)"
+  [ -n "$summary" ] || summary="$from work complete"
+  comment "$id" <<EOF
+type: handoff
+from: $from
+to: $to
+branch: $branch
+commit: $head
+summary: $summary
+EOF
+  set_stage "$id" "$to"
+  echo "HANDOFF: $(short_id "$id") $from -> $to at $head"
+}
+
+cmd_ask() {
+  local id; id="$(bug_id "${1:-}")"; shift
+  local text="${*:-}"; [ -n "$text" ] || die "ask needs a question"
+  local from; from="$(acting_role "$id")"
+  comment "$id" <<EOF
+type: question
+from: $from
+question: $text
+EOF
+  add_label "$id" "needs:operator"
+  echo "ASKED: $(short_id "$id") waits for the operator"
+}
+
+cmd_answer() {
+  local id; id="$(bug_id "${1:-}")"; shift
+  local text="${*:-}"; [ -n "$text" ] || die "answer needs text"
+  comment "$id" <<EOF
+type: answer
+from: operator
+answer: $text
+EOF
+  rm_label "$id" "needs:operator"
+  echo "ANSWERED: $(short_id "$id") resumes at stage:$(stage_of "$id")"
+}
+
+cmd_review() {
+  local id; id="$(bug_id "${1:-}")"; shift
+  local summary; summary="$(read_message "specification ready for review" "$@")"
+  local dir; dir="$(worktree_of "$id")"
+  [ -d "$dir" ] || die "task worktree missing; run: sf start $(short_id "$id")"
+  local dirty; dirty="$(cd "$dir" && git status --porcelain)"
+  [ -z "$dirty" ] || die "uncommitted changes in $dir; commit first"
+  local head; head="$(cd "$dir" && git rev-parse --short HEAD)"
+  comment "$id" <<EOF
+type: review
+from: $(acting_role "$id")
+commit: $head
+summary: $summary
+EOF
+  add_label "$id" "needs:approval"
+  echo "REVIEW: $(short_id "$id") waits for operator approval"
+}
+
+cmd_approve() {
+  local id; id="$(bug_id "${1:-}")"
+  labels_of "$id" | grep -qx "needs:approval" || die "task is not waiting for approval"
+  comment "$id" <<EOF
+type: approval
+from: operator
+EOF
+  rm_label "$id" "needs:approval"
+  SWARMFORGE_ROLE="${SWARMFORGE_ROLE:-$(stage_of "$id")}" cmd_handoff "$id"
+}
+
+cmd_reject() {
+  local id; id="$(bug_id "${1:-}")"; shift
+  local text="${*:-}"; [ -n "$text" ] || die "reject needs a reason"
+  labels_of "$id" | grep -qx "needs:approval" || die "task is not waiting for approval"
+  comment "$id" <<EOF
+type: changes-requested
+from: operator
+reason: $text
+EOF
+  rm_label "$id" "needs:approval"
+  echo "REJECTED: $(short_id "$id") stays at stage:$(stage_of "$id")"
+}
+
+cmd_finish() {
+  local id; id="$(bug_id "${1:-}")"; shift
+  local into=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --into) into="$2"; shift 2 ;;
+      *) die "unknown finish option '$1'" ;;
+    esac
+  done
+  [ "$(stage_of "$id")" = "done" ] || die "task is at stage:$(stage_of "$id"), not done"
+  local root branch dir
+  root="$(repo_root)"; branch="$(branch_of "$id")"; dir="$(worktree_of "$id")"
+  [ -n "$into" ] || into="$(cd "$root" && git rev-parse --abbrev-ref HEAD)"
+  (cd "$root" && git checkout --quiet "$into" && git merge --no-ff --no-edit "$branch" >/dev/null)
+  [ -d "$dir" ] && (cd "$root" && git worktree remove --force "$dir")
+  (cd "$root" && git branch -D "$branch" >/dev/null)
+  comment "$id" <<EOF
+type: finished
+from: operator
+merged-into: $into
+EOF
+  bug status close "$id" >/dev/null
+  echo "FINISHED: $(short_id "$id") merged into $into"
+}
+
+cmd_pipeline() { pipeline; }
+
+role_prompt() {
+  local role="$1" short="$2"
+  cat <<EOF
+You are the SwarmForge '$role' role. Read swarmforge/constitution.md and every file it names, then read swarmforge/roles/$role.md, then do your role's work for task $short. Start with: swarmforge/bin/sf start $short
+EOF
+}
+
+detect_backend() {
+  if [ -n "${SWARMFORGE_BACKEND:-}" ]; then echo "$SWARMFORGE_BACKEND"; return; fi
+  for b in claude codex copilot; do
+    command -v "$b" >/dev/null 2>&1 && { echo "$b"; return; }
+  done
+  die "no backend found (claude, codex, copilot); set SWARMFORGE_BACKEND"
+}
+
+cmd_dispatch() {
+  local role="${1:-}" id short backend tier
+  [ -n "$role" ] || die "dispatch needs a role"
+  require_role "$role"
+  id="$(bug_id "${2:-}")"; short="$(short_id "$id")"
+  backend="${3:-$(detect_backend)}"
+  tier="$(role_field "$role" 2)"
+  local prompt; prompt="$(role_prompt "$role" "$short")"
+  cd "$(repo_root)"
+  case "$backend" in
+    claude)
+      local model; model="$(tier_field "$tier" 2)"
+      local args=(-p --permission-mode acceptEdits)
+      [ "$model" != "inherit" ] && args+=(--model "$model")
+      # shellcheck disable=SC2086
+      claude "${args[@]}" ${SWARMFORGE_CLAUDE_ARGS:-} "$prompt" ;;
+    codex)
+      local effort; effort="$(tier_field "$tier" 3)"
+      # shellcheck disable=SC2086
+      codex exec --full-auto -c "model_reasoning_effort=\"$effort\"" ${SWARMFORGE_CODEX_ARGS:-} "$prompt" ;;
+    copilot)
+      local model; model="$(tier_field "$tier" 4)"
+      # shellcheck disable=SC2086
+      copilot -p "$prompt" --model "$model" --allow-all-tools ${SWARMFORGE_COPILOT_ARGS:-} ;;
+    *) die "unknown backend '$backend'" ;;
+  esac
+}
+
+cmd_run() {
+  local id; id="$(bug_id "${1:-}")"
+  local backend="${2:-}"
+  while :; do
+    local stage needs
+    stage="$(stage_of "$id")"; needs="$(needs_of "$id" | tr '\n' ' ')"
+    if [ "$stage" = "done" ]; then echo "DONE: $(short_id "$id"); run: sf finish $(short_id "$id")"; return 0; fi
+    if [ -n "$needs" ]; then echo "BLOCKED: $(short_id "$id") needs:$needs"; return 2; fi
+    local before="$stage"
+    cmd_dispatch "$stage" "$id" ${backend:+"$backend"}
+    [ "$(stage_of "$id")" != "$before" ] || [ -n "$(needs_of "$id")" ] || die "stage:$stage made no progress"
+  done
+}
+
+role_summary() {
+  local file="$(conf_dir)/roles/$1.md"
+  [ -f "$file" ] || die "missing role prompt $file"
+  awk 'NR>1 && NF {print; exit}' "$file"
+}
+
+adapter_body() {
+  local role="$1"
+  cat <<EOF
+You are the SwarmForge \`$role\` role.
+
+1. Read \`swarmforge/constitution.md\` and every file it names.
+2. Read \`swarmforge/roles/$role.md\`.
+3. Do that role's work for the task id named in your prompt, using
+   \`swarmforge/bin/sf\`. Begin with \`sf start <id>\` and work in the
+   directory it prints. End with \`sf handoff\` or \`sf ask\`, then report
+   the one-line result of that command.
+EOF
+}
+
+write_claude_agent() {
+  local role="$1" tier="$2" summary="$3" file=".claude/agents/$role.md"
+  local model; model="$(tier_field "$tier" 2)"
+  {
+    echo "---"
+    echo "name: $role"
+    echo "description: SwarmForge $role role. $summary Use for a task whose stage is $role."
+    echo "model: $model"
+    echo "---"
+    echo
+    adapter_body "$role"
+  } > "$file"
+}
+
+write_copilot_agent() {
+  local role="$1" tier="$2" summary="$3" file=".github/agents/$role.agent.md"
+  local model; model="$(tier_field "$tier" 4)"
+  {
+    echo "---"
+    echo "name: $role"
+    echo "description: SwarmForge $role role. $summary Use for a task whose stage is $role."
+    echo "model: $model"
+    echo "tools: [\"*\"]"
+    echo "include-custom-instructions: true"
+    echo "---"
+    echo
+    adapter_body "$role"
+  } > "$file"
+}
+
+write_codex_agent() {
+  local role="$1" tier="$2" summary="$3" file=".codex/agents/$role.toml"
+  local effort; effort="$(tier_field "$tier" 3)"
+  {
+    echo "name = \"$role\""
+    echo "description = \"SwarmForge $role role. $summary Use for a task whose stage is $role.\""
+    echo "model_reasoning_effort = \"$effort\""
+    echo "developer_instructions = \"\"\""
+    adapter_body "$role"
+    echo "\"\"\""
+  } > "$file"
+}
+
+cmd_adapters() {
+  cd "$(repo_root)"
+  mkdir -p .claude/agents .github/agents .codex/agents
+  rm -f .claude/agents/*.md .github/agents/*.agent.md .codex/agents/*.toml
+  local role tier runs summary
+  while read -r role tier runs; do
+    [ "$runs" = "subagent" ] || continue
+    summary="$(role_summary "$role")"
+    write_claude_agent "$role" "$tier" "$summary"
+    write_copilot_agent "$role" "$tier" "$summary"
+    write_codex_agent "$role" "$tier" "$summary"
+    echo "$role: $tier"
+  done < <(conf_lines swarmforge/roles.conf)
+}
+
+main() {
+  local cmd="${1:-}"; [ $# -gt 0 ] && shift
+  case "$cmd" in
+    init) cmd_init "$@" ;;
+    new) cmd_new "$@" ;;
+    ls) cmd_ls "$@" ;;
+    show) cmd_show "$@" ;;
+    next) cmd_next "$@" ;;
+    stage) cmd_stage "$@" ;;
+    start) cmd_start "$@" ;;
+    handoff) cmd_handoff "$@" ;;
+    ask) cmd_ask "$@" ;;
+    answer) cmd_answer "$@" ;;
+    review) cmd_review "$@" ;;
+    approve) cmd_approve "$@" ;;
+    reject) cmd_reject "$@" ;;
+    finish) cmd_finish "$@" ;;
+    pipeline) cmd_pipeline "$@" ;;
+    dispatch) cmd_dispatch "$@" ;;
+    run) cmd_run "$@" ;;
+    adapters) cmd_adapters "$@" ;;
+    -h|--help|help|"") usage ;;
+    *) die "unknown command '$cmd' (try sf --help)" ;;
+  esac
+}
+
+main "$@"
