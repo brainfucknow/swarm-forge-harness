@@ -120,8 +120,8 @@ set_route() {
   local id="$1" route="$2" old
   old="$(labels_of "$id" | sed -n 's/^route://p' | head -n 1)"
   [ "$old" = "$route" ] && return 0
-  [ -n "$old" ] && bug label rm "$id" "route:$old" >/dev/null
-  bug label new "$id" "route:$route" >/dev/null
+  [ -n "$old" ] && rm_label "$id" "route:$old"
+  add_label "$id" "route:$route"
 }
 
 first_in_route() { echo "$1" | cut -d, -f1; }
@@ -157,17 +157,40 @@ branch_of() { echo "${BRANCH_PREFIX}$(short_id "$1")"; }
 
 worktree_of() { echo "$(repo_root)/$WORKTREE_DIR/$(short_id "$1")"; }
 
+has_label() { labels_of "$1" | grep -qx "$2"; }
+
+# git-bug can serve the next process a label list that predates the previous
+# process's write. Every label write is therefore verified by reading it back,
+# and repeated once a second until it is visible.
+add_label() {
+  local id="$1" label="$2" try
+  for try in 1 2 3 4 5; do
+    has_label "$id" "$label" && return 0
+    bug label new "$id" "$label" >/dev/null
+    has_label "$id" "$label" && return 0
+    sleep 1
+  done
+  die "label $label did not stick on $(short_id "$id")"
+}
+
+rm_label() {
+  local id="$1" label="$2" try
+  for try in 1 2 3 4 5; do
+    has_label "$id" "$label" || return 0
+    bug label rm "$id" "$label" >/dev/null
+    has_label "$id" "$label" || return 0
+    sleep 1
+  done
+  die "label $label did not come off $(short_id "$id")"
+}
+
 set_stage() {
   local id="$1" stage="$2" old
   old="$(stage_of "$id")"
   [ "$old" = "$stage" ] && return 0
-  [ -n "$old" ] && bug label rm "$id" "stage:$old" >/dev/null
-  bug label new "$id" "stage:$stage" >/dev/null
+  [ -n "$old" ] && rm_label "$id" "stage:$old"
+  add_label "$id" "stage:$stage"
 }
-
-add_label() { labels_of "$1" | grep -qx "$2" || bug label new "$1" "$2" >/dev/null; }
-
-rm_label() { labels_of "$1" | grep -qx "$2" && bug label rm "$1" "$2" >/dev/null || true; }
 
 comment() { bug comment new "$1" -F - >/dev/null; }
 

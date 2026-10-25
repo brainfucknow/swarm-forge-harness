@@ -106,6 +106,19 @@ assert_eq "finish deletes the branch" "$(git branch --list "swarm/$id")" ""
 assert_eq "finish closes the task" "$(sf ls)" ""
 assert_eq "closed task is not next" "$(sf next done 2>/dev/null || echo NO_TASK)" "NO_TASK"
 
+# a label write that git-bug drops is repeated until it is visible
+shim="$scratch/dropping-git-bug"; dropped="$scratch/dropped"
+cat > "$shim" <<EOF
+#!/usr/bin/env bash
+if [ "\$1" = bug ] && [ "\$2" = label ] && [ "\$3" = new ] && [ ! -f "$dropped" ]; then touch "$dropped"; echo "label dropped"; exit 0; fi
+exec "$(command -v git-bug)" "\$@"
+EOF
+chmod +x "$shim"
+idx="$(SWARMFORGE_GIT_BUG="$shim" sf new "Dropped write" -m x)"
+assert_eq "the shim dropped one write" "$(test -f "$dropped" && echo dropped)" "dropped"
+assert_eq "a dropped route write is repeated" "$(sf route "$idx")" "$full"
+assert_eq "the stage after it is still set" "$(sf stage "$idx")" "specifier"
+
 # routes
 assert_eq "routes lists the presets" "$(sf routes | awk '{print $1}' | paste -sd ' ' -)" "feature bugfix refactor harden spike"
 id2="$(sf new "Fix rounding" -m "x" --route bugfix)"
