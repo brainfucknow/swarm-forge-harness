@@ -21,5 +21,7 @@ jobs:
         run: bash test/probe_gitbug.sh 30
       - name: Test sf
         run: bash test/sf_test.sh
+      - name: Test sf tool
+        run: bash test/sf_tool_test.sh
       - name: Test sf-cs
         run: node --test swarmforge/tools/csharp/csharp.test.mjs

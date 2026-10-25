@@ -38,6 +38,7 @@ Catalogue commands
   dispatch <role> <id> [backend]  run a role headlessly (claude, codex, copilot)
   run <id> [backend]              dispatch stage after stage until done or blocked
   adapters                        regenerate .claude/.codex/.github agent files
+  tool require|ensure|list|bin    install constitution tools project-locally (sf tool --help)
 
 Environment
   SWARMFORGE_ROUTE     default route for `new` (default: feature, else every role)
@@ -641,6 +642,7 @@ main() {
     dispatch) cmd_dispatch "$@" ;;
     run) cmd_run "$@" ;;
     adapters) cmd_adapters "$@" ;;
+    tool) exec "$(cd "$(dirname "$0")" && pwd)/sf-tool" "$@" ;;
     -h|--help|help|"") usage ;;
     *) die "unknown command '$cmd' (try sf --help)" ;;
   esac
