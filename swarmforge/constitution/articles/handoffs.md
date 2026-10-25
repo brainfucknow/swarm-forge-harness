@@ -24,7 +24,7 @@ record formats.
 - When blocked by ambiguity, contradiction, or a test/specification conflict, run `sf ask <id> "<question>"`, stop, and report the question verbatim. The task is labeled `needs:operator`; nobody can hand it off until the operator answers with `sf answer`.
 - Ask one clear question with the options you see. Do not guess and continue.
 - When resumed after an answer, `sf start <id>` shows the `type: answer` comment. Follow it.
-- `session` roles ask in chat directly, then record the exchange with `sf ask` and `sf answer` so the task carries it.
+- A role the orchestrator plays in chat (`session` in `roles.conf`) asks the operator directly, then records the exchange with `sf ask` and `sf answer` so the task carries it.
 
 ## Specification Gate
-- The specifier does not hand off. It commits the specification, runs `sf review <id>`, and stops for the operator. `sf approve <id>` records the approval and performs the handoff to the next role; `sf reject <id> "<reason>"` keeps the task with the specifier.
+- The specifier does not hand off. It commits the specification, runs `sf review <id>`, and stops. The orchestrator shows the operator the committed files; `sf approve <id>` records the approval and performs the handoff to the next role; `sf reject <id> "<reason>"` keeps the task with the specifier.

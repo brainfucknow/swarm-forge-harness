@@ -5,14 +5,14 @@ pipeline of AI roles as harness agents in Claude Code, Codex, or Copilot CLI.
 Roles pass work through git-bug tasks stored in this repository.
 
 ```text
-operator ──► session: orchestrator + specifier ──► subagents: coder → cleaner → architect → hardener → qa
+operator ──► session: orchestrator ──► subagents: specifier → coder → cleaner → architect → hardener → qa
                         │ git-bug task, branch swarm/<id>, worktree .worktrees/<id>
                         └─ sf review ─► operator approves ─► sf approve ─► … ─► sf finish
 ```
 
 | File | Purpose |
 |---|---|
-| `roles.conf` | Active roles in pipeline order, each with a model tier and whether it runs in the session or as a subagent. |
+| `roles.conf` | Active roles in pipeline order, each with a model tier. All run as subagents unless marked `session`. |
 | `tiers.conf` | Model per tier per harness. |
 | `packs/*.conf` | Presets for `roles.conf`. |
 | `constitution.md`, `constitution/articles/` | Rules every role obeys. |
@@ -28,7 +28,7 @@ Start a task from the harness with `/swarm <feature request>`, or by hand:
 
 ```sh
 sf new "Add login" -m "Users log in with email and password."   # prints the id
-sf start <id>      # worktree and task text; the session plays the specifier
+sf start <id>      # worktree and task text, run by the role that owns the stage
 sf review <id>     # specifier stops for approval
 sf approve <id>    # operator; moves the task to the coder
 sf ls              # id, stage, needs, title

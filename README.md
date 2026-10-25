@@ -10,12 +10,12 @@ project repository, and they talk to you in chat.
 
 | SwarmForge | This harness |
 |---|---|
-| One tmux session per role, each a long-running CLI. | Roles are harness agents. The session plays the specifier; the rest are subagents. |
+| One tmux session per role, each a long-running CLI. | Roles are harness subagents. The session only orchestrates. |
 | Handoff daemon, inbox and outbox files, `roles.tsv`. | A git-bug task per feature: `stage:<role>` label, `type: handoff` comments, one branch. |
 | Dashboard approval gate (Attention). | The specifier commits, runs `sf review`, and stops. You approve or reject in chat. |
 | Dashboard clarifications. | A role runs `sf ask`, stops, and the question reaches you in chat. `sf answer` resumes it. |
 | Per-role worktrees with back-propagation merges. | One worktree per task; roles work in sequence on the same branch, so nothing propagates backwards. |
-| `grok`, `codex`, `claude`, `copilot` backends chosen per role. | Model tiers per role: `strong` (Opus) and `fast` (Sonnet) subagents under the session's own model. |
+| `grok`, `codex`, `claude`, `copilot` backends chosen per role. | Model tiers per role: `frontier` (the session's model) for the specifier, `strong` (Opus) and `fast` (Sonnet) for the rest. |
 
 ## Prerequisites
 
@@ -46,11 +46,14 @@ Open the project in your harness and ask:
 /swarm Users can log in with email and password; lock the account after five failures.
 ```
 
-The session becomes the orchestrator and the specifier:
+The session becomes the orchestrator:
 
-1. `sf new` creates the task and its branch. The specifier writes Gherkin and a
-   QA procedure in `.worktrees/<id>`, commits, runs `sf review`, and stops.
-2. You read the spec in chat and say approve, or ask for changes.
+1. `sf new` creates the task and its branch. The `specifier` subagent, on your
+   session's model, writes Gherkin and a QA procedure in `.worktrees/<id>`,
+   commits, runs `sf review`, and returns. If the request is ambiguous it runs
+   `sf ask` with its questions first and returns; you answer in chat.
+2. The orchestrator shows you the committed spec. You say approve, or ask for
+   changes.
 3. `sf approve` hands the task to the `coder` subagent. Each subagent reads the
    constitution and its role, works on the task branch, commits, and runs
    `sf handoff`. The orchestrator dispatches the next role.
@@ -92,7 +95,7 @@ you. Headless runs need tool permissions you grant yourself; pass them in
 
 | Role | Tier | Runs as |
 |---|---|---|
-| specifier | frontier | session (your model) |
+| specifier | frontier | subagent (your session's model) |
 | coder | strong | subagent |
 | cleaner | fast | subagent |
 | architect | strong | subagent |
@@ -101,7 +104,9 @@ you. Headless runs need tool permissions you grant yourself; pass them in
 
 `swarmforge/tiers.conf` maps `strong` to Opus and `fast` to Sonnet for Claude
 Code and Copilot, and to reasoning effort for Codex. Edit either file and run
-`sf adapters`.
+`sf adapters`. Setting a role to `session` instead of `subagent` makes the
+orchestrator play it in chat, which suits co-writing a specification turn by
+turn at the cost of a fuller session context.
 
 ## Languages
 
