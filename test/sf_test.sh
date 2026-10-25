@@ -212,6 +212,43 @@ cp -R "$HERE/swarmforge" "$HERE/.claude" "$HERE/.github" "$HERE/.codex" "$work/"
   && pass "committed adapters match sf adapters" \
   || fail "committed adapters are stale; run swarmforge/bin/sf adapters"
 
+# configuration check
+rm -rf swarmforge && cp -R "$HERE/swarmforge" swarmforge
+assert_match "check passes on the shipped configuration" "$(sf check)" "^CHECK: ok \(6 roles, 5 routes\)$"
+check_fails() {
+  local name="$1" expected="$2" out
+  out="$(sf check 2>&1 || true)"
+  assert_match "$name" "$out" "$expected"
+  rm -rf swarmforge && cp -R "$HERE/swarmforge" swarmforge
+}
+echo "qa strong subagent" >> swarmforge/roles.conf
+check_fails "check rejects a duplicate role" "CHECK: roles.conf: role 'qa' listed twice"
+echo "janitor strong" >> swarmforge/roles.conf
+check_fails "check rejects a short role line" "CHECK: roles.conf: 'janitor' needs exactly"
+echo "Big_Role strong subagent" >> swarmforge/roles.conf
+check_fails "check rejects a bad role name" "CHECK: roles.conf: role name 'Big_Role'"
+echo "done strong subagent" >> swarmforge/roles.conf
+check_fails "check rejects a reserved role name" "CHECK: roles.conf: 'done' is reserved"
+echo "scribe mythic subagent" >> swarmforge/roles.conf
+check_fails "check rejects an unknown tier" "CHECK: roles.conf: 'scribe' uses unknown tier 'mythic'"
+echo "scribe fast daemon" >> swarmforge/roles.conf
+check_fails "check rejects an unknown runs-as" "CHECK: roles.conf: 'scribe' runs-as must be"
+echo "scribe fast subagent" >> swarmforge/roles.conf
+check_fails "check requires a role prompt" "CHECK: roles/scribe.md: missing role prompt"
+echo "slow opus" >> swarmforge/tiers.conf
+check_fails "check rejects a short tier line" "CHECK: tiers.conf: 'slow' needs exactly"
+echo "backwards qa,coder" >> swarmforge/routes.conf
+check_fails "check rejects an out-of-order route" "CHECK: routes.conf: backwards: route 'qa,coder' is out of order"
+echo "feature specifier" >> swarmforge/routes.conf
+check_fails "check rejects a duplicate route" "CHECK: routes.conf: route 'feature' listed twice"
+echo "weird magic github.com/x/y task - -" >> swarmforge/tools.conf
+check_fails "check rejects an unknown tool kind" "CHECK: tools.conf: 'weird' has unknown kind 'magic'"
+echo "qa strong subagent" >> swarmforge/roles.conf
+assert_fails "init refuses a broken configuration" sf init
+assert_fails "adapters refuse a broken configuration" sf adapters
+rm -rf swarmforge && cp -R "$HERE/swarmforge" swarmforge
+sf adapters >/dev/null
+
 for pair in ".claude/skills/swarm/SKILL.md .agents/skills/swarm/SKILL.md"; do
   set -- $pair
   cmp -s "$HERE/$1" "$HERE/$2" && pass "$1 matches $2" || fail "$1 differs from $2"
