@@ -1,0 +1,7 @@
+{:paths ["src" "test"]
+ :tasks
+ {test {:doc "Run the sf-cs tests"
+        :task (do
+                (require 'clojure.test 'sfcs.core-test)
+                (let [{:keys [fail error]} (clojure.test/run-tests 'sfcs.core-test)]
+                  (System/exit (+ fail error))))}}}

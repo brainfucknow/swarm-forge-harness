@@ -14,9 +14,10 @@ jobs:
             https://github.com/git-bug/git-bug/releases/latest/download/git-bug_linux_amd64
           chmod +x "$HOME/bin/git-bug"
           echo "$HOME/bin" >> "$GITHUB_PATH"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - name: Install Babashka
+        run: |
+          curl -sSL https://raw.githubusercontent.com/babashka/babashka/master/install -o install-bb
+          bash install-bb --dir "$HOME/bin"
       - name: Probe git-bug read-after-write
         run: bash test/probe_gitbug.sh 30
       - name: Test sf
@@ -24,4 +25,4 @@ jobs:
       - name: Test sf tool
         run: bash test/sf_tool_test.sh
       - name: Test sf-cs
-        run: node --test swarmforge/tools/csharp/csharp.test.mjs
+        run: bb --config swarmforge/tools/csharp/bb.edn test

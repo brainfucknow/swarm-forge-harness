@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 # sf-cs: C# tool wrapper for SwarmForge roles. See swarmforge/languages/csharp.md.
 set -euo pipefail
-command -v node >/dev/null || { echo "sf-cs: node is required (jscpd and the report readers run on it)" >&2; exit 2; }
-exec node "$(cd "$(dirname "$0")/../tools/csharp" && pwd)/cli.mjs" "$@"
+command -v bb >/dev/null || { echo "sf-cs: Babashka (bb) is required: https://babashka.org" >&2; exit 2; }
+exec bb --config "$(cd "$(dirname "$0")/../tools/csharp" && pwd)/bb.edn" -m sfcs.cli "$@"
