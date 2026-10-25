@@ -18,6 +18,7 @@ operator ──► session: orchestrator + specifier ──► subagents: coder 
 | `constitution.md`, `constitution/articles/` | Rules every role obeys. |
 | `roles/*.md` | What each role owns, verifies, and hands off. `orchestrator.md` is the session's own role. |
 | `bin/sf` | The only writer of task state. `sf --help` lists the commands. |
+| `bin/sf-cs`, `languages/csharp.md` | C# tool wrapper: tests, coverage, CRAP, DRY, mutation, each scoped to the task's changes. |
 | `handoff-protocol.md` | Task labels, records, and lifecycle. |
 
 Prerequisites: `git`, `bash`, and [`git-bug`](https://github.com/git-bug/git-bug)

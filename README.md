@@ -103,12 +103,31 @@ you. Headless runs need tool permissions you grant yourself; pass them in
 Code and Copilot, and to reasoning effort for Codex. Edit either file and run
 `sf adapters`.
 
+## Languages
+
+The constitution's tool table covers Go, Clojure, Java, and C#. For C#,
+`swarmforge/bin/sf-cs` wraps the tools so each role runs one command:
+
+| Command | Tool |
+|---|---|
+| `sf-cs test`, `sf-cs property` | `dotnet test`, split by the `Property` trait |
+| `sf-cs coverage` | coverlet Cobertura under `tmp/coverage/` |
+| `sf-cs crap` | CRAP per changed method from coverlet's complexity and coverage |
+| `sf-cs dry` | jscpd clones touching changed lines |
+| `sf-cs mutate` | Stryker.NET on changed files, survivors listed |
+
+Each exits 0 when clean, 1 on a finding, 2 on a usage error. See
+`swarmforge/languages/csharp.md` for the output formats. The report readers run
+on Node, which jscpd needs anyway.
+
 ## Layout
 
 ```text
 install.sh                       copy the pack into a project
 swarmforge/
   bin/sf                         git-bug task helper
+  bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers
+  languages/csharp.md            what each sf-cs command runs and prints
   roles.conf  tiers.conf  packs/ pipeline and models
   constitution.md  constitution/articles/
   roles/                         specifier, coder, cleaner, architect, hardener, qa, orchestrator
@@ -122,7 +141,9 @@ test/sf_test.sh                  behavioral tests for sf (needs git-bug)
 
 ```sh
 bash test/sf_test.sh
+node --test swarmforge/tools/csharp/csharp.test.mjs
 ```
 
-The tests drive `sf` against a real git-bug in a scratch repository. They do
-not pin prompt wording.
+The first drives `sf` against a real git-bug in a scratch repository. The
+second drives `sf-cs` against fixture reports and a fake `dotnet`. Neither
+pins prompt wording.

@@ -14,5 +14,10 @@ jobs:
             https://github.com/git-bug/git-bug/releases/latest/download/git-bug_linux_amd64
           chmod +x "$HOME/bin/git-bug"
           echo "$HOME/bin" >> "$GITHUB_PATH"
-      - name: Test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test sf
         run: bash test/sf_test.sh
+      - name: Test sf-cs
+        run: node --test swarmforge/tools/csharp/csharp.test.mjs
