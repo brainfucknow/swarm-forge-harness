@@ -51,11 +51,21 @@ manager comes from packageManager in package.json, else from the lockfile.
   (when-not (:all opts)
     (changes/collect-changed-lines {:base (base-of opts) :pathspecs commands/source-pathspecs})))
 
+(defn- exists? [path]
+  (fs/exists? (shell/in-dir path)))
+
 (defn- read-json [path]
-  (json/parse-string (slurp (str path))))
+  (json/parse-string (slurp (shell/in-dir path))))
+
+(defn- write-file [path content]
+  (fs/create-dirs (fs/parent (shell/in-dir path)))
+  (spit (shell/in-dir path) content))
+
+(defn- delete-file [path]
+  (fs/delete-if-exists (shell/in-dir path)))
 
 (defn- read-package []
-  (when-not (fs/exists? "package.json")
+  (when-not (exists? "package.json")
     (throw (shell/usage-error "no package.json in the current directory")))
   (read-json "package.json"))
 
@@ -64,8 +74,8 @@ manager comes from packageManager in package.json, else from the lockfile.
   []
   (let [package (read-package)]
     {:package package
-     :manager (pkg/detect-manager package (filter fs/exists? pkg/lockfiles))
-     :tsconfig? (fs/exists? "tsconfig.json")}))
+     :manager (pkg/detect-manager package (filter exists? pkg/lockfiles))
+     :tsconfig? (exists? "tsconfig.json")}))
 
 (defn- run-tool [{:keys [manager]} tool-args]
   (let [[command & args] (pkg/exec-command manager tool-args)]
@@ -104,29 +114,28 @@ manager comes from packageManager in package.json, else from the lockfile.
 (defn- cmd-coverage [args]
   (let [{:keys [package] :as proj} (project)
         runner (pkg/require-runner package)]
-    (fs/delete-if-exists coverage-report)
+    (delete-file coverage-report)
     (let [status (run-tool proj (commands/coverage-args runner args))]
       (cond
         (not (zero? status)) shell/exit-findings
-        (not (fs/exists? coverage-report))
+        (not (exists? coverage-report))
         (throw (shell/usage-error (str "no " coverage-report " after the coverage run")))
         :else (do (println (str "coverage written to " coverage-report)) shell/exit-ok)))))
 
 (defn- lint
   "Runs ESLint's complexity rule with sf-js's own config over `files`."
   [proj files]
-  (fs/create-dirs commands/eslint-dir)
-  (spit eslint-config (commands/eslint-config))
-  (fs/delete-if-exists eslint-report)
+  (write-file eslint-config (commands/eslint-config))
+  (delete-file eslint-report)
   (let [status (run-tool proj (commands/eslint-args eslint-config eslint-report files))]
-    (when-not (fs/exists? eslint-report)
+    (when-not (exists? eslint-report)
       (throw (shell/usage-error (str "eslint exited " status " without " eslint-report))))
     (read-json eslint-report)))
 
 (defn- cmd-crap [opts]
   (let [dir (or (:report opts) commands/coverage-dir)
-        coverage (fs/path dir coverage-file)]
-    (when-not (fs/exists? coverage)
+        coverage (str (fs/path dir coverage-file))]
+    (when-not (exists? coverage)
       (throw (shell/usage-error (str "no " coverage-file " under " dir "; run sf-js coverage first"))))
     (let [proj (project)
           root (shell/repo-root)
@@ -144,12 +153,12 @@ manager comes from packageManager in package.json, else from the lockfile.
 
 (defn- cmd-dry [opts]
   (when-not (:report-only opts)
-    (fs/create-dirs commands/jscpd-dir)
+    (fs/create-dirs (shell/in-dir commands/jscpd-dir))
     (let [[command & args] (commands/jscpd-args (or (:min-tokens opts) 50))
           status (shell/run command args)]
-      (when (and (not (zero? status)) (not (fs/exists? jscpd-report)))
+      (when (and (not (zero? status)) (not (exists? jscpd-report)))
         (throw (shell/usage-error (str "jscpd exited " status " without " jscpd-report))))))
-  (when-not (fs/exists? jscpd-report)
+  (when-not (exists? jscpd-report)
     (throw (shell/usage-error (str jscpd-report " not found"))))
   (let [clones (jscpd/parse-clones (read-json jscpd-report))
         changed (changed-for opts)
@@ -167,12 +176,11 @@ manager comes from packageManager in package.json, else from the lockfile.
     (if (and files (empty? files))
       (do (println "no changed source files to mutate") false)
       (do
-        (fs/create-dirs commands/stryker-dir)
-        (spit mutate/config-path (mutate/stryker-config))
-        (fs/delete-if-exists mutate/report-path)
+        (write-file mutate/config-path (mutate/stryker-config))
+        (delete-file mutate/report-path)
         (let [status (run-tool proj (mutate/stryker-args {:runner runner :tsconfig? tsconfig?
                                                            :files files :extra extra}))]
-          (when-not (fs/exists? mutate/report-path)
+          (when-not (exists? mutate/report-path)
             (throw (shell/usage-error (str "stryker exited " status " without " mutate/report-path)))))
         true))))
 
@@ -180,7 +188,7 @@ manager comes from packageManager in package.json, else from the lockfile.
   (if (and (not (:report-only opts)) (not (run-stryker opts extra)))
     shell/exit-ok
     (do
-      (when-not (fs/exists? mutate/report-path)
+      (when-not (exists? mutate/report-path)
         (throw (shell/usage-error (str mutate/report-path " not found"))))
       (let [mutants (stryker/parse-mutants (read-json mutate/report-path))
             alive (stryker/survivors mutants)]
@@ -188,22 +196,29 @@ manager comes from packageManager in package.json, else from the lockfile.
         (println (stryker/format-summary (stryker/summarize mutants)))
         (if (seq alive) shell/exit-findings shell/exit-ok)))))
 
+(def ^:private command-table
+  {"tools" (fn [_] (cmd-tools))
+   "test" (fn [{:keys [args]}] (cmd-test args))
+   "property" (fn [{:keys [args]}] (cmd-property args))
+   "coverage" (fn [{:keys [args]}] (cmd-coverage args))
+   "crap" (fn [{:keys [opts]}] (cmd-crap opts))
+   "dry" (fn [{:keys [opts]}] (cmd-dry opts))
+   "mutate" (fn [{:keys [opts extra]}] (cmd-mutate opts extra))})
+
+(defn- dispatch [command args]
+  (let [[before after] (split-with #(not= "--" %) args)
+        run (command-table command)]
+    (when-not run
+      (throw (shell/usage-error (str "unknown command '" command "'\n" usage))))
+    (run {:args (vec args)
+          :opts (:opts (cli/parse-args (vec before) option-spec))
+          :extra (vec (rest after))})))
+
 (defn main [argv]
   (let [[command & args] argv]
     (if (or (nil? command) (#{"help" "--help" "-h"} command))
       (do (println usage) shell/exit-ok)
-      (let [[before after] (split-with #(not= "--" %) args)
-            extra (vec (rest after))
-            {:keys [opts]} (cli/parse-args (vec before) option-spec)]
-        (case command
-          "tools" (cmd-tools)
-          "test" (cmd-test (vec args))
-          "property" (cmd-property (vec args))
-          "coverage" (cmd-coverage (vec args))
-          "crap" (cmd-crap opts)
-          "dry" (cmd-dry opts)
-          "mutate" (cmd-mutate opts extra)
-          (throw (shell/usage-error (str "unknown command '" command "'\n" usage))))))))
+      (dispatch command args))))
 
 (defn -main [& argv]
   (shell/run-main "sf-js" main argv))

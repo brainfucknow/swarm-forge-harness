@@ -1,7 +1,7 @@
 {:paths ["src" "test" "acceptance/src" "../core/src"]
  :tasks
  {test {:doc "Run the sf-js unit tests"
-        :task (let [namespaces '[sfjs.package-test sfjs.commands-test sfjs.crap-test sfjs.mutate-test sfjs.reports-test sfjs.acceptance-test]]
+        :task (let [namespaces '[sfjs.package-test sfjs.cli-test sfjs.commands-test sfjs.crap-test sfjs.mutate-test sfjs.reports-test sfjs.acceptance-test]]
                 (apply require 'clojure.test namespaces)
                 (let [{:keys [fail error]} (apply clojure.test/run-tests namespaces)]
                   (System/exit (+ fail error))))}

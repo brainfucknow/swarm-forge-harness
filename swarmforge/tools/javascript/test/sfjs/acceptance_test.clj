@@ -1,8 +1,11 @@
 (ns sfjs.acceptance-test
-  (:require [clojure.string :as str]
+  (:require [babashka.fs :as fs]
+            [cheshire.core :as json]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [sfjs.acceptance.generator :as generator]
-            [sfjs.acceptance.runtime :as runtime]))
+            [sfjs.acceptance.runtime :as runtime]
+            [sfjs.acceptance.worker :as worker]))
 
 (def feature
   {"background" [{"keyword" "Given" "text" "a world"}]
@@ -42,3 +45,57 @@
     (is (str/includes? source "(ns sfjs.generated.f-a-feature"))
     (is (str/includes? source "(runtime/run-scenario steps/handlers ir-json 1)"))
     (is (= source (generator/entry-point "f/a.feature" "{\"scenarios\":[{\"name\":\"one\"},{\"name\":\"two\"}]}")))))
+
+(defn- stderr-of [f]
+  (let [err (java.io.StringWriter.)]
+    [(binding [*err* err] (f)) (str/trim (str err))]))
+
+(deftest generator-command-line
+  (is (= [2 "usage: acceptance-entrypoint-generator <json-ir> <generated-test-output>"]
+         (stderr-of #(generator/run-command ["only-one"]))))
+  (let [[status message] (stderr-of #(generator/run-command ["missing.json" "out"]))]
+    (is (= 1 status))
+    (is (str/includes? message "missing.json")))
+  (let [dir (fs/create-temp-dir {:prefix "sfjs-generator"})
+        ir (str (fs/path dir "crap.json"))]
+    (try
+      (spit ir "{\"scenarios\":[]}")
+      (is (= [0 ""] (stderr-of #(generator/run-command [ir (str (fs/path dir "out"))]))))
+      (is (fs/exists? (fs/path dir "out" "metadata")))
+      (finally (fs/delete-tree dir)))))
+
+(defn- generated-dir [tests]
+  (let [dir (fs/create-temp-dir {:prefix "sfjs-worker"})]
+    (spit (str (fs/path dir "feature.json")) "{}")
+    (when tests
+      (spit (str (fs/path dir "entry.clj"))
+            (str "(ns sfjs.generated.worker-" (str/replace (str (fs/file-name dir)) #"\W" "-") "\n"
+                 "  (:require [clojure.test :refer [deftest is]]))\n"
+                 "(deftest outcome (is " tests "))\n")))
+    (str dir)))
+
+(defn- job [dir]
+  (worker/run-job {"id" "j1" "feature_json" (str (fs/path dir "feature.json")) "generated_dir" dir}))
+
+(deftest worker-jobs-report-test-outcomes
+  (let [passing (generated-dir "true")
+        failing (generated-dir "false")
+        empty-dir (generated-dir nil)]
+    (try
+      (is (= ["j1" "test_success" ""] ((juxt :id :outcome :error) (job passing))))
+      (is (= "test_failure" (:outcome (job failing))))
+      (is (str/includes? (:output (job failing)) "FAIL"))
+      (is (= "test_success" (:outcome (job passing))) "a directory's entry points load once")
+      (is (= ["infrastructure_error" (str "no generated entry points in " empty-dir)]
+             ((juxt :outcome :error) (job empty-dir))))
+      (is (= "no generated_dir; pass --generated-dir to gherkin-mutator"
+             (:error (worker/run-job {"id" "j2"}))))
+      (finally (run! fs/delete-tree [passing failing empty-dir])))))
+
+(deftest worker-answers-each-line-of-jobs
+  (let [dir (generated-dir "true")]
+    (try
+      (let [request (json/generate-string {"id" "j9" "feature_json" (str (fs/path dir "feature.json")) "generated_dir" dir})
+            output (with-out-str (with-in-str (str request "\n\n") (worker/run)))]
+        (is (= ["j9"] (map #(get % "id") (map json/parse-string (str/split-lines output))))))
+      (finally (fs/delete-tree dir)))))

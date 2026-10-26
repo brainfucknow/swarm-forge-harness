@@ -61,13 +61,19 @@
                                 {:pretty true}))
     test-file))
 
+(defn- complain [status message]
+  (binding [*out* *err*] (println message))
+  status)
+
+(defn run-command
+  "Generates for the command-line `args`; returns the exit status."
+  [args]
+  (if (not= 2 (count args))
+    (complain 2 "usage: acceptance-entrypoint-generator <json-ir> <generated-test-output>")
+    (try
+      (apply generate args)
+      0
+      (catch Exception e (complain 1 (ex-message e))))))
+
 (defn -main [& args]
-  (System/exit
-   (if (not= 2 (count args))
-     (do (binding [*out* *err*] (println "usage: acceptance-entrypoint-generator <json-ir> <generated-test-output>")) 2)
-     (try
-       (apply generate args)
-       0
-       (catch Exception e
-         (binding [*out* *err*] (println (ex-message e)))
-         1)))))
+  (System/exit (run-command args)))

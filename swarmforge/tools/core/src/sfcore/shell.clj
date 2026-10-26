@@ -10,10 +10,22 @@
 (defn usage-error [message]
   (ex-info message {:usage true}))
 
+(def ^:dynamic *dir*
+  "The directory commands run in and project paths resolve against; nil is the
+  process's own working directory."
+  nil)
+
+(defn in-dir
+  "`path` resolved against *dir*, or unchanged when there is none."
+  [path]
+  (if *dir*
+    (str (.resolve (fs/path *dir*) (str path)))
+    (str path)))
+
 (defn git
   "Runs git with the given arguments and returns its stdout; throws on failure."
   [args & {:keys [dir]}]
-  (let [result (apply p/shell {:out :string :err :string :dir dir :continue true}
+  (let [result (apply p/shell {:out :string :err :string :dir (or dir *dir*) :continue true}
                       "git" "-c" "core.quotePath=false" args)]
     (when-not (zero? (:exit result))
       (throw (ex-info (str "git " (str/join " " args) ": " (str/trim (:err result))) {})))
@@ -23,7 +35,7 @@
   (str/trim (git ["rev-parse" "--show-toplevel"] :dir dir)))
 
 (defn ref-exists? [ref dir]
-  (zero? (:exit (p/shell {:out :string :err :string :dir dir :continue true}
+  (zero? (:exit (p/shell {:out :string :err :string :dir (or dir *dir*) :continue true}
                          "git" "rev-parse" "--verify" "--quiet" (str ref "^{commit}")))))
 
 (defn run
@@ -31,7 +43,7 @@
   [command args]
   (println (str "$ " (str/join " " (cons command args))))
   (try
-    (:exit (apply p/shell {:continue true} command args))
+    (:exit (apply p/shell {:continue true :dir *dir*} command args))
     (catch java.io.IOException e
       (throw (ex-info (str command ": " (.getMessage e)) {})))))
 

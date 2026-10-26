@@ -39,11 +39,17 @@
 (defn generated-namespace [entry-point]
   (symbol (second (re-find #"\(ns (\S+)" (slurp entry-point)))))
 
-(defn run [& features]
+(defn run-features
+  "Prepares and runs the named features, or every feature; returns the
+  clojure.test summary."
+  [& features]
   (let [parser (gherkin-parser)
         features (or (seq features) (sort (map str (fs/glob features-dir "*.feature"))))
         namespaces (doall (for [feature features
                                 :let [entry-point (prepare parser feature)]]
-                            (do (load-file entry-point) (generated-namespace entry-point))))
-        {:keys [fail error]} (apply t/run-tests namespaces)]
+                            (do (load-file entry-point) (generated-namespace entry-point))))]
+    (apply t/run-tests namespaces)))
+
+(defn run [& features]
+  (let [{:keys [fail error]} (apply run-features features)]
     (System/exit (if (zero? (+ fail error)) 0 1))))

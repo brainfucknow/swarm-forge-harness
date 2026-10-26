@@ -73,20 +73,22 @@
 (defn- required [runner]
   (or runner (throw (shell/usage-error "no test runner (vitest or jest) in package.json"))))
 
-(defn runner
-  "The runner for test, property and coverage: vitest when package.json
-  lists it, else jest when listed, else nil."
-  [package]
-  (first-listed package ["vitest" "jest"]))
+(def ^:private test-runners
+  "Preference for test, property and coverage: vitest, else jest."
+  ["vitest" "jest"])
+
+(def ^:private stryker-runners
+  "Preference for mutate and tools: jest, else vitest."
+  ["jest" "vitest"])
+
+(defn runner [package]
+  (first-listed package test-runners))
 
 (defn require-runner [package]
   (required (runner package)))
 
-(defn stryker-runner
-  "The runner for mutate and tools: jest when package.json lists it, else
-  vitest when listed, else nil."
-  [package]
-  (first-listed package ["jest" "vitest"]))
+(defn stryker-runner [package]
+  (first-listed package stryker-runners))
 
 (defn require-stryker-runner [package]
   (required (stryker-runner package)))

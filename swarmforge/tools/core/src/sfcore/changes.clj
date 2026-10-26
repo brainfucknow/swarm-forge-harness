@@ -16,22 +16,24 @@
     (cond-> (assoc state :current file)
       file (update :result #(if (contains? % file) % (assoc % file (sorted-set)))))))
 
+(defn- read-hunk-line [state raw]
+  (cond (str/starts-with? raw "+") (note-line state)
+        (str/starts-with? raw "-") (update state :pending-old dec)
+        :else state))
+
+(defn- read-header-line [state raw]
+  (if-let [[_ old-count new-start new-count] (hunk-header raw)]
+    (assoc state
+           :pending-old (if old-count (parse-long old-count) 1)
+           :cursor (parse-long new-start)
+           :pending-new (if new-count (parse-long new-count) 1))
+    state))
+
 (defn- read-diff-line [{:keys [pending-new pending-old] :as state} raw]
   (cond
-    (or (pos? pending-new) (pos? pending-old))
-    (cond (str/starts-with? raw "+") (note-line state)
-          (str/starts-with? raw "-") (update state :pending-old dec)
-          :else state)
-
+    (or (pos? pending-new) (pos? pending-old)) (read-hunk-line state raw)
     (str/starts-with? raw "+++ ") (start-file state raw)
-
-    :else
-    (if-let [[_ old-count new-start new-count] (hunk-header raw)]
-      (assoc state
-             :pending-old (if old-count (parse-long old-count) 1)
-             :cursor (parse-long new-start)
-             :pending-new (if new-count (parse-long new-count) 1))
-      state)))
+    :else (read-header-line state raw)))
 
 (defn changed-lines-from-diff
   "Reads `git diff -U0` output into a map from new-side path to the sorted set
