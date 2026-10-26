@@ -17,11 +17,28 @@
 
 (defn- diff [& lines] (str/join "\n" lines))
 
-(deftest diff-files-without-added-lines
-  (testing "a file with only deletions is still listed, with no lines"
-    (is (= {"a.js" #{}}
+(deftest diff-deletions-change-the-line-after-them
+  (testing "a deletion changes the new-side line that now follows it"
+    (is (= {"a.js" #{3}}
            (changes/changed-lines-from-diff
-            (diff "--- a/a.js" "+++ b/a.js" "@@ -3 +2,0 @@" "-gone")))))
+            (diff "--- a/a.js" "+++ b/a.js" "@@ -3 +2,0 @@" "-gone"))))
+    (is (= {"a.js" #{10}}
+           (changes/changed-lines-from-diff
+            (diff "--- a/a.js" "+++ b/a.js" "@@ -10,2 +9,0 @@" "-one" "-two")))))
+  (testing "a deletion at the top of the file changes line 1"
+    (is (= {"a.js" #{1}}
+           (changes/changed-lines-from-diff
+            (diff "--- a/a.js" "+++ b/a.js" "@@ -1,2 +0,0 @@" "-one" "-two")))))
+  (testing "deletions and additions in one file"
+    (is (= {"a.js" #{2 7}}
+           (changes/changed-lines-from-diff
+            (diff "--- a/a.js" "+++ b/a.js" "@@ -2 +2 @@" "-old" "+new" "@@ -8 +6,0 @@" "-gone")))))
+  (testing "a deleted file has no new side"
+    (is (= {}
+           (changes/changed-lines-from-diff
+            (diff "--- a/a.js" "+++ /dev/null" "@@ -1,2 +0,0 @@" "-one" "-two"))))))
+
+(deftest diff-file-headers
   (testing "a file named twice keeps the lines found so far"
     (is (= {"a.js" #{2 9}}
            (changes/changed-lines-from-diff

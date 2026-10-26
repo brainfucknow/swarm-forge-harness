@@ -112,3 +112,16 @@
                                                    coverage "/w"))))]
     (is (= 1.0 (covered-by 5)) "column 5 is offset 4: before the inner function, so the outer one")
     (is (= 0.0 (covered-by 6)) "column 6 is offset 5: the inner function starts there")))
+
+(deftest fatal-eslint-messages-are-analysis-errors
+  (let [report [{"filePath" "/w/src/a.ts"
+                 "messages" [{"fatal" true "severity" 2 "line" 3 "message" "Parsing error: Unexpected token )"}
+                             {"severity" 1 "line" 1 "message" "File ignored because of a matching ignore pattern."}
+                             {"ruleId" "complexity" "severity" 2 "line" 5
+                              "message" "Function 'f' has a complexity of 1. Maximum allowed is 0."}]}
+                {"filePath" "/w/src/b.ts"
+                 "messages" [{"fatal" true "severity" 2 "line" 21 "message" "Parsing error: Declaration expected."}]}]]
+    (is (= ["src/a.ts:3: Parsing error: Unexpected token )"
+            "src/b.ts:21: Parsing error: Declaration expected."]
+           (crap/fatal-messages report "/w"))))
+  (is (= [] (crap/fatal-messages [{"filePath" "/w/a.ts" "messages" [{"fatal" false "line" 1 "message" "m"}]}] "/w"))))

@@ -78,6 +78,11 @@
   (let [lines (str/split-lines (slurp (path world file)))]
     (write-file world file (str (str/join "\n" (assoc lines (dec n) (str "// " file " rewritten line " n))) "\n"))))
 
+(defn delete-lines [world file first-line last-line]
+  (let [lines (str/split-lines (slurp (path world file)))
+        kept (concat (take (dec first-line) lines) (drop last-line lines))]
+    (write-file world file (str/join (map #(str % "\n") kept)))))
+
 (defn install-fakes [{:keys [bin system-bin state] :as world}]
   (fs/create-dirs bin)
   (fs/create-dirs system-bin)

@@ -118,6 +118,7 @@ export function deposit(total: number, amount: number): number {
   return total + amount;
 }
 
+// withdraw
 export function withdraw(total: number, amount: number, overdraft: boolean): number {
   if (amount > total && !overdraft) {
     throw new Error("overdraft not allowed");
@@ -372,6 +373,7 @@ export function deposit(total: number, amount: number): number {
   return total + amount;
 }
 
+// withdraw
 export function withdraw(total: number, amount: number, overdraft: boolean): number {
   if (amount > total && !overdraft) {
     throw new Error("overdraft not allowed");
@@ -591,6 +593,82 @@ check "QA-9.6 P2 mutates through pnpm with the jest runner and no checker" \
   '[ -n "$stryker_line" ] && grep -qF -- "--testRunner jest" <<<"$stryker_line" && ! grep -qF -- "--checkers" <<<"$stryker_line"'
 check "QA-9.6 P2 mutation completes with a score" 'last_line | grep -q "^mutation score "'
 
+# ---------------------------------------------------------------- QA-9a
+# Runs after QA-9.6: QA-9.4 and QA-9.5 leave P1's swarm/qa as QA-9.3 left it,
+# with every mutant in src/ledger.ts killed.
+section "QA-9a Mutation scope (P1)"
+cd "$QA/vitest-ts"
+run "$SFJS" mutate --all
+check "QA-9a.1 mutate --all exits 1 and lists the uncovered src/legacy.ts" \
+  'rc_is 1 && out_matches "^(Survived|NoCoverage) +src/legacy\.ts:"'
+check "QA-9a.1 the incremental file now holds the src/legacy.ts mutants" \
+  'grep -qF "src/legacy.ts" tmp/stryker/incremental.json'
+sed -i 's/amounts.map((amount) => amount \* 2)/amounts.map((value) => value * 2)/' src/ledger.ts
+commit "Rename the doubled callback parameter"
+run "$SFJS" mutate --base main
+scoped_findings="$(grep -E '^(Survived|NoCoverage|mutation score)' <<<"$OUT")"
+check "QA-9a.2 a differential run judges only src/ledger.ts and exits 0" \
+  'rc_is 0 && out_lacks src/legacy.ts && [ -n "$(cmd_line "npx --no-install stryker run")" ]'
+check "QA-9a.2 the score is 100% with no Survived or NoCoverage count" \
+  'last_line | grep -q "^mutation score 100\.0%" && ! last_line | grep -qE "Survived|NoCoverage"'
+run "$SFJS" mutate --report-only
+check "QA-9a.3 --report-only repeats the differential verdict without stryker" \
+  'rc_is 0 && no_cmd_lines && [ "$(grep -E "^(Survived|NoCoverage|mutation score)" <<<"$OUT")" = "$scoped_findings" ]'
+run "$SFJS" mutate --report-only --all
+check "QA-9a.4 --report-only --all judges the whole report and lists src/legacy.ts again" \
+  'rc_is 1 && no_cmd_lines && out_matches "^(Survived|NoCoverage) +src/legacy\.ts:"'
+
+# ---------------------------------------------------------------- QA-9b
+section "QA-9b Literal mutate paths (P1)"
+cd "$QA/vitest-ts"
+git switch -q -c swarm/qa-pages main
+mkdir -p src/pages
+cat >'src/pages/[id].ts' <<'TS'
+export function isLarge(id: number): boolean {
+  return id > 10;
+}
+TS
+cat >'src/pages/[...slug].ts' <<'TS'
+export function isDeep(depth: number): boolean {
+  return depth > 3;
+}
+TS
+cat >src/pages/pages.test.ts <<'TS'
+import { expect, it } from "vitest";
+import { isLarge } from "./[id]";
+import { isDeep } from "./[...slug]";
+
+it("tells large ids from small ones", () => {
+  expect(isLarge(50)).toBe(true);
+  expect(isLarge(1)).toBe(false);
+});
+
+it("tells deep paths from shallow ones", () => {
+  expect(isDeep(9)).toBe(true);
+  expect(isDeep(0)).toBe(false);
+});
+TS
+commit "Add bracketed pages"
+run "$SFJS" mutate --base main
+stryker_line="$(cmd_line 'npx --no-install stryker run')"
+check "QA-9b.1 bracketed names reach --mutate as literal patterns" \
+  'line_has_all "$stryker_line" "--mutate src/pages/[[]...slug[]].ts,src/pages/[[]id[]].ts"'
+check "QA-9b.1 stryker lists survivors in both bracketed files" \
+  'out_matches "^Survived +src/pages/\[id\]\.ts:" && out_matches "^Survived +src/pages/\[\.\.\.slug\]\.ts:"'
+check "QA-9b.1 the JSON report has an entry for each bracketed file" \
+  'node -e '"'"'const r=require(process.argv[1]);const k=Object.keys(r.files);for(const f of ["src/pages/[id].ts","src/pages/[...slug].ts"])if(!k.some(x=>x===f||x.endsWith("/"+f)))process.exit(1)'"'"' "$PWD/tmp/stryker/mutation.json"'
+echo 'export const ab = 1;' >'src/a,b.ts'
+commit "Add a module with a comma in its name"
+run "$SFJS" mutate --base main
+check "QA-9b.2 a changed file with a comma exits 2 before stryker" \
+  'rc_is 2 && err_has "cannot mutate src/a,b.ts: Stryker splits --mutate on commas" && [ -z "$(cmd_line ".*stryker run")" ]'
+git mv 'src/a,b.ts' src/a-b.ts
+commit "Rename it without the comma"
+run "$SFJS" mutate --base main
+check "QA-9b.3 without the comma mutate runs stryker again" \
+  '[ -n "$(cmd_line "npx --no-install stryker run")" ] && last_line | grep -q "^mutation score "'
+git switch -q swarm/qa
+
 # ---------------------------------------------------------------- QA-10
 section "QA-10 Base branch"
 rm -rf "$QA/base" && cp -R "$QA/vitest-ts" "$QA/base" && cd "$QA/base"
@@ -606,6 +684,64 @@ run "$SFJS" dry --report-only
 check "QA-10.2 no main or master exits 2" 'rc_is 2 && err_has "no base branch found"'
 run env SWARMFORGE_BASE=trunk "$SFJS" dry --report-only
 check "QA-10.2 SWARMFORGE_BASE names the base" '[ "$RC" = "$main_rc" ] && [ "$OUT" = "$main_out" ]'
+
+# ---------------------------------------------------------------- QA-10a
+section "QA-10a CRAP after deleting lines (P1)"
+cd "$QA/vitest-ts"
+# crap_after_commit BRANCH SED-SCRIPT: a fresh branch from main whose only change
+# is the deletion SED-SCRIPT makes in src/ledger.ts, then coverage and crap.
+crap_after_commit() {
+  git switch -q -c "$1" main
+  sed -i "$2" src/ledger.ts
+  commit "Delete lines in ledger"
+  quiet "$SFJS" coverage
+  run "$SFJS" crap --base main
+}
+added_lines() { git diff --numstat main -- src/ledger.ts | cut -f1; }
+crap_after_commit swarm/qa-del-guard '/if (amount > total \&\& !overdraft) {/,+2d'
+check "QA-10a.1 the commit only deletes lines" '[ "$(added_lines)" = 0 ]'
+check "QA-10a.1 deleting withdraw's guard selects withdraw and not deposit" \
+  'out_matches "src/ledger\.ts:[0-9]+ withdraw$" && out_lacks deposit && last_line | grep -qE "^1 changed function\(s\), [0-9]+ over CRAP 10$"'
+crap_after_commit swarm/qa-del-blank '0,/^$/{/^$/d}'
+check "QA-10a.2 the commit only deletes lines" '[ "$(added_lines)" = 0 ]'
+check "QA-10a.2 deleting the blank line before the comment selects no function" \
+  'rc_is 0 && [ "$(last_line)" = "0 changed function(s), 0 over CRAP 10" ]'
+crap_after_commit swarm/qa-del-comment '/^\/\/ withdraw$/d'
+check "QA-10a.3 the commit only deletes lines" '[ "$(added_lines)" = 0 ]'
+check "QA-10a.3 deleting the comment above withdraw selects withdraw and not deposit" \
+  'out_matches "src/ledger\.ts:[0-9]+ withdraw$" && out_lacks deposit'
+git switch -q -c swarm/qa-del-uncommitted main
+sed -i '/if (amount > total \&\& !overdraft) {/,+2d' src/ledger.ts
+quiet "$SFJS" coverage
+run "$SFJS" crap --base main
+check "QA-10a.4 an uncommitted deletion selects withdraw as well" \
+  'out_matches "src/ledger\.ts:[0-9]+ withdraw$" && out_lacks deposit && last_line | grep -qE "^1 changed function\(s\), [0-9]+ over CRAP 10$"'
+git checkout -q -- src/ledger.ts
+git switch -q swarm/qa
+
+# ---------------------------------------------------------------- QA-10b
+# The copy keeps P1's swarm/qa, whose src/ledger.ts differs from main, so a
+# reverted syntax error still leaves a changed file for ESLint to read.
+section "QA-10b ESLint analysis errors (P1 copy)"
+rm -rf "$QA/lint" && cp -R "$QA/vitest-ts" "$QA/lint" && cd "$QA/lint"
+quiet "$SFJS" coverage
+sed -i '/^export function withdraw/a\  const = ;' src/ledger.ts
+syntax_line="$(grep -n '^  const = ;$' src/ledger.ts | cut -d: -f1)"
+commit "Break the syntax"
+run "$SFJS" crap --base main
+check "QA-10b.1 a parse error in a changed file exits 2 and names its line" \
+  'rc_is 2 && err_has "eslint could not analyze src/ledger.ts:$syntax_line: Parsing error:" && out_lacks "function(s)"'
+run "$SFJS" crap --all
+check "QA-10b.2 crap --all fails the same way" \
+  'rc_is 2 && err_has "eslint could not analyze src/ledger.ts:$syntax_line: Parsing error:" && out_lacks "function(s)"'
+quiet git revert --no-edit HEAD
+rm -rf node_modules/typescript-eslint
+run "$SFJS" crap --base main
+check "QA-10b.3 ESLint failing on its own exits 2" 'rc_is 2 && err_has "eslint exited 2"'
+quiet npm install
+run "$SFJS" crap --base main
+check "QA-10b.4 with ESLint restored crap works and its exit 1 is not a failure" \
+  'rc_is 0 && [ -n "$(cmd_line "npx --no-install eslint")" ] && last_line | grep -qE "^[1-9][0-9]* changed function\(s\), 0 over CRAP 10$"'
 
 # ---------------------------------------------------------------- QA-11
 section "QA-11 Installation through sf tool"

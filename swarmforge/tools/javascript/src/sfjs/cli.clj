@@ -113,15 +113,26 @@ manager comes from packageManager in package.json, else from the lockfile.
         (throw (outcome/usage-error (str "no " commands/coverage-report " after the coverage run")))
         :else (do (println (str "coverage written to " commands/coverage-report)) outcome/exit-ok)))))
 
+(def ^:private eslint-failed
+  "ESLint's own exit status for a configuration or internal error; 1 only
+  means error messages, and every complexity message is one at maximum 0."
+  2)
+
 (defn- lint
-  "Runs ESLint's complexity rule with sf-js's own config over `files`."
-  [proj files]
+  "Runs ESLint's complexity rule with sf-js's own config over `files`; fails
+  when ESLint could not analyze them."
+  [proj files root]
   (write-file commands/eslint-config-path (commands/eslint-config))
   (delete-file commands/eslint-report)
   (let [status (run-tool proj (commands/eslint-args commands/eslint-config-path commands/eslint-report files))]
+    (when (= eslint-failed status)
+      (throw (outcome/usage-error (str "eslint exited " status))))
     (when-not (exists? commands/eslint-report)
       (throw (outcome/usage-error (str "eslint exited " status " without " commands/eslint-report))))
-    (read-json commands/eslint-report)))
+    (let [report (read-json commands/eslint-report)]
+      (when-let [fatal (seq (jscrap/fatal-messages report root))]
+        (throw (outcome/usage-error (str/join "\n" (map #(str "eslint could not analyze " %) fatal)))))
+      report)))
 
 (defn- cmd-crap [{:keys [opts]}]
   (let [dir (or (:report opts) commands/coverage-dir)
@@ -133,7 +144,7 @@ manager comes from packageManager in package.json, else from the lockfile.
           changed (changed-for opts)
           files (if changed (commands/production-sources (keys changed)) ["."])
           functions (if (seq files)
-                      (jscrap/score (jscrap/parse-eslint (lint proj files) root) (read-json coverage) root)
+                      (jscrap/score (jscrap/parse-eslint (lint proj files root) root) (read-json coverage) root)
                       [])]
       (shell/emit (crap/review (jscrap/select functions changed) crap/format-row "function" changed)))))
 
@@ -150,12 +161,19 @@ manager comes from packageManager in package.json, else from the lockfile.
         changed (changed-for opts)]
     (shell/emit (jscpd/review clones changed (when changed (git/repo-root))))))
 
+(defn- mutate-scope
+  "The changed source files to mutate and judge, or nil with --all."
+  [opts]
+  (when-let [changed (changed-for opts)]
+    (commands/production-sources (keys changed))))
+
 (defn- run-stryker
-  "Runs Stryker; false when there was nothing to mutate."
-  [opts extra]
+  "Runs Stryker on `files`; false when there was nothing to mutate."
+  [files extra]
   (let [{:keys [package tsconfig?] :as proj} (project)
-        runner (pkg/require-stryker-runner package)
-        files (when-let [changed (changed-for opts)] (commands/production-sources (keys changed)))]
+        runner (pkg/require-stryker-runner package)]
+    (when-let [errors (seq (mutate/comma-errors files))]
+      (throw (outcome/usage-error (str/join "\n" errors))))
     (if (and files (empty? files))
       (do (println "no changed source files to mutate") false)
       (do
@@ -168,12 +186,14 @@ manager comes from packageManager in package.json, else from the lockfile.
         true))))
 
 (defn- cmd-mutate [{:keys [opts extra]}]
-  (if (and (not (:report-only opts)) (not (run-stryker opts extra)))
-    outcome/exit-ok
-    (do
-      (when-not (exists? mutate/report-path)
-        (throw (outcome/usage-error (str mutate/report-path " not found"))))
-      (shell/emit (stryker/review (stryker/parse-mutants (read-json mutate/report-path)))))))
+  (let [files (mutate-scope opts)]
+    (if (and (not (:report-only opts)) (not (run-stryker files extra)))
+      outcome/exit-ok
+      (do
+        (when-not (exists? mutate/report-path)
+          (throw (outcome/usage-error (str mutate/report-path " not found"))))
+        (let [mutants (stryker/parse-mutants (read-json mutate/report-path))]
+          (shell/emit (stryker/review (mutate/in-scope mutants files (when files (git/repo-root))))))))))
 
 (def ^:private commands
   {"tools" cmd-tools "test" cmd-test "property" cmd-property "coverage" cmd-coverage

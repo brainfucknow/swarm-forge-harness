@@ -67,9 +67,8 @@
    },
    {
     "ruleId": null,
-    "fatal": true,
-    "severity": 2,
-    "message": "Parsing error",
+    "severity": 1,
+    "message": "Unused eslint-disable directive (no problems were reported).",
     "line": 40,
     "column": 1
    }

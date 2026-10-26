@@ -63,21 +63,32 @@
           (world/git w "switch" "--quiet" "swarm/task")))
     w))
 
+(defn- delete-lines [w first-line last-line file]
+  (world/delete-lines w file (parse-long first-line) (parse-long last-line))
+  (world/commit-all w (str "delete from " file))
+  w)
+
 (defn- untracked [w file n]
   (world/write-file w file (world/numbered-lines file (parse-long n)))
   w)
 
 ;; ESLint, Istanbul, jscpd and Stryker reports
 
-(defn- add-eslint-message [w name line file complexity]
-  (let [w (update-in w [:eslint (world/path w file)] (fnil conj [])
-                     {:ruleId "complexity" :severity 1
-                      :message (str (if (= name "(anonymous)") "Arrow function" (str "Function '" name "'"))
-                                    " has a complexity of " complexity ". Maximum allowed is 0.")
-                      :line (parse-long line) :column 1 :endLine (parse-long line) :endColumn 2})]
+(defn- report-eslint [w file message]
+  (let [w (update-in w [:eslint (world/path w file)] (fnil conj []) message)]
     (world/state-file w "eslint.json"
                       (json/generate-string (for [[path messages] (:eslint w)] {:filePath path :messages messages})))
     w))
+
+(defn- add-eslint-message [w name line file complexity]
+  (report-eslint w file {:ruleId "complexity" :severity 1
+                         :message (str (if (= name "(anonymous)") "Arrow function" (str "Function '" name "'"))
+                                       " has a complexity of " complexity ". Maximum allowed is 0.")
+                         :line (parse-long line) :column 1 :endLine (parse-long line) :endColumn 2}))
+
+(defn- add-eslint-problem [w kind message line file]
+  (report-eslint w file (cond-> {:severity 1 :message message :line (parse-long line) :column 1}
+                          (= kind "fatal") (assoc :fatal true :severity 2))))
 
 (defn- coverage-dir [w]
   (or (:coverage-dir w) "tmp/coverage"))
@@ -135,17 +146,21 @@
     (world/write-json w "tmp/jscpd/jscpd-report.json" {:duplicates (:clones w)})
     w))
 
-(defn- add-mutant [w mutant]
+(defn- add-mutant
+  "Writes the report, and keeps it for the fake Stryker to write when it runs."
+  [w mutant]
   (let [w (update w :mutants (fnil conj []) mutant)
-        files (group-by :file (:mutants w))]
-    (world/write-json w "tmp/stryker/mutation.json"
-                      {:schemaVersion "2" :thresholds {:high 80 :low 60}
-                       :files (into {} (for [[f mutants] files]
-                                         [f {:language "typescript" :source ""
-                                             :mutants (for [[i {:keys [line status mutator replacement]}] (map-indexed vector mutants)]
-                                                        {:id (str f "#" i) :mutatorName mutator :replacement replacement
-                                                         :status status
-                                                         :location (location line 1 line 2)})}]))})
+        files (group-by :file (:mutants w))
+        report (json/generate-string
+                {:schemaVersion "2" :thresholds {:high 80 :low 60}
+                 :files (into {} (for [[f mutants] files]
+                                   [f {:language "typescript" :source ""
+                                       :mutants (for [[i {:keys [line status mutator replacement]}] (map-indexed vector mutants)]
+                                                  {:id (str f "#" i) :mutatorName mutator :replacement replacement
+                                                   :status status
+                                                   :location (location line 1 line 2)})}]))})]
+    (world/write-file w "tmp/stryker/mutation.json" report)
+    (world/state-file w "stryker.json" report)
     w))
 
 (defn- one-mutant [w status mutator file line replacement]
@@ -283,8 +298,10 @@
    [#"tsconfig.json is (present|absent)" tsconfig]
    [#"\"([^\"]+)\" is added on the task branch" add-on-task-branch]
    [#"line (\d+) of \"([^\"]+)\" (?:is )?(changed on the task branch|changed but not committed|changed on main after the task began)" change-line]
+   [#"lines (\d+) to (\d+) of \"([^\"]+)\" are deleted on the task branch" delete-lines]
    [#"\"([^\"]+)\" is untracked with (\d+) lines" untracked]
    [#"ESLint reports \"([^\"]+)\" at line (\d+) of \"([^\"]+)\" with complexity (\d+)" add-eslint-message]
+   [#"ESLint reports a (fatal|non-fatal) \"([^\"]+)\" at line (\d+) of \"([^\"]+)\"" add-eslint-problem]
    [#"Istanbul covers (\d+) of (\d+) statements of \"([^\"]+)\" on lines (\d+) to (\d+) of \"([^\"]+)\"" cover-statements]
    [#"Istanbul counts (\d+) calls of \"([^\"]+)\" on lines (\d+) to (\d+) of \"([^\"]+)\" with no statements" count-calls]
    [#"the coverage report is moved to \"([^\"]+)\"" move-coverage]

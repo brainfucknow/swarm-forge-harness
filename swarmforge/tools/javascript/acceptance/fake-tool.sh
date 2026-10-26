@@ -54,7 +54,11 @@ case "$tool" in
       report "$(value_of --output "$@")/jscpd-report.json" '{"duplicates":[]}'
     fi ;;
   stryker)
-    if [ ! -e "$state/no-report-stryker" ]; then
+    if [ -e "$state/no-report-stryker" ]; then
+      :
+    elif [ -f "$state/stryker.json" ]; then
+      report tmp/stryker/mutation.json "$(< "$state/stryker.json")"
+    else
       report tmp/stryker/mutation.json '{"schemaVersion":"2","thresholds":{"high":80,"low":60},"files":{}}'
     fi ;;
 esac

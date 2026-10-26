@@ -6,9 +6,16 @@ Feature: sf-js mutate
 
   sf-js mutate runs StrykerJS through the package manager on the task's
   changed source files (test files and .d.ts files left out), incrementally,
-  with the JSON report at tmp/stryker/mutation.json. It lists every Survived
-  or NoCoverage mutant and exits 1 when there is any. --report-only re-reads
-  the last report.
+  with the JSON report at tmp/stryker/mutation.json. Each changed file goes
+  to --mutate as a pattern that matches only that file: each of the glob
+  characters [ ] * ? { } ( ) is wrapped in a one-character class, so
+  pages/[id].ts becomes pages/[[]id[]].ts. Stryker splits --mutate on commas,
+  so a changed source file whose name has a comma fails the run with exit 2,
+  naming each such file, before Stryker runs. It lists every Survived or
+  NoCoverage mutant and exits 1 when there is any. Without --all it judges
+  only the mutants in the changed source files, because an incremental
+  report keeps mutants from earlier runs on other files. --report-only
+  re-reads the last report with the same scope.
 
   Background:
     Given a task worktree branched from main
@@ -120,7 +127,8 @@ Feature: sf-js mutate
 
   # sf-js mutate 10
   Scenario Outline: sf-js mutate 10: survivors are listed and fail the run
-    Given the Stryker report has a <status> "<mutator>" mutant in "src/ledger.ts" at line <line> replacing it with "<replacement>"
+    Given "src/ledger.ts" is added on the task branch
+    And the Stryker report has a <status> "<mutator>" mutant in "src/ledger.ts" at line <line> replacing it with "<replacement>"
     When I run sf-js with "mutate --report-only"
     Then the exit status is <exit>
     And the output has the line "<row>"
@@ -133,7 +141,8 @@ Feature: sf-js mutate
 
   # sf-js mutate 11
   Scenario Outline: sf-js mutate 11: the score leaves out Ignored, CompileError and RuntimeError mutants
-    Given the Stryker report has <killed> mutants with status "Killed"
+    Given "src/ledger.ts" is added on the task branch
+    And the Stryker report has <killed> mutants with status "Killed"
     And the Stryker report has <survived> mutants with status "Survived"
     And the Stryker report has <nocoverage> mutants with status "NoCoverage"
     And the Stryker report has <timeout> mutants with status "Timeout"
@@ -170,3 +179,58 @@ Feature: sf-js mutate
       | stryker_status |
       | 1              |
       | 3              |
+
+  # sf-js mutate 14
+  Scenario Outline: sf-js mutate 14: without --all only mutants in changed source files are judged
+    Given "src/ledger.ts" is added on the task branch
+    And the Stryker report has a Killed "EqualityOperator" mutant in "src/ledger.ts" at line 3 replacing it with "a >= b"
+    And the Stryker report has a <status> "BooleanLiteral" mutant in "src/old.ts" at line 5 replacing it with "true"
+    When I run sf-js with "<command>"
+    Then the exit status is 0
+    And the output does not mention "src/old.ts"
+    And the output ends with the line "mutation score 100.0% (Killed 1)"
+
+    Examples:
+      | status     | command                          |
+      | Survived   | mutate --base main               |
+      | NoCoverage | mutate --base main               |
+      | Survived   | mutate --report-only --base main |
+
+  # sf-js mutate 15
+  Scenario Outline: sf-js mutate 15: --all judges every mutant in the report
+    Given "src/ledger.ts" is added on the task branch
+    And the Stryker report has a Killed "EqualityOperator" mutant in "src/ledger.ts" at line 3 replacing it with "a >= b"
+    And the Stryker report has a Survived "BooleanLiteral" mutant in "src/old.ts" at line 5 replacing it with "true"
+    When I run sf-js with "<command>"
+    Then the exit status is 1
+    And the output has the line "Survived   src/old.ts:5  BooleanLiteral  true"
+    And the output ends with the line "mutation score 50.0% (Killed 1, Survived 1)"
+
+    Examples:
+      | command                    |
+      | mutate --all               |
+      | mutate --report-only --all |
+
+  # sf-js mutate 16
+  Scenario Outline: sf-js mutate 16: glob characters in a changed file name match only that file
+    Given "<file>" is added on the task branch
+    When I run sf-js with "mutate --base main"
+    Then the command line that runs "stryker" contains "--mutate <pattern>"
+
+    Examples:
+      | file                | pattern                 |
+      | pages/[id].ts       | pages/[[]id[]].ts       |
+      | pages/[...slug].tsx | pages/[[]...slug[]].tsx |
+      | src/a*b.ts          | src/a[*]b.ts            |
+      | src/a?b.ts          | src/a[?]b.ts            |
+      | src/{a}.ts          | src/[{]a[}].ts          |
+      | src/@(x).ts         | src/@[(]x[)].ts         |
+
+  # sf-js mutate 17
+  Scenario: sf-js mutate 17: a changed source file with a comma in its name fails before Stryker
+    Given "src/a,b.ts" is added on the task branch
+    And "src/c.ts" is added on the task branch
+    When I run sf-js with "mutate --base main"
+    Then the exit status is 2
+    And the error output contains "cannot mutate src/a,b.ts: Stryker splits --mutate on commas"
+    And sf-js did not run "stryker"

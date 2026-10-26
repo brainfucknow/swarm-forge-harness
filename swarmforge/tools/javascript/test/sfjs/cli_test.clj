@@ -170,6 +170,37 @@
   (is (str/includes? (usage-failure crap-tool "crap") "run sf-js coverage first"))
   (is (str/includes? (usage-failure crap-tool "crap" "--report" "nowhere") "no coverage-final.json under nowhere")))
 
+(defn- eslint-reporting [messages status]
+  (fn [line]
+    (when (some #{"eslint"} line)
+      (write! "tmp/eslint/eslint.json"
+              (json/generate-string [{"filePath" (project-file "src/ledger.ts") "messages" messages}])))
+    status))
+
+(deftest crap-fails-when-eslint-could-not-analyze-a-file
+  (change-ledger!)
+  (write-coverage!)
+  (let [tool (eslint-reporting [{"fatal" true "severity" 2 "line" 3 "message" "Parsing error: Unexpected token )"}
+                                {"fatal" true "severity" 2 "line" 9 "message" "Parsing error: ';' expected."}]
+                               1)
+        message (usage-failure tool "crap")]
+    (is (= (str "eslint could not analyze src/ledger.ts:3: Parsing error: Unexpected token )\n"
+                "eslint could not analyze src/ledger.ts:9: Parsing error: ';' expected.")
+           message))))
+
+(deftest crap-fails-when-eslint-exits-2
+  (change-ledger!)
+  (write-coverage!)
+  (is (= "eslint exited 2" (usage-failure (eslint-reporting [] 2) "crap"))))
+
+(deftest crap-accepts-eslint-exit-1-from-complexity-messages
+  (change-ledger!)
+  (write-coverage!)
+  (let [tool (eslint-reporting [{"ruleId" "complexity" "severity" 2 "line" 10 "column" 8
+                                 "message" "Function 'withdraw' has a complexity of 1. Maximum allowed is 0."}]
+                               1)]
+    (is (= 0 (:status (run-sf-js tool "crap"))))))
+
 (deftest crap-fails-when-eslint-writes-no-report
   (write-coverage!)
   (is (str/includes? (usage-failure ok "crap" "--all") "eslint exited 0 without tmp/eslint/eslint.json")))
@@ -222,10 +253,46 @@
     (is (str/includes? (:out result) "no changed source files to mutate"))))
 
 (deftest mutate-report-only-rereads-the-last-report
+  (change-ledger!)
   (write! "tmp/stryker/mutation.json" (slurp (str (fs/path fixtures "mutation.json"))))
   (is (= 1 (:status (run-sf-js ok "mutate" "--report-only"))))
   (fs/delete (project-file "tmp/stryker/mutation.json"))
   (is (str/includes? (usage-failure ok "mutate" "--report-only") "tmp/stryker/mutation.json not found")))
+
+(defn- other-file-survivor [mutation]
+  (assoc-in mutation ["files" "src/other.js"]
+            {"language" "javascript" "source" ""
+             "mutants" [{"id" "9" "mutatorName" "BooleanLiteral" "replacement" "true" "status" "Survived"
+                         "location" {"start" {"line" 5 "column" 1} "end" {"line" 5 "column" 2}}}]}))
+
+(deftest mutate-judges-only-changed-files-without-all
+  (write! "src/ledger.ts" (str (numbered 30) "// added\n"))
+  (git "add" ".")
+  (git "commit" "--quiet" "-m" "extend ledger")
+  (let [killed-only (update-in (json/parse-string (slurp (str (fs/path fixtures "mutation.json"))))
+                               ["files" "src/ledger.ts" "mutants"]
+                               (fn [mutants] (filterv #(= "Killed" (get % "status")) mutants)))
+        report (json/generate-string (other-file-survivor killed-only))
+        tool (fn [line] (when (some #{"stryker"} line) (write! "tmp/stryker/mutation.json" report)) 0)]
+    (doseq [argv [["mutate"] ["mutate" "--report-only"]]]
+      (let [result (apply run-sf-js tool argv)]
+        (is (= 0 (:status result)) (pr-str argv))
+        (is (not (str/includes? (:out result) "src/other.js")) (pr-str argv))
+        (is (str/includes? (:out result) "mutation score 100.0% (Killed 1)") (pr-str argv))))
+    (doseq [argv [["mutate" "--all"] ["mutate" "--report-only" "--all"]]]
+      (let [result (apply run-sf-js tool argv)]
+        (is (= 1 (:status result)) (pr-str argv))
+        (is (str/includes? (:out result) "Survived   src/other.js:5  BooleanLiteral  true") (pr-str argv))))))
+
+(deftest mutate-refuses-file-names-with-commas
+  (write! "src/a,b.ts" (numbered 3))
+  (write! "src/c.ts" (numbered 3))
+  (git "add" ".")
+  (git "commit" "--quiet" "-m" "comma")
+  (let [message (usage-failure stryker-tool "mutate")]
+    (is (= "cannot mutate src/a,b.ts: Stryker splits --mutate on commas" message))
+    (is (= [] @*calls*))
+    (is (not (fs/exists? (project-file "tmp/stryker/stryker.config.mjs"))))))
 
 (deftest mutate-fails-when-stryker-writes-no-report
   (is (str/includes? (usage-failure ok "mutate" "--all") "stryker exited 0 without")))

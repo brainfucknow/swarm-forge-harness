@@ -25,7 +25,7 @@ the project root with `--base main` unless the step says otherwise.
 
 - `package.json` with `"type": "module"`, no `packageManager` field, and `vitest` in devDependencies. Run `npm install` so that `package-lock.json` exists.
 - A `tsconfig.json` with `"strict": true`, `"noEmit": true` and `"include": ["src"]`.
-- `src/ledger.ts` exports `deposit(total, amount)` (one statement) and `withdraw(total, amount, overdraft)`. `withdraw` has two `if` branches and throws on an overdraft that is not allowed.
+- `src/ledger.ts` exports `deposit(total, amount)` (one statement) and `withdraw(total, amount, overdraft)`. `withdraw` has two `if` branches and throws on an overdraft that is not allowed. One blank line follows `deposit`, then a comment line `// withdraw` directly above `withdraw`'s first line.
 - `src/ledger.test.ts` tests `deposit` and only the happy path of `withdraw`.
 - `src/ledger.property.test.ts` holds one fast-check property on `deposit`. Its test name is `PROPERTY-ONLY`.
 - `src/legacy.ts` holds a 20-line block of code.
@@ -108,10 +108,45 @@ Work on a throwaway copy of P1, `tmp/qa/pm`.
 5. `$SFJS mutate --base main -- --concurrency 2` ends the Stryker line with `--concurrency 2` and does not contain `--concurrency 4`.
 6. In P2, change `src/cart.js`, commit, and run `$SFJS mutate --base main`. The line runs `pnpm exec stryker run` with `--testRunner jest` and without `--checkers`.
 
+## QA-9a Mutation scope (P1)
+
+Continue from the end of QA-9 step 3, where every mutant in `src/ledger.ts` is killed.
+
+1. `$SFJS mutate --all` exits 1. It lists at least one `Survived` or `NoCoverage` line for `src/legacy.ts`, which no test covers. The incremental file now holds those mutants.
+2. Make one more committed change to `src/ledger.ts` that the tests still pin, for example rename a local variable. `$SFJS mutate --base main` exits 0. It lists no line for `src/legacy.ts`. Its last line starts `mutation score 100.0%` and has no `Survived` or `NoCoverage` count.
+3. `$SFJS mutate --report-only` prints the same findings and the same last line as step 2, and runs no Stryker.
+4. `$SFJS mutate --report-only --all` exits 1 and lists the `src/legacy.ts` lines again.
+
+## QA-9b Literal mutate paths (P1)
+
+Work on a fresh branch from `main`.
+
+1. Add `src/pages/[id].ts` and `src/pages/[...slug].ts`, each exporting a function with a comparison, and a test file that calls both without telling `>` from `>=`. Commit. `$SFJS mutate --base main` prints a Stryker line that contains `--mutate src/pages/[[]...slug[]].ts,src/pages/[[]id[]].ts`. Stryker reports mutants for both files: the run lists `Survived` lines for `src/pages/[id].ts` and `src/pages/[...slug].ts`, and `tmp/stryker/mutation.json` has an entry for each.
+2. Add and commit `src/a,b.ts`, a small module. `$SFJS mutate --base main` exits 2. Stderr has `cannot mutate src/a,b.ts: Stryker splits --mutate on commas`. No `$ ` Stryker line is printed.
+3. Rename it to `src/a-b.ts` and commit. `$SFJS mutate --base main` runs Stryker again.
+
 ## QA-10 Base branch
 
 1. In a copy of P1 whose base branch is renamed to `master`, `$SFJS dry --report-only` (with no `--base`) works as it does with `main`.
 2. With the base branch renamed to `trunk`, `$SFJS dry --report-only` exits 2 and stderr has `no base branch found`. `SWARMFORGE_BASE=trunk $SFJS dry --report-only` works.
+
+## QA-10a CRAP after deleting lines (P1)
+
+Each step starts on a fresh branch from `main` and runs `$SFJS coverage` before `crap`.
+
+1. Delete only the overdraft guard of `withdraw` (its `if` line and the `throw` inside it) and commit. No other line changes. `$SFJS crap --base main` lists `src/ledger.ts:<line> withdraw` and not `deposit`. The last line reads `1 changed function(s), N over CRAP 10`.
+2. Delete only the blank line after `deposit` and commit. The comment line now follows the deletion, and it is outside both functions. `$SFJS crap --base main` exits 0 and ends with `0 changed function(s), 0 over CRAP 10`.
+3. Delete only the `// withdraw` comment line and commit. `withdraw`'s first line now follows the deletion. `$SFJS crap --base main` lists `withdraw` and not `deposit`.
+4. Repeat step 1 without committing. `$SFJS crap --base main` lists `withdraw` as in step 1.
+
+## QA-10b ESLint analysis errors (P1 copy)
+
+Work on a throwaway copy of P1, `tmp/qa/lint`, after `$SFJS coverage` has written `tmp/coverage/coverage-final.json`.
+
+1. Commit a syntax error inside `withdraw`, for example a line `const = ;`. `$SFJS crap --base main` exits 2. Stderr has `eslint could not analyze src/ledger.ts:<line>: Parsing error:` with the line of the syntax error. Stdout has no `function(s)` line.
+2. `$SFJS crap --all` fails the same way.
+3. Revert the syntax error. Break ESLint itself, for example by removing `node_modules/typescript-eslint`. `$SFJS crap --base main` exits 2 and stderr has `eslint exited 2`.
+4. Restore `node_modules` (`npm install`). `$SFJS crap --base main` works again, and ESLint's exit status 1 from complexity messages does not fail it.
 
 ## QA-11 Installation through sf tool
 

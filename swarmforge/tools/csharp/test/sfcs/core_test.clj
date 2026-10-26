@@ -36,7 +36,7 @@
                              "-bye"])
         changed (changes/changed-lines-from-diff diff)]
     (is (= ["Bank/Ledger.cs"] (keys changed)))
-    (is (= [7 29 30] (vec (get changed "Bank/Ledger.cs"))))))
+    (is (= [7 13 29 30] (vec (get changed "Bank/Ledger.cs"))) "the deletion at 12 changes line 13 after it")))
 
 (deftest path-matching
   (let [changed {"Bank/Ledger.cs" (sorted-set 7)}]

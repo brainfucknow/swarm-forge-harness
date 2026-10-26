@@ -1,6 +1,7 @@
 (ns sfjs.mutate
   "The StrykerJS command line and the config file sf-js runs it with."
   (:require [clojure.string :as str]
+            [sfcore.changes :as changes]
             [sfjs.commands :as commands]))
 
 (def config-path (str commands/stryker-dir "/stryker.config.mjs"))
@@ -11,6 +12,28 @@
 (defn- sets-concurrency? [extra]
   (some #(or (#{"--concurrency" "-c"} %) (str/starts-with? % "--concurrency=")) extra))
 
+(defn literal-pattern
+  "A --mutate glob that matches only `file`: each glob character sits in a
+  one-character class."
+  [file]
+  (str/replace file #"[\[\]*?{}()]" #(str "[" % "]")))
+
+(defn comma-errors
+  "Stryker splits --mutate on commas, so a file whose name has one cannot be
+  passed to it."
+  [files]
+  (vec (for [file files :when (str/includes? file ",")]
+         (str "cannot mutate " file ": Stryker splits --mutate on commas"))))
+
+(defn in-scope
+  "The mutants in `files`, or every mutant when `files` is nil. An incremental
+  report keeps mutants from earlier runs on other files."
+  [mutants files root]
+  (if (nil? files)
+    mutants
+    (let [wanted (set files)]
+      (filterv #(wanted (changes/relative-path (:file %) root)) mutants))))
+
 (defn stryker-args
   "`files` are the files to mutate, or nil to leave them to Stryker's own
   configuration; `extra` are the caller's arguments after --."
@@ -19,7 +42,7 @@
            "--incremental" "--incrementalFile" incremental-path]
     (not (sets-concurrency? extra)) (into ["--concurrency" default-concurrency])
     tsconfig? (into ["--checkers" "typescript"])
-    (seq files) (into ["--mutate" (str/join "," files)])
+    (seq files) (into ["--mutate" (str/join "," (map literal-pattern files))])
     :always (into extra)))
 
 (def ^:private project-configs

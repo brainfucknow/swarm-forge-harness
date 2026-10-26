@@ -33,7 +33,8 @@
   (if (and short? (= 1 n)) "" (str "," n)))
 
 (defn- render-file
-  "A file's diff section, and the new-side lines it adds."
+  "A file's diff section, and the new-side lines it changes: the lines it
+  adds, and the line after each deletion-only hunk."
   [file hunks]
   (loop [[{:keys [gap removed added short? texts]} & more :as todo] hunks
          cursor 0
@@ -46,9 +47,9 @@
             body (concat [(str "@@ -" start (header-count removed short?) " +" shown-start (header-count added short?) " @@")]
                          (map #(str "-" %) (take removed texts))
                          (map #(str "+" %) (take added (drop removed texts))))]
-        (recur more (+ start added) (into lines body) (into added-lines (range start (+ start added))))))))
+        (recur more (+ start added) (into lines body) (into added-lines (if (zero? added) [start] (range start (+ start added)))))))))
 
-(defspec diffs-read-back-every-added-line trials
+(defspec diffs-read-back-every-changed-line trials
   (prop/for-all [files (gen/map relative (gen/vector hunk 0 4) {:max-elements 4})]
     (let [rendered (into (sorted-map) (for [[file hunks] files] [file (render-file file hunks)]))
           text (str/join "\n" (map first (vals rendered)))]
