@@ -86,7 +86,9 @@ mutants do not count toward the score; `Timeout` counts as detected.
 
 sf-js runs Stryker with `tmp/stryker/stryker.config.mjs`, which loads the
 project's own Stryker config file (`stryker.config.*`, `stryker.conf.*`, or
-their dotted forms) when there is one and only redirects the JSON report.
+their dotted forms) when there is one and redirects the JSON report. Under a
+linked `node_modules` (pnpm), where Stryker cannot find the project's runner
+and checker plugins from its own location, it appends them to `appendPlugins`.
 Stryker's sandbox stays in its default `.stryker-tmp/`.
 
 ## Conventions the tools rely on
@@ -108,6 +110,7 @@ bb --config swarmforge/tools/javascript/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn property
 swarmforge/bin/sf tool ensure gherkin-parser
 bb --config swarmforge/tools/javascript/bb.edn acceptance [feature ...]
+bash swarmforge/tools/javascript/qa/sf-js-qa.sh
 ```
 
 The first runs the unit tests against fixture reports, including
@@ -129,6 +132,10 @@ gherkin-mutator --feature swarmforge/tools/javascript/features/crap.feature \
   --work-dir tmp/sf-js/mutation/crap \
   --runner-worker "bb --config swarmforge/tools/javascript/bb.edn acceptance-worker"
 ```
+
+The last runs the end-to-end QA procedure `qa/sf-js.md` against real
+npm, pnpm, yarn and bun projects under `tmp/qa/`, with the real Vitest, Jest,
+tsc, ESLint, jscpd and StrykerJS; it needs the npm registry.
 
 The shared core in `swarmforge/tools/core/` serves `sf-cs` as well. Its
 policy namespaces are pure: `sfcore.changes` (diff parsing, path matching),

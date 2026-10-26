@@ -29,4 +29,5 @@
   (let [config (mutate/stryker-config)]
     (is (str/includes? config "fileName: \"tmp/stryker/mutation.json\""))
     (is (str/includes? config "\"stryker.config.mjs\""))
-    (is (str/includes? config "\".stryker.conf.json\""))))
+    (is (str/includes? config "\".stryker.conf.json\""))
+    (is (str/includes? config "appendPlugins: [...(project.appendPlugins ?? []), ...linkedPlugins]"))))

@@ -27,11 +27,23 @@
         extension [".json" ".js" ".mjs" ".cjs"]]
     (str base extension)))
 
+(def ^:private linked-plugins
+  "Stryker finds its plugins next to its own real path. A linked
+  node_modules (pnpm) keeps the runner and checker plugins elsewhere, so the
+  config appends the project's copies by resolved URL."
+  (str "const plugins = \"node_modules/@stryker-mutator\";\n"
+       "const linked = existsSync(resolve(plugins, \"core\"))\n"
+       "  && realpathSync(resolve(plugins, \"core\")) !== resolve(plugins, \"core\");\n"
+       "const linkedPlugins = !linked ? []\n"
+       "  : readdirSync(plugins).filter((name) => /-(runner|checker)$/.test(name))\n"
+       "    .map((name) => import.meta.resolve(`@stryker-mutator/${name}`));\n\n"))
+
 (defn stryker-config
   "A Stryker config that loads the project's own config file, when there is
-  one, and sends the JSON report to tmp/stryker/mutation.json."
+  one, appends the project's linked Stryker plugins, and sends the JSON report
+  to tmp/stryker/mutation.json."
   []
-  (str "import { existsSync, readFileSync } from \"node:fs\";\n"
+  (str "import { existsSync, readdirSync, readFileSync, realpathSync } from \"node:fs\";\n"
        "import { resolve } from \"node:path\";\n"
        "import { pathToFileURL } from \"node:url\";\n\n"
        "const names = [" (str/join ", " (map pr-str project-configs)) "];\n"
@@ -39,7 +51,9 @@
        "const project = !found ? {}\n"
        "  : found.endsWith(\".json\") ? JSON.parse(readFileSync(found, \"utf8\"))\n"
        "  : (await import(pathToFileURL(resolve(found)).href)).default;\n\n"
+       linked-plugins
        "export default {\n"
        "  ...project,\n"
+       "  appendPlugins: [...(project.appendPlugins ?? []), ...linkedPlugins],\n"
        "  jsonReporter: { ...project.jsonReporter, fileName: " (pr-str report-path) " },\n"
        "};\n"))
