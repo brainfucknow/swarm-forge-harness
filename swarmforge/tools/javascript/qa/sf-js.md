@@ -33,7 +33,7 @@ the project root with `--base main` unless the step says otherwise.
 
 ### P2: `tmp/qa/jest-js` (pnpm, Jest, plain JavaScript)
 
-- `package.json` with `"packageManager": "pnpm@<installed pnpm version>"` and `jest` in devDependencies. Run `pnpm install` so that `pnpm-lock.yaml` exists.
+- `package.json` with `"packageManager": "pnpm@<installed pnpm version>"`, and `jest` and `typescript` in devDependencies, `typescript` pinned to the range `typescript-eslint` declares as its peer (pnpm would otherwise take a newer `typescript` than typescript-eslint accepts). Run `pnpm install` so that `pnpm-lock.yaml` exists.
 - No `tsconfig.json`.
 - `src/cart.js` (CommonJS) exports `total(items)` with one `if`.
 - `src/cart.test.js` and `src/cart.property.test.js`, the second one fast-check.

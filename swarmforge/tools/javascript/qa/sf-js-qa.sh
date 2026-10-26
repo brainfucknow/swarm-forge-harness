@@ -170,7 +170,11 @@ build_p2() {
   "packageManager": "pnpm@$pnpm_version"
 }
 EOF
-  quiet pnpm add --save-dev jest
+  # pnpm takes the latest typescript, which may be newer than typescript-eslint
+  # accepts; keeping it in range is the project's job, not sf-js tools'.
+  local typescript_range
+  typescript_range="$(cd "$QA" && npm view typescript-eslint peerDependencies.typescript)"
+  quiet pnpm add --save-dev jest "typescript@$typescript_range"
   mkdir -p src
   cat >src/cart.js <<'EOF'
 function total(items) {

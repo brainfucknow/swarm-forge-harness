@@ -30,6 +30,7 @@ rerunning the tool. Every tool run is echoed first as a `$ ` line.
 - `test`, `property` and `coverage` run Vitest when `package.json` lists `vitest` in `dependencies` or `devDependencies`, else Jest when it lists `jest`.
 - `mutate` and `tools` pick the other way round when both are listed: Jest when `package.json` lists `jest`, else Vitest. `sf-js tools` installs Vitest when neither is listed.
 - The tool packages are the runner, `@vitest/coverage-v8` for Vitest, `typescript`, `eslint`, `typescript-eslint`, `@stryker-mutator/core`, the Stryker runner plugin for the runner, `@stryker-mutator/typescript-checker` when `tsconfig.json` exists, and `fast-check`.
+- `sf-js tools` adds each missing package by bare name and does not choose versions; a person keeps the project's tool versions compatible. In particular, keep `typescript` within the range `typescript-eslint` declares in its `peerDependencies` (`npm view typescript-eslint peerDependencies`). npm resolves that range by itself; pnpm, yarn and bun take the latest `typescript`, which may be newer than typescript-eslint and the Stryker TypeScript checker accept, so in those projects add a compatible `typescript` before running `sf-js tools`, or pin it afterwards.
 - sf-js works on the `package.json` in the current directory. Workspaces and monorepos are out of scope.
 
 ## Changed code
