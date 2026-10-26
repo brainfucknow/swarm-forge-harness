@@ -5,7 +5,7 @@
 
 (defn parse-mutants
   "Reads a Stryker mutation-report.json (mutation-testing-elements schema)
-  into a flat list of mutants with their file and line."
+  into a flat list of mutants, each with its file and line."
   [report]
   (->> (get report "files")
        (mapcat (fn [[file entry]]

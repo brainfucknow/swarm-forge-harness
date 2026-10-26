@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Probe: is a label written by git-bug visible to the very next git-bug
-# process? Prints one line per round, and the raw ref and git views when not.
+# Probe: does the next git-bug process see a label that git-bug just wrote?
+# Prints one line per round. When the label is not visible, also prints the raw
+# ref and git views.
 set -euo pipefail
 
 rounds="${1:-30}"
@@ -19,9 +20,8 @@ full="$(git-bug bug new --non-interactive -t probe -m probe 2>/dev/null | awk '{
 full="$(git-bug bug show "$full" --field id)"
 ref="refs/bugs/$full"
 
-# Each round adds a label, reads, removes it, reads again, and re-adds it the
-# way `sf reject` then `sf review` do, checking every read against the write
-# that preceded it.
+# Each round adds a label, reads, removes it, reads, and adds it again, as
+# `sf reject` and then `sf review` do. Each read must agree with the last write.
 stale=0
 check() {
   local round="$1" step="$2" label="$3" expect="$4"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# sf-tool: install the constitution tools project-locally and wrap them with
-# the constitution's argument guardrails. Catalogue: swarmforge/tools.conf.
+# sf-tool: installs the constitution tools in the project and wraps them with
+# the argument guardrails of the constitution. Catalogue: swarmforge/tools.conf.
 set -euo pipefail
 
 usage() {

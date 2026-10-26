@@ -16,7 +16,7 @@ scratch="$(mktemp -d)"
 trap 'rc=$?; [ "$rc" -eq 0 ] || diagnose "exit status $rc"; rm -rf "$scratch"' EXIT
 export HOME="$scratch/home"; mkdir -p "$HOME"
 
-# When the script exits non-zero, dump the git-bug state so a CI log explains itself.
+# On a non-zero exit, dump the git-bug state so that the CI log shows the cause.
 diagnose() {
   echo "=== diagnostics after failure ($1) ===" >&2
   [ -d "$repo/.git" ] || return 0
@@ -155,7 +155,7 @@ assert_eq "finish deletes the branch" "$(git branch --list "swarm/$id")" ""
 assert_eq "finish closes the task" "$(sf ls)" ""
 assert_eq "closed task is not next" "$(sf next done 2>/dev/null || echo NO_TASK)" "NO_TASK"
 
-# a label write that git-bug drops is repeated until it is visible
+# sf repeats a label write that git-bug drops until the label is visible
 shim="$scratch/dropping-git-bug"; dropped="$scratch/dropped"
 cat > "$shim" <<EOF
 #!/usr/bin/env bash
