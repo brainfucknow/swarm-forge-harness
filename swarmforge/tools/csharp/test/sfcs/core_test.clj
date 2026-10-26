@@ -173,3 +173,13 @@
 (deftest usage-errors
   (is (= 2 (:status (sfcs {} "nope"))))
   (is (= 2 (:status (sfcs {} "crap" "--report" (str (fs/path *repo* "missing")))))))
+
+(deftest path-and-ref-options-stay-strings
+  (testing "a report directory named like a boolean is still a directory"
+    (let [{:keys [status err]} (sfcs {} "crap" "--all" "--report" "false")]
+      (is (= 2 status))
+      (is (str/includes? err "no coverage.cobertura.xml under false"))))
+  (testing "a base ref named like a number is still a ref"
+    (let [{:keys [status err]} (sfcs {} "crap" "--base" "123" "--report" (str (fs/path fixtures "coverage")))]
+      (is (= 2 status))
+      (is (str/includes? err "123")))))
