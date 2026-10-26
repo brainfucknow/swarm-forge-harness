@@ -13,12 +13,12 @@ assert_match() { if echo "$2" | grep -Eq "$3"; then pass "$1"; else fail "$1: '$
 assert_fails() { if "$@" >/dev/null 2>&1; then fail "$1 should fail"; else pass "$1 fails"; fi; }
 
 scratch="$(mktemp -d)"
-trap 'rm -rf "$scratch"' EXIT
+trap 'rc=$?; [ "$rc" -eq 0 ] || diagnose "exit status $rc"; rm -rf "$scratch"' EXIT
 export HOME="$scratch/home"; mkdir -p "$HOME"
 
-# On an unexpected failure, dump the git-bug state so a CI log explains itself.
+# When the script exits non-zero, dump the git-bug state so a CI log explains itself.
 diagnose() {
-  echo "=== diagnostics after failure at line $1 ===" >&2
+  echo "=== diagnostics after failure ($1) ===" >&2
   [ -d "$repo/.git" ] || return 0
   cd "$repo"
   echo "--- refs" >&2; git for-each-ref refs/bugs >&2 || true
@@ -31,7 +31,6 @@ diagnose() {
     git log --format='%h %ci %s' "refs/bugs/$b" >&2 || true
   done
 }
-trap 'diagnose $LINENO' ERR
 git config --global user.name tester
 git config --global user.email tester@example.com
 git config --global init.defaultBranch main
