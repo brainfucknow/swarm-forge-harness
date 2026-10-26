@@ -9,6 +9,7 @@
   - Clojure: install with Clojure CLI/deps.edn; mutation `github.com/unclebob/clj-mutate`, CRAP `github.com/unclebob/crap4clj`, DRY `github.com/unclebob/dry4clj`.
   - Java: install with Maven (`mvn`); mutation `github.com/unclebob/mutate4java`, CRAP `github.com/unclebob/crap4java`, DRY `github.com/unclebob/dry4java`.
   - C#: install with `sf-cs tools`; mutation `sf-cs mutate` (Stryker.NET), CRAP `sf-cs crap` (coverlet Cobertura), DRY `sf-cs dry` (jscpd). `swarmforge/languages/csharp.md` maps every constitution tool to its `sf-cs` command and explains the output.
+  - JavaScript/TypeScript: install with `sf-js tools`; tests `sf-js test` (Vitest, else Jest, after `tsc --noEmit`), mutation `sf-js mutate` (StrykerJS), CRAP `sf-js crap` (ESLint complexity with Istanbul coverage), DRY `sf-js dry` (jscpd). `swarmforge/languages/javascript.md` maps every constitution tool to its `sf-js` command and explains the output.
 - Install every listed tool with `sf tool ensure <tool>` and check it with `sf tool require <tool>`; `sf tool list` prints the catalogue. Wrappers land in `.swarmforge/bin/` at the repository root, ignored by git and shared by every task worktree, so a tool install never writes outside the project. Run tools through those wrappers (`sf tool bin` prints the directory to put on PATH); they carry the argument guardrails below.
 
 ## Language Defaults
@@ -16,6 +17,7 @@
 - For Clojure or Babashka projects, write Speclj specs, not `clojure.test`.
 - For Java projects, avoid using Maven to run tests; build dedicated test runners and run those instead.
 - For C# projects, run tests, coverage, CRAP, DRY, and mutation through `sf-cs`; mark property tests with `[Trait("Category", "Property")]`.
+- For JavaScript and TypeScript projects, run tests, coverage, CRAP, DRY, and mutation through `sf-js`; write property tests with fast-check in files named `*.property.test.*`.
 
 ## Design And Testability
 - Work in small, reviewable increments.
@@ -43,15 +45,16 @@
 - Run constitution tools one at a time. Do not run CRAP, DRY, coverage, language mutation, Gherkin mutation, or structure-check concurrently.
 - Tools that take a worker limit must use `--max-workers 4` or `--workers 4`.
 - Function mutation is differential against the source manifest. Do not pass `--mutate-all`.
-- Scan changed and new source files with the language mutation tool's scan/count mode as a hint that a module may mix jobs. Split a source file when it has more than one job. Do not split a one-job module to chase a mutation-site count. Preserve mutation manifests across the split; do not hand-edit them. C# has no scan/count mode; use the complexity column of `sf-cs crap --all` as that hint.
+- Scan changed and new source files with the language mutation tool's scan/count mode as a hint that a module may mix jobs. Split a source file when it has more than one job. Do not split a one-job module to chase a mutation-site count. Preserve mutation manifests across the split; do not hand-edit them. C# has no scan/count mode; use the complexity column of `sf-cs crap --all` as that hint. JavaScript has none either; use the `cc` column of `sf-js crap --all`.
 - For C#, "differential against the manifest" means `sf-cs mutate` without `--all`: Stryker mutates only files changed since the base branch.
+- For JavaScript and TypeScript, it means `sf-js mutate` without `--all`: StrykerJS mutates only the changed source files, incrementally.
 - Gherkin mutation is differential against the feature manifest (`--level hard`). Do not pass `--level full`.
 - Run acceptance generation and acceptance tests sequentially.
 - Avoid running whole-suite language test commands concurrently with acceptance generation.
 - Run the relevant local verification command before handoff whenever the project has one.
 
 ## Guardrails
-- Do not invent project-local CRAP, DRY, mutation, or coverage proxies. Install and run the constitution tools (`crap4clj` with cloverage, `dry4clj`, `clj-mutate`, speclj, `sf-cs`, or the language table). Do not treat a homegrown `bb crap` / `bb coverage` / `bb mutation-count` task or a throwaway report-parsing script as those tools.
+- Do not invent project-local CRAP, DRY, mutation, or coverage proxies. Install and run the constitution tools (`crap4clj` with cloverage, `dry4clj`, `clj-mutate`, speclj, `sf-cs`, `sf-js`, or the language table). Do not treat a homegrown `bb crap` / `bb coverage` / `bb mutation-count` task or a throwaway report-parsing script as those tools.
 - Do not edit mutation testing or Gherkin acceptance mutation manifests by hand; allow approved mutation tools to update those manifests as part of their normal runs.
 - Do not commit unrelated local changes or generated artifacts unless required for the task.
 - Before relying on an unfamiliar command, inspect local help or project documentation.

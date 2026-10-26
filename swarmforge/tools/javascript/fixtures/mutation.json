@@ -1,0 +1,127 @@
+{
+ "schemaVersion": "2",
+ "thresholds": {
+  "high": 80,
+  "low": 60
+ },
+ "files": {
+  "src/ledger.ts": {
+   "language": "typescript",
+   "source": "",
+   "mutants": [
+    {
+     "id": "1",
+     "mutatorName": "EqualityOperator",
+     "replacement": "amount >= total",
+     "location": {
+      "start": {
+       "line": 14,
+       "column": 5
+      },
+      "end": {
+       "line": 14,
+       "column": 20
+      }
+     },
+     "status": "Survived"
+    },
+    {
+     "id": "2",
+     "mutatorName": "BooleanLiteral",
+     "replacement": "true",
+     "location": {
+      "start": {
+       "line": 21,
+       "column": 5
+      },
+      "end": {
+       "line": 21,
+       "column": 20
+      }
+     },
+     "status": "NoCoverage"
+    },
+    {
+     "id": "3",
+     "mutatorName": "ConditionalExpression",
+     "replacement": "false",
+     "location": {
+      "start": {
+       "line": 14,
+       "column": 5
+      },
+      "end": {
+       "line": 14,
+       "column": 20
+      }
+     },
+     "status": "Killed"
+    },
+    {
+     "id": "4",
+     "mutatorName": "BlockStatement",
+     "replacement": "{}",
+     "location": {
+      "start": {
+       "line": 15,
+       "column": 5
+      },
+      "end": {
+       "line": 15,
+       "column": 20
+      }
+     },
+     "status": "Timeout"
+    },
+    {
+     "id": "5",
+     "mutatorName": "StringLiteral",
+     "replacement": "\"\"",
+     "location": {
+      "start": {
+       "line": 16,
+       "column": 5
+      },
+      "end": {
+       "line": 16,
+       "column": 20
+      }
+     },
+     "status": "RuntimeError"
+    },
+    {
+     "id": "6",
+     "mutatorName": "ArithmeticOperator",
+     "replacement": "a - b",
+     "location": {
+      "start": {
+       "line": 17,
+       "column": 5
+      },
+      "end": {
+       "line": 17,
+       "column": 20
+      }
+     },
+     "status": "CompileError"
+    },
+    {
+     "id": "7",
+     "mutatorName": "Regex",
+     "replacement": "/x/",
+     "location": {
+      "start": {
+       "line": 18,
+       "column": 5
+      },
+      "end": {
+       "line": 18,
+       "column": 20
+      }
+     },
+     "status": "Ignored"
+    }
+   ]
+  }
+ }
+}
