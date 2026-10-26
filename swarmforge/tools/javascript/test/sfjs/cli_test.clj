@@ -227,6 +227,10 @@
   (is (str/includes? (usage-failure ok "dry" "--report-only") "tmp/jscpd/jscpd-report.json not found"))
   (is (str/includes? (usage-failure (fails-tool "npx") "dry" "--all") "jscpd exited 1 without")))
 
+(deftest dry-does-not-review-a-stale-report
+  (jscpd-tool ["npx"])
+  (is (str/includes? (usage-failure (fails-tool "npx") "dry" "--all") "jscpd exited 1 without")))
+
 (defn- stryker-tool [line]
   (when (some #{"stryker"} line)
     (write! "tmp/stryker/mutation.json" (slurp (str (fs/path fixtures "mutation.json")))))
