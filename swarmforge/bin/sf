@@ -181,11 +181,19 @@ require_label() {
 # git-bug can serve the next process a label list that predates the previous
 # process's write. Every label write is therefore verified by reading it back,
 # and repeated once a second until it is visible.
+# label_write new|rm <id> <label>: a write that was already in effect is not
+# an error; any other failure is.
+label_write() {
+  local out
+  if out="$(bug label "$1" "$2" "$3" 2>&1)"; then return 0; fi
+  grep -q 'no label added or removed' <<< "$out" && return 0
+  die "git-bug label $1 $3 failed: $out"
+}
+
 add_label() {
   local id="$1" label="$2" try
   for try in 1 2 3 4 5; do
-    has_label "$id" "$label" && return 0
-    bug label new "$id" "$label" >/dev/null
+    label_write new "$id" "$label"
     has_label "$id" "$label" && return 0
     sleep 1
   done
@@ -195,8 +203,7 @@ add_label() {
 rm_label() {
   local id="$1" label="$2" try
   for try in 1 2 3 4 5; do
-    has_label "$id" "$label" || return 0
-    bug label rm "$id" "$label" >/dev/null
+    label_write rm "$id" "$label"
     has_label "$id" "$label" || return 0
     sleep 1
   done
