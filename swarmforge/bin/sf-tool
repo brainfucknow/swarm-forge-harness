@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # sf-tool: install the constitution tools project-locally and wrap them with
-# the constitution's argument guardrails. Catalogue: swarmforge/tools.conf.
+# the constitution's argument guardrails. Catalogue: swarmforge/tools.conf of
+# the checkout sf tool runs in.
 set -euo pipefail
 
 usage() {
@@ -12,9 +13,10 @@ usage: sf tool <command> [tool]
   list             print the catalogue
   bin              print the wrapper directory; put it on PATH
 
-Wrappers live in .swarmforge/bin/ and sources in .swarmforge/tools/, both
-under the repository root and ignored by git. SWARMFORGE_TOOL_SRC points every
-GitHub source at one local checkout instead of cloning.
+The catalogue is swarmforge/tools.conf of the checkout you run in. Wrappers
+live in .swarmforge/bin/ and sources in .swarmforge/tools/, both under the
+main checkout and ignored by git. SWARMFORGE_TOOL_SRC points every GitHub
+source at one local checkout instead of cloning.
 EOF
 }
 
@@ -26,7 +28,9 @@ repo_root() {
   (cd "$common/.." && pwd)
 }
 
-catalogue() { grep -Ev '^\s*(#|$)' "$(repo_root)/swarmforge/tools.conf"; }
+checkout_root() { git rev-parse --show-toplevel; }
+
+catalogue() { grep -Ev '^\s*(#|$)' "$(checkout_root)/swarmforge/tools.conf"; }
 
 spec_of() {
   local tool="$1" line
@@ -45,6 +49,8 @@ source_dir() {
   else echo "$(repo_root)/.swarmforge/tools/${source##*/}"
   fi
 }
+
+coverage_config() { echo "$(repo_root)/.swarmforge/tools/$1-coverage/bb.edn"; }
 
 needs_of() {
   local needs="$1"
@@ -66,15 +72,72 @@ cmd_require() {
   echo "OK: $tool $(wrapper_path "$tool")"
 }
 
+# A source directory that exists is used as it is; only a missing one is cloned.
 ensure_source() {
   local source="$1" dir
   dir="$(source_dir "$source")"
-  if [ ! -f "$dir/bb.edn" ]; then
-    [ -z "${SWARMFORGE_TOOL_SRC:-}" ] || die "SWARMFORGE_TOOL_SRC has no bb.edn: $dir"
+  if [ -z "${SWARMFORGE_TOOL_SRC:-}" ] && [ ! -d "$dir" ]; then
     mkdir -p "$(dirname "$dir")"
-    git clone --quiet --depth 1 "https://$source.git" "$dir" || die "failed to clone https://$source.git"
+    git clone --quiet --depth 1 "https://$source.git" "$dir" >&2 || die "failed to clone https://$source.git"
   fi
   echo "$dir"
+}
+
+# Prints the keys of the top-level :tasks map of a bb.edn, one per line.
+bb_tasks() {
+  awk '
+    function form(kind, token) {
+      if (depth == 1) {
+        count1++
+        if (count1 % 2 == 1) key = (kind == "atom") ? token : ""
+        else if (key == ":tasks" && kind == "{") { in_tasks = 1; count2 = 0 }
+      } else if (depth == 2 && in_tasks) {
+        count2++
+        if (count2 % 2 == 1 && kind == "atom") print token
+      }
+    }
+    { text = text $0 "\n" }
+    END {
+      n = length(text); i = 1
+      while (i <= n) {
+        c = substr(text, i, 1)
+        if (c ~ /[ \t\r\n,]/ || c ~ /[#^@`~'"'"']/) { i++; continue }
+        if (c == ";") { while (i <= n && substr(text, i, 1) != "\n") i++; continue }
+        if (c == "\"") {
+          i++
+          while (i <= n && (c = substr(text, i, 1)) != "\"") i += (c == "\\") ? 2 : 1
+          i++; form("string", ""); continue
+        }
+        if (c ~ /[{(\[]/) { form(c, ""); depth++; i++; continue }
+        if (c ~ /[})\]]/) { depth--; if (depth == 1) in_tasks = 0; i++; continue }
+        if (c == "\\") { i += 2; while (i <= n && substr(text, i, 1) ~ /[A-Za-z0-9]/) i++; form("char", ""); continue }
+        start = i
+        while (i <= n && substr(text, i, 1) !~ /[][{}() \t\r\n,;"]/) i++
+        form("atom", substr(text, start, i - start))
+      }
+    }' "$1"
+}
+
+namespace_file() {
+  local dir="$1" namespace="$2" path ext
+  path="$(echo "$namespace" | tr . / | tr - _)"
+  for ext in clj cljc bb; do
+    [ -f "$dir/src/$path.$ext" ] && return 0
+  done
+  return 1
+}
+
+# Prints why the source lacks the catalogue's entry point, or nothing.
+entry_point_problem() {
+  local kind="$1" dir="$2" task="$3"
+  case "$kind" in
+    bb)
+      if [ ! -f "$dir/bb.edn" ]; then echo "no bb.edn in $dir"
+      elif ! bb_tasks "$dir/bb.edn" | grep -Fxq -- "$task"; then echo "$dir/bb.edn has no task '$task'"
+      fi ;;
+    bbmain)
+      namespace_file "$dir" "$task" || echo "$dir/src has no namespace $task" ;;
+  esac
 }
 
 rewrite_mutate() {
@@ -111,16 +174,81 @@ set -- "${args[@]}"
 EOF
 }
 
+# Appends a Babashka coverage command unless the caller settled coverage or
+# the Clojure CLI can run the project's own :cov alias.
+rewrite_coverage() {
+  local tool="$1"
+  echo "cfg=$(sq "$(coverage_config "$tool")")"
+  cat <<'EOF'
+settled=
+if command -v clj >/dev/null 2>&1 && [ -f deps.edn ]; then settled=1; fi
+args=("$@")
+roots=()
+k=0
+while [ "$k" -lt "${#args[@]}" ]; do
+  case "${args[$k]}" in
+    --source-root|-s) roots+=("${args[$((k + 1))]}"); k=$((k + 2)) ;;
+    --lcov) k=$((k + 2)) ;;
+    --coverage-command|--use-existing-coverage) settled=1; k=$((k + 1)) ;;
+    *) k=$((k + 1)) ;;
+  esac
+done
+if [ -z "$settled" ]; then
+  [ "${#roots[@]}" -gt 0 ] || roots=(src)
+  command="bb --config $cfg coverage"
+  [ -d spec ] && command="$command -r speclj"
+  for root in "${roots[@]}"; do command="$command -p $root"; done
+  for tests in spec test; do [ -d "$tests" ] && command="$command -s $tests"; done
+  set -- "$@" --coverage-command "$command --lcov"
+fi
+EOF
+}
+
 rewrite_for() {
   case "$1" in
     mutate) rewrite_mutate ;;
     gherkin) rewrite_gherkin ;;
+    coverage) rewrite_coverage "$2" ;;
     -) ;;
     *) die "unknown rewrite '$1' in swarmforge/tools.conf" ;;
   esac
 }
 
 sq() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
+
+edn_string() { local text="${1//\\/\\\\}"; printf '"%s"' "${text//\"/\\\"}"; }
+
+# The Babashka coverage config: Cloverage at the Babashka-compatible commit
+# crap4clj documents, run through crap4clj.bb-coverage.
+write_coverage_config() {
+  local tool="$1" dir="$2" path
+  path="$(coverage_config "$tool")"
+  mkdir -p "$(dirname "$path")"
+  cat > "$path" <<EOF
+{:deps {cloverage/cloverage {:git/url "https://github.com/cloverage/cloverage.git"
+                             :git/sha "61e3cac426e9907a9dd01c37597f85c71a57ff90"
+                             :deps/root "cloverage"}
+        speclj/speclj {:mvn/version "3.12.2"}}
+ :tasks
+ {coverage
+  {:doc "Run Cloverage on the -p and -s directories through crap4clj.bb-coverage"
+   :requires ([babashka.classpath :as classpath]
+              [babashka.fs :as fs]
+              [clojure.edn :as edn]
+              [clojure.string :as str])
+   :task (let [args *command-line-args*
+               given (keep (fn [[flag dir]] (when (#{"-p" "-s"} flag) dir))
+                           (partition 2 1 args))
+               project (when (fs/exists? "bb.edn")
+                         (:paths (edn/read-string (slurp "bb.edn"))))
+               dirs (concat [$(edn_string "$dir/src")] given project)]
+           (classpath/add-classpath
+             (str/join fs/path-separator (map (fn [dir] (str (fs/absolutize dir))) dirs)))
+           (when (some #{"speclj"} args) (require 'speclj.cloverage))
+           (require 'crap4clj.bb-coverage)
+           (apply (resolve 'crap4clj.bb-coverage/-main) args))}}}
+EOF
+}
 
 clj_command() {
   local tool="$1" coordinate="$2" main="$3"
@@ -134,31 +262,54 @@ clj_command() {
   esac
 }
 
+# A local tool runs the caller's checkout copy of the script when it has one.
+local_command() {
+  local source="$1"
+  echo "top=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" && [ -x \"\$top/\"$(sq "$source") ] && exec \"\$top/\"$(sq "$source") \"\$@\""
+  echo "exec $(sq "$(repo_root)/$source") \"\$@\""
+}
+
 write_wrapper() {
   local tool="$1" rewrite="$2" command="$3" path
   path="$(wrapper_path "$tool")"
   mkdir -p "$(dirname "$path")"
   {
     echo '#!/usr/bin/env bash'
-    rewrite_for "$rewrite"
+    rewrite_for "$rewrite" "$tool"
     echo "$command"
   } > "$path"
   chmod 755 "$path"
   echo "INSTALLED: $tool $path"
 }
 
+# A source without the entry point gets no wrapper, and loses an old one.
+checked_source() {
+  local tool="$1" kind="$2" source="$3" task="$4" dir problem
+  dir="$(ensure_source "$source")"
+  problem="$(entry_point_problem "$kind" "$dir" "$task")"
+  if [ -n "$problem" ]; then
+    rm -f "$(wrapper_path "$tool")"
+    die "$tool: $problem"
+  fi
+  echo "$dir"
+}
+
 install_one() {
-  local tool="$1" line kind source task rewrite
+  local tool="$1" line kind source task rewrite dir
   line="$(spec_of "$tool")"
   read -r _ kind source task rewrite _ <<< "$line"
   case "$kind" in
     bb)
-      local dir; dir="$(ensure_source "$source")"
+      dir="$(checked_source "$tool" "$kind" "$source" "$task")"
+      [ "$rewrite" != coverage ] || write_coverage_config "$tool" "$dir"
       write_wrapper "$tool" "$rewrite" "exec bb --config $(sq "$dir/bb.edn") $task \"\$@\"" ;;
+    bbmain)
+      dir="$(checked_source "$tool" "$kind" "$source" "$task")"
+      write_wrapper "$tool" "$rewrite" "exec bb -cp $(sq "$dir/src") -m $task \"\$@\"" ;;
     clj)
       write_wrapper "$tool" "$rewrite" "$(clj_command "$tool" "$source" "$task")" ;;
     local)
-      write_wrapper "$tool" "$rewrite" "exec $(sq "$(repo_root)/$source") \"\$@\"" ;;
+      write_wrapper "$tool" "$rewrite" "$(local_command "$source")" ;;
     *) die "unknown kind '$kind' for $tool" ;;
   esac
 }
@@ -173,7 +324,7 @@ cmd_ensure() {
   install_one "$tool"
 }
 
-cmd_list() { catalogue | awk '{printf "%-22s %-5s %s\n", $1, $2, $3}'; }
+cmd_list() { catalogue | awk '{printf "%-22s %-6s %s\n", $1, $2, $3}'; }
 
 main() {
   local cmd="${1:-}"; [ $# -gt 0 ] && shift

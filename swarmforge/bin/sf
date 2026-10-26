@@ -292,8 +292,8 @@ check_tools() {
     echo "$seen" | grep -qx "$name" && problem "tools.conf: tool '$name' listed twice"
     seen="$seen"$'\n'"$name"
     if [ -z "$needs" ] || [ -n "$extra" ]; then problem "tools.conf: '$name' needs exactly <name> <kind> <source> <task> <rewrite> <needs>"; continue; fi
-    case "$kind" in bb|clj|local) ;; *) problem "tools.conf: '$name' has unknown kind '$kind'" ;; esac
-    case "$rewrite" in mutate|gherkin|-) ;; *) problem "tools.conf: '$name' has unknown rewrite '$rewrite'" ;; esac
+    case "$kind" in bb|bbmain|clj|local) ;; *) problem "tools.conf: '$name' has unknown kind '$kind'" ;; esac
+    case "$rewrite" in mutate|gherkin|coverage|-) ;; *) problem "tools.conf: '$name' has unknown rewrite '$rewrite'" ;; esac
   done < <(conf_lines "$file")
 }
 
