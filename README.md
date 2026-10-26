@@ -19,11 +19,11 @@ project repository, and they talk to you in chat.
 
 ## Prerequisites
 
-- `git`, `bash`
+- `git`, and `bash` for `install.sh`, the commit-msg hook, and the tool wrappers
 - [`git-bug`](https://github.com/git-bug/git-bug) on PATH (release binaries are
   single files)
-- [Babashka](https://babashka.org) (`bb`) for the C# tool wrapper and the
-  Clojure constitution tools
+- [Babashka](https://babashka.org) (`bb`) for `sf`, the C# tool wrapper, and
+  the Clojure constitution tools
 - One of Claude Code, Codex CLI, or Copilot CLI
 
 ## Install into a project
@@ -152,7 +152,7 @@ Node.
 ```text
 install.sh                       copy SwarmForge into a project
 swarmforge/
-  bin/sf                         git-bug task helper
+  bin/sf  tools/sf/              git-bug task helper (Babashka)
   bin/sf-tool  tools.conf        constitution tool installer and catalogue (sf tool ...)
   bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers (Babashka)
   languages/csharp.md            what each sf-cs command runs and prints
@@ -163,6 +163,7 @@ swarmforge/
 .claude/agents  .codex/agents  .github/agents     generated role agents
 .claude/skills/swarm  .agents/skills/swarm        the /swarm entry point
 test/sf_test.sh                  behavioral tests for sf (needs git-bug)
+test/probe_gitbug.clj            checks that git-bug reads its own label writes
 ```
 
 ## Tests
