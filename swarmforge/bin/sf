@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# sf: SwarmForge task helper. Tasks are git-bug issues; roles hand work to each
-# other by committing on the task branch and recording a handoff comment.
+# sf: SwarmForge task helper. Each task is a git-bug issue. A role hands work
+# to the next role: it commits on the task branch and records a handoff comment.
 set -euo pipefail
 
 GIT_BUG="${SWARMFORGE_GIT_BUG:-git-bug}"
@@ -88,7 +88,7 @@ named_routes() { [ -f "$(routes_conf)" ] && conf_lines "$(routes_conf)" || true;
 route_named() { named_routes | awk -v n="$1" '$1==n {print $2}'; }
 
 # resolve_route <name | role,role,...>: prints the comma-separated role list.
-# Roles must exist and appear in catalogue order.
+# The roles must exist and be in catalogue order.
 resolve_route() {
   local spec="$1" list
   list="$(route_named "$spec")"
@@ -165,9 +165,8 @@ has_label() {
   grep -qx "$2" <<< "$labels"
 }
 
-# A label that must be present for a command to proceed. Reads are repeated
-# for a few seconds, and a late appearance is reported, so an inconsistent
-# read shows up in logs instead of as a wrong refusal.
+# Returns 1 when the label is not present after 5 reads, one second apart.
+# A late label is logged, so a stale read shows in the log, not as a refusal.
 require_label() {
   local id="$1" label="$2" try
   for try in 1 2 3 4 5; do
@@ -180,11 +179,9 @@ require_label() {
   return 1
 }
 
-# git-bug can serve the next process a label list that predates the previous
-# process's write. Every label write is therefore verified by reading it back,
-# and repeated once a second until it is visible.
-# label_write new|rm <id> <label>: a write that was already in effect is not
-# an error; any other failure is.
+# git-bug can give a process a label list that is older than the last write.
+# Thus add_label and rm_label read each write back and repeat it until it shows.
+# label_write new|rm <id> <label>: a write that changes nothing is not an error.
 label_write() {
   local out
   if out="$(bug label "$1" "$2" "$3" 2>&1)"; then return 0; fi
@@ -231,8 +228,8 @@ acting_role() {
   fi
 }
 
+# read_message <default> [-m text | -F file]
 read_message() {
-  # read_message <default> [-m text | -F file]
   local default="$1"; shift
   case "${1:-}" in
     -m) [ $# -ge 2 ] || die "-m needs a value"; echo "$2" ;;
@@ -311,9 +308,7 @@ role_audits() { [ "$(role_field "$1" 4)" = "audit" ]; }
 
 audit_file() { echo "$(repo_root)/.swarmforge/audit/$(short_id "$1")"; }
 
-# For roles flagged `audit` in roles.conf, the first handoff or review attempt
-# at a given HEAD is refused with a self-review checklist; the next attempt at
-# the same HEAD goes through. Returns 1 when the attempt was refused.
+# The `audit` flag in roles.conf. Returns 1 when it refuses the attempt.
 audit_gate() {
   local id="$1" role="$2" head="$3" file
   [ -z "${SF_AUDIT_PASSED:-}" ] || return 0
@@ -343,9 +338,9 @@ commit_hook_body() {
   cat <<EOF
 #!/usr/bin/env bash
 $HOOK_MARKER
-# Appends "By <role>." to a commit made in a task worktree, where <role> is
-# SWARMFORGE_ROLE when set, else the task's current stage. Commits elsewhere
-# are left alone. A task commit whose role cannot be found is refused.
+# Appends "By <role>." to a commit in a task worktree. <role> is SWARMFORGE_ROLE
+# or, if it is not set, the task stage. Other commits do not change. A task
+# commit is refused when its role is not known.
 msg="\$1"
 top="\$(git rev-parse --show-toplevel)"
 common="\$(git rev-parse --path-format=absolute --git-common-dir)"
@@ -429,12 +424,11 @@ EOF
   echo "$short"
 }
 
-# Free text in a record header stays on one line, so a header is never
-# mistaken for text and text never looks like a header.
+# Free text in a record header stays on one line, so it cannot look like a header.
 one_line() { printf '%s' "$1" | tr '\n\r' '  ' | sed 's/  */ /g; s/^ //; s/ $//'; }
 
-# The commit the last created, review, or handoff record named. Only header
-# lines inside those records count; the request body and free text do not.
+# The commit in the last created, review, or handoff record. Only the header
+# lines of those records count. The request body and free text do not.
 last_recorded_commit() {
   bug show "$1" | awk '
     /^ *[0-9a-f]+ #[0-9]+ / { record = 0 }
@@ -444,7 +438,7 @@ last_recorded_commit() {
 }
 
 # Files changed on the task branch since the last recorded commit, as one
-# comma-separated header value, or - when nothing changed.
+# comma-separated header value, or - when there are none.
 files_since_last_record() {
   local id="$1" dir="$2" prev files count
   prev="$(last_recorded_commit "$id")"
@@ -627,8 +621,8 @@ type: approval
 from: operator
 EOF
   rm_label "$id" "needs:approval"
-  # The review that asked for approval already passed any audit gate, so the
-  # handoff that approval performs must not re-gate at the same commit.
+  # The review that asked for approval passed the audit gate at this commit.
+  # Thus the handoff must not run the gate again.
   if ! (SF_AUDIT_PASSED=1 SWARMFORGE_ROLE="${SWARMFORGE_ROLE:-$(stage_of "$id")}" cmd_handoff "$id"); then
     add_label "$id" "needs:approval"
     die "approval recorded but the handoff failed; the task still waits for approval"
