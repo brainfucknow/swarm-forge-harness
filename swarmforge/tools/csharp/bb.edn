@@ -1,7 +1,7 @@
-{:paths ["src" "test"]
+{:paths ["src" "test" "../core/src" "../core/test"]
  :tasks
- {test {:doc "Run the sf-cs tests"
-        :task (do
-                (require 'clojure.test 'sfcs.core-test)
-                (let [{:keys [fail error]} (clojure.test/run-tests 'sfcs.core-test)]
+ {test {:doc "Run the sf-cs tests and the shared core tests"
+        :task (let [namespaces '[sfcore.core-test sfcs.core-test]]
+                (apply require 'clojure.test namespaces)
+                (let [{:keys [fail error]} (apply clojure.test/run-tests namespaces)]
                   (System/exit (+ fail error))))}}}

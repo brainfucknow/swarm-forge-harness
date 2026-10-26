@@ -156,6 +156,7 @@ swarmforge/
   bin/sf-tool  tools.conf        constitution tool installer and catalogue (sf tool ...)
   bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers (Babashka)
   languages/csharp.md            what each sf-cs command runs and prints
+  tools/core/                    changed-line, CRAP, jscpd and Stryker readers shared by the tool wrappers
   roles.conf  routes.conf  tiers.conf   catalogue, routes, models
   constitution.md  constitution/articles/
   roles/                         specifier, coder, cleaner, architect, hardener, qa, orchestrator
@@ -176,5 +177,5 @@ bb --config swarmforge/tools/csharp/bb.edn test
 
 The first drives `sf` against a real git-bug in a scratch repository, the
 second drives `sf tool` against a local tool source and a fake `bb`, and the
-third drives `sf-cs` against fixture reports and a fake `dotnet`. None pins
-prompt wording.
+third drives `sf-cs` against fixture reports and a fake `dotnet`, together with
+the shared `tools/core/` readers. None pins prompt wording.

@@ -4,10 +4,13 @@
             [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing use-fixtures]]
-            [sfcs.changes :as changes]
+            [sfcore.changes :as changes]
+            [sfcore.crap :as crap]
+            [sfcore.shell :as shell]
+            [sfcs.cli :as cli]
             [sfcs.cobertura :as cob]
-            [sfcs.jscpd :as jscpd]
-            [sfcs.stryker :as stryker]))
+            [sfcore.jscpd :as jscpd]
+            [sfcore.stryker :as stryker]))
 
 (def here (str (fs/parent (fs/parent (fs/parent *file*)))))
 (def fixtures (str (fs/path here "fixtures")))
@@ -33,7 +36,7 @@
                              "-bye"])
         changed (changes/changed-lines-from-diff diff)]
     (is (= ["Bank/Ledger.cs"] (keys changed)))
-    (is (= [7 29 30] (vec (get changed "Bank/Ledger.cs"))))))
+    (is (= [7 13 29 30] (vec (get changed "Bank/Ledger.cs"))) "the deletion at 12 changes line 13 after it")))
 
 (deftest path-matching
   (let [changed {"Bank/Ledger.cs" (sorted-set 7)}]
@@ -46,9 +49,9 @@
     (is (false? (changes/overlaps? "Bank/Ledger.cs" 8 9 changed)))))
 
 (deftest crap-formula
-  (is (= 1.0 (cob/crap-score 1 1)))
-  (is (= 20.0 (cob/crap-score 4 0)))
-  (is (= "10.750" (cob/fmt "%.3f" (cob/crap-score 4 0.25)))))
+  (is (= 1.0 (crap/crap-score 1 1)))
+  (is (= 20.0 (crap/crap-score 4 0)))
+  (is (= "10.750" (crap/fmt "%.3f" (crap/crap-score 4 0.25)))))
 
 (deftest cobertura-methods
   (let [methods (cob/parse-cobertura (fixture "coverage" "coverage.cobertura.xml"))]
@@ -57,6 +60,52 @@
             ["Bank.Ledger" "Balance" "Bank/Ledger.cs" 1.0 1.0 20 22]
             ["Bank.Audit<T>" "Record" "Bank/Audit.cs" 2.0 0.0 4 5]]
            (map (juxt :class-name :name :file :complexity :coverage :first-line :last-line) methods)))))
+
+(defn- cobertura-xml [sources filename]
+  (str "<coverage><sources>" (apply str (map #(str "<source>" % "</source>") sources)) "</sources>"
+       "<packages><package><classes><class name=\"A.B\" filename=\"" filename "\"><methods>"
+       "<method name=\"M\" signature=\"(System.Int32)\" line-rate=\"1\" complexity=\"2\">"
+       "<lines><line number=\"3\" hits=\"1\"/></lines></method>"
+       "</methods></class></classes></package></packages></coverage>"))
+
+(deftest cobertura-file-resolution
+  (let [base (str (fs/create-temp-dir {:prefix "sfcs-src"}))]
+    (try
+      (fs/create-dirs (fs/path base "Bank"))
+      (spit (str (fs/path base "Bank" "L.cs")) "x")
+      (spit (str (fs/path base "C:\\w\\L.cs")) "x")
+      (let [file-of (fn [sources filename] (:file (first (cob/parse-cobertura (cobertura-xml sources filename)))))]
+        (is (= (str (fs/path base "Bank" "L.cs")) (file-of ["/nonexistent" base] "Bank/L.cs")))
+        (is (= "Bank/Missing.cs" (file-of ["/nonexistent" base] "Bank/Missing.cs")))
+        (is (= "/abs/L.cs" (file-of [base] "/abs/L.cs")))
+        (is (= "C:\\w\\L.cs" (file-of [base] "C:\\w\\L.cs")))
+        (is (= "" (file-of [base] ""))))
+      (finally (fs/delete-tree base)))))
+
+(deftest cobertura-signatures
+  (is (= ["(System.Int32)" 3 3]
+         ((juxt :signature :first-line :last-line) (first (cob/parse-cobertura (cobertura-xml [] "A.cs")))))))
+
+(deftest cobertura-files-newest-first
+  (let [dir (fs/create-temp-dir {:prefix "sfcs-cov"})
+        write (fn [path millis]
+                (let [f (fs/path dir path)]
+                  (fs/create-dirs (fs/parent f))
+                  (spit (str f) "x")
+                  (fs/set-last-modified-time f (java.nio.file.attribute.FileTime/fromMillis millis))
+                  (str f)))]
+    (try
+      (let [old (write "run1/coverage.cobertura.xml" 1000000)
+            newer (write "run2/coverage.cobertura.xml" 2000000)]
+        (write "run2/other.xml" 3000000)
+        (is (= [newer old] (cob/find-cobertura-files (str dir)))))
+      (is (= [] (cob/find-cobertura-files (str (fs/path dir "missing")))))
+      (finally (fs/delete-tree dir)))))
+
+(deftest method-rows-name-the-signature-line-when-known
+  (let [method {:class-name "A.B" :name "M" :first-line 7 :crap 1.0 :complexity 1.0 :coverage 1.0 :file "a.cs"}]
+    (is (= "ok   crap    1.0  cc   1  cov 100%  a.cs:7 B.M" (cob/format-method method)))
+    (is (= "ok   crap    1.0  cc   1  cov 100%  a.cs:5 B.M" (cob/format-method (assoc method :signature-line 5))))))
 
 (deftest signature-start
   (let [source (str/split-lines (fixture "Ledger.cs.txt"))]
@@ -89,7 +138,31 @@
 (defn- git [& args]
   (apply p/shell {:dir *repo* :out :string :err :string} "git" args))
 
-(defn- sfcs [env & args]
+(defn- fake-run
+  "shell/run against the fake tools in *bin*, with `env` for the fakes."
+  [env]
+  (fn [command args]
+    (println (str "$ " (str/join " " (cons command args))))
+    (:exit (apply p/shell {:dir *repo* :out :string :err :string :continue true :extra-env env}
+                  (str (fs/path *bin* command)) args))))
+
+(defn- sfcs
+  "Runs sf-cs in-process in the scratch repository. `env` feeds the fakes;
+  MISSING lists commands to report as absent from PATH."
+  [env & args]
+  (let [out (java.io.StringWriter.)
+        err (java.io.StringWriter.)
+        missing (set (str/split (get env "MISSING" "") #","))
+        status (binding [shell/*dir* *repo* *out* out *err* err]
+                 (with-redefs [shell/run (fake-run env)
+                               shell/available? (complement missing)]
+                   (try (cli/main (vec args))
+                        (catch Exception e
+                          (binding [*out* err] (println (str "sf-cs: " (ex-message e))))
+                          2))))]
+    {:status status :lines (vec (str/split-lines (str/trimr (str out)))) :err (str err)}))
+
+(defn- sfcs-process [env & args]
   (let [result (apply p/shell {:dir *repo* :out :string :err :string :continue true
                                :extra-env (merge {"PATH" (str *bin* fs/path-separator (System/getenv "PATH"))} env)}
                       "bash" (str (fs/path here ".." ".." "bin" "sf-cs")) args)]
@@ -101,8 +174,17 @@
     (fs/create-dirs bin)
     (spit (str (fs/path bin "dotnet"))
           (str "#!/usr/bin/env bash\n"
-               "printf '%s\\n' \"$@\" > \"$FAKE_DOTNET_LOG\"\n"
-               "if [ \"$1\" = test ] && [ -n \"$FAKE_COVERAGE\" ]; then mkdir -p tmp/coverage/run && cp \"$FAKE_COVERAGE\" tmp/coverage/run/coverage.cobertura.xml; fi\n"))
+               "[ -n \"$FAKE_DOTNET_LOG\" ] && printf '%s\\n' \"$@\" > \"$FAKE_DOTNET_LOG\"\n"
+               "if [ \"$1\" = test ] && [ -n \"$FAKE_COVERAGE\" ]; then mkdir -p tmp/coverage/run && cp \"$FAKE_COVERAGE\" tmp/coverage/run/coverage.cobertura.xml; fi\n"
+               "if [ \"$1\" = stryker ] && [ -n \"$FAKE_REPORT\" ]; then mkdir -p tmp/stryker/reports && cp \"$FAKE_REPORT\" tmp/stryker/reports/mutation-report.json; fi\n"
+               "if [ \"$1\" = new ]; then mkdir -p .config && echo '{\"tools\":{}}' > .config/dotnet-tools.json; fi\n"
+               "exit ${FAKE_EXIT:-0}\n"))
+    (doseq [tool ["node" "npx"]]
+      (spit (str (fs/path bin tool))
+            (str "#!/usr/bin/env bash\n"
+                 "if [ -n \"$FAKE_JSCPD_REPORT\" ]; then mkdir -p tmp/jscpd && cp \"$FAKE_JSCPD_REPORT\" tmp/jscpd/jscpd-report.json; fi\n"
+                 "exit ${FAKE_EXIT:-0}\n"))
+      (fs/set-posix-file-permissions (fs/path bin tool) "rwxr-xr-x"))
     (fs/set-posix-file-permissions (fs/path bin "dotnet") "rwxr-xr-x")
     (binding [*repo* repo *bin* bin]
       (git "init" "--quiet" "--initial-branch=main")
@@ -183,3 +265,114 @@
     (let [{:keys [status err]} (sfcs {} "crap" "--base" "123" "--report" (str (fs/path fixtures "coverage")))]
       (is (= 2 status))
       (is (str/includes? err "123")))))
+
+(deftest tools-needs-dotnet-node-and-npx
+  (let [{:keys [status err]} (sfcs {"MISSING" "node,npx"} "tools")]
+    (is (= 2 status))
+    (is (= "sf-cs: missing on PATH: node, npx\n" err))))
+
+(deftest tools-installs-what-is-missing
+  (let [run-tools (fn []
+                    (fs/delete-tree (fs/path *repo* ".config"))
+                    (sfcs {} "tools"))]
+    (testing "no manifest: create it, install Stryker, restore, check jscpd"
+      (let [{:keys [status lines err]} (run-tools)]
+        (is (= 0 status) err)
+        (is (= ["$ dotnet new tool-manifest" "$ dotnet tool install dotnet-stryker"
+                "$ dotnet tool restore" "$ npx --yes jscpd@4 --version"]
+               lines))))
+    (testing "a manifest that lists Stryker is only restored"
+      (fs/create-dirs (fs/path *repo* ".config"))
+      (spit (str (fs/path *repo* ".config" "dotnet-tools.json")) "{\"tools\":{\"dotnet-stryker\":{}}}")
+      (let [{:keys [status lines]} (sfcs {} "tools")]
+        (is (= 0 status))
+        (is (= ["$ dotnet tool restore" "$ npx --yes jscpd@4 --version"] lines))))
+    (testing "a manifest without Stryker installs it"
+      (spit (str (fs/path *repo* ".config" "dotnet-tools.json")) "{\"tools\":{}}")
+      (is (= ["$ dotnet tool install dotnet-stryker" "$ dotnet tool restore" "$ npx --yes jscpd@4 --version"]
+             (:lines (sfcs {} "tools")))))
+    (fs/delete-tree (fs/path *repo* ".config"))))
+
+(deftest coverage-passes-on-a-failing-test-run
+  (is (= 3 (:status (sfcs {"FAKE_EXIT" "3"} "coverage")))))
+
+(deftest help-without-a-command
+  (is (str/starts-with? (first (:lines (sfcs {}))) "usage: sf-cs"))
+  (is (= 0 (:status (sfcs {}))))
+  (is (= 0 (:status (sfcs {} "help")))))
+
+(deftest dry-runs-jscpd-and-reads-its-report
+  (let [report (str (fs/path fixtures "jscpd-report.json"))
+        fresh #(fs/delete-tree (fs/path *repo* "tmp" "jscpd"))]
+    (testing "a non-zero jscpd exit with a report still reports the clones"
+      (fresh)
+      (let [{:keys [status lines]} (sfcs {"FAKE_EXIT" "1" "FAKE_JSCPD_REPORT" report} "dry" "--base" "main")]
+        (is (= 1 status))
+        (is (= "$ npx --yes jscpd@4 --format csharp --min-tokens 50" (subs (first lines) 0 (count "$ npx --yes jscpd@4 --format csharp --min-tokens 50"))))))
+    (testing "a non-zero jscpd exit without a report is that exit"
+      (fresh)
+      (is (= 5 (:status (sfcs {"FAKE_EXIT" "5"} "dry" "--all")))))
+    (testing "a clean jscpd exit without a report is an error"
+      (fresh)
+      (let [{:keys [status err]} (sfcs {} "dry" "--all")]
+        (is (= 2 status))
+        (is (str/includes? err "jscpd-report.json not found"))))
+    (testing "--min-tokens reaches jscpd"
+      (fresh)
+      (is (str/includes? (first (:lines (sfcs {"FAKE_JSCPD_REPORT" report} "dry" "--all" "--min-tokens" "80")))
+                         "--min-tokens 80")))))
+
+(deftest dry-over-everything-needs-no-git
+  (let [plain (str (fs/create-temp-dir {:prefix "sfcs-plain"}))]
+    (try
+      (fs/create-dirs (fs/path plain "tmp" "jscpd"))
+      (fs/copy (fs/path fixtures "jscpd-report.json") (fs/path plain "tmp" "jscpd" "jscpd-report.json"))
+      (binding [*repo* plain]
+        (let [{:keys [status err]} (sfcs {} "dry" "--report-only" "--all")]
+          (is (= 1 status) err)))
+      (finally (fs/delete-tree plain)))))
+
+(deftest mutate-exits-with-stryker-when-it-leaves-no-report
+  (fs/delete-tree (fs/path *repo* "tmp" "stryker"))
+  (is (= 4 (:status (sfcs {"FAKE_EXIT" "4"} "mutate" "--all"))))
+  (testing "with a report the survivors decide"
+    (let [{:keys [status lines]} (sfcs {"FAKE_REPORT" (str (fs/path fixtures "mutation-report.json"))} "mutate" "--all")]
+      (is (= 1 status))
+      (is (str/starts-with? (first lines) "$ dotnet stryker"))
+      (is (some #(str/starts-with? % "Survived") lines)))))
+
+(deftest crap-reads-sources-named-by-absolute-path
+  (let [dir (fs/path *repo* "abs-coverage")
+        xml (str/replace (fixture "coverage" "coverage.cobertura.xml") "filename=\"Bank/Ledger.cs\""
+                         (str "filename=\"" (fs/path *repo* "Bank" "Ledger.cs") "\""))]
+    (fs/create-dirs dir)
+    (spit (str (fs/path dir "coverage.cobertura.xml")) xml)
+    (doseq [flags [["--all"] ["--base" "main"]]]
+      (let [{:keys [lines err]} (apply sfcs {} "crap" "--report" (str dir) flags)]
+        (is (= "OVER crap   10.8  cc   4  cov  25%  Bank/Ledger.cs:10 Ledger.Withdraw" (first lines)) err)))))
+
+(deftest the-newest-coverage-run-wins-a-tie
+  (let [dir (fs/path *repo* "tie-coverage")
+        xml (fn [complexity] (str/replace (fixture "coverage" "coverage.cobertura.xml")
+                                          "complexity=\"4\"" (str "complexity=\"" complexity "\"")))
+        write (fn [run complexity millis]
+                (let [f (fs/path dir run "coverage.cobertura.xml")]
+                  (fs/create-dirs (fs/parent f))
+                  (spit (str f) (xml complexity))
+                  (fs/set-last-modified-time f (java.nio.file.attribute.FileTime/fromMillis millis))))]
+    (write "old" 7 1000000)
+    (write "new" 5 2000000)
+    (let [{:keys [lines]} (sfcs {} "crap" "--all" "--report" (str dir))]
+      (is (some #(str/includes? % "cc   5") lines))
+      (is (not-any? #(str/includes? % "cc   7") lines)))))
+
+(deftest the-wrapper-script-runs-the-cli
+  (let [{:keys [status lines]} (sfcs-process {} "help")]
+    (is (= 0 status))
+    (is (str/starts-with? (first lines) "usage: sf-cs")))
+  (is (= 2 (:status (sfcs-process {} "nope")))))
+
+(deftest help-after-a-command-prints-the-usage
+  (let [{:keys [status lines]} (sfcs {} "test" "--help")]
+    (is (= 0 status))
+    (is (str/starts-with? (first lines) "usage: sf-cs"))))
