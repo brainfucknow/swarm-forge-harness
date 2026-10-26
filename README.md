@@ -187,6 +187,7 @@ bash test/sf_tool_test.sh
 bb --config swarmforge/tools/csharp/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn property
+swarmforge/bin/sf tool ensure gherkin-parser
 bb --config swarmforge/tools/javascript/bb.edn acceptance
 ```
 
