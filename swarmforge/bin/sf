@@ -248,18 +248,24 @@ commit_hook_body() {
 #!/usr/bin/env bash
 $HOOK_MARKER
 # Appends "By <role>." to a commit made in a task worktree, where <role> is
-# the task's current stage, or SWARMFORGE_ROLE when set.
+# SWARMFORGE_ROLE when set, else the task's current stage. Commits elsewhere
+# are left alone. A task commit whose role cannot be found is refused.
 msg="\$1"
+top="\$(git rev-parse --show-toplevel)"
+common="\$(git rev-parse --path-format=absolute --git-common-dir)"
+root="\$(cd "\$common/.." && pwd)"
+case "\$top" in
+  "\$root/\${SWARMFORGE_WORKTREE_DIR:-$WORKTREE_DIR}"/*) ;;
+  *) exit 0 ;;
+esac
 role="\${SWARMFORGE_ROLE:-}"
 if [ -z "\$role" ]; then
-  top="\$(git rev-parse --show-toplevel)"
-  common="\$(git rev-parse --path-format=absolute --git-common-dir)"
-  root="\$(cd "\$common/.." && pwd)"
-  case "\$top" in
-    "\$root/\${SWARMFORGE_WORKTREE_DIR:-$WORKTREE_DIR}"/*) role="\$("\$root/swarmforge/bin/sf" stage "\$(basename "\$top")" 2>/dev/null || true)" ;;
-  esac
+  role="\$("\$root/swarmforge/bin/sf" stage "\$(basename "\$top")" 2>&1)" || {
+    echo "commit-msg: cannot find the role for this task worktree (\$role); set SWARMFORGE_ROLE or put git-bug on PATH" >&2
+    exit 1
+  }
 fi
-[ -n "\$role" ] && [ "\$role" != done ] || exit 0
+[ "\$role" != done ] || exit 0
 grep -q "^By \$role\\.\$" "\$msg" && exit 0
 printf '%s\\n\\nBy %s.\\n' "\$(cat "\$msg")" "\$role" > "\$msg"
 EOF
