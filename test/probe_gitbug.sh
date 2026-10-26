@@ -19,24 +19,33 @@ full="$(git-bug bug new --non-interactive -t probe -m probe 2>/dev/null | awk '{
 full="$(git-bug bug show "$full" --field id)"
 ref="refs/bugs/$full"
 
+# Each round adds a label, reads, removes it, reads again, and re-adds it the
+# way `sf reject` then `sf review` do, checking every read against the write
+# that preceded it.
 stale=0
+check() {
+  local round="$1" step="$2" label="$3" expect="$4"
+  local seen later
+  seen="$(git-bug bug show "$full" --field labels | grep -cx "$label" || true)"
+  if [ "$seen" = "$expect" ]; then
+    echo "round $round $step: ok"
+    return 0
+  fi
+  stale=$((stale + 1))
+  later="$(sleep 1; git-bug bug show "$full" --field labels | grep -cx "$label" || true)"
+  echo "round $round $step: STALE (expected $expect, read $seen; after 1s: $later) ref=$(git rev-parse "$ref")"
+  echo "  file: $(cat ".git/$ref" 2>/dev/null || echo missing)"
+  echo "  for-each-ref: $(git for-each-ref "$ref" | tr '\t' ' ')"
+  echo "  lock: $(cat .git/git-bug/lock 2>/dev/null || echo none)"
+  echo "  commits on ref: $(git rev-list --count "$ref")"
+}
 for round in $(seq 1 "$rounds"); do
   label="probe:$round"
-  before_ref="$(git rev-parse "$ref")"
   git-bug bug label new "$full" "$label" >/dev/null
-  after_file="$(cat ".git/$ref" 2>/dev/null || echo missing)"
-  after_git="$(git rev-parse "$ref")"
-  seen="$(git-bug bug show "$full" --field labels | grep -cx "$label" || true)"
-  if [ "$seen" = 1 ]; then
-    echo "round $round: visible at once ($before_ref -> $after_git)"
-  else
-    stale=$((stale + 1))
-    later="$(sleep 1; git-bug bug show "$full" --field labels | grep -cx "$label" || true)"
-    echo "round $round: NOT visible; ref file=$after_file git=$after_git before=$before_ref; visible after 1s: $later"
-    echo "  for-each-ref: $(git for-each-ref "$ref" | tr '\t' ' ')"
-    echo "  packed-refs: $(grep -c "$full" .git/packed-refs 2>/dev/null || echo none)"
-    echo "  lock: $(cat .git/git-bug/lock 2>/dev/null || echo none)"
-    echo "  commits on ref: $(git rev-list --count "$ref")"
-  fi
+  check "$round" add "$label" 1
+  git-bug bug label rm "$full" "$label" >/dev/null
+  check "$round" rm "$label" 0
+  git-bug bug label new "$full" "$label" >/dev/null
+  check "$round" re-add "$label" 1
 done
-echo "stale reads: $stale / $rounds"
+echo "stale reads: $stale / $((rounds * 3))"
