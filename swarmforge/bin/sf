@@ -332,9 +332,19 @@ EOF
   echo "$short"
 }
 
-# The commit the last record on the task named: the previous handoff, review,
-# or the branch point from `created`.
-last_recorded_commit() { bug show "$1" | sed -n 's/^ *commit: //p' | tail -n 1; }
+# Free text in a record header stays on one line, so a header is never
+# mistaken for text and text never looks like a header.
+one_line() { printf '%s' "$1" | tr '\n\r' '  ' | sed 's/  */ /g; s/^ //; s/ $//'; }
+
+# The commit the last created, review, or handoff record named. Only header
+# lines inside those records count; the request body and free text do not.
+last_recorded_commit() {
+  bug show "$1" | awk '
+    /^ *[0-9a-f]+ #[0-9]+ / { record = 0 }
+    /^ *type: (created|review|handoff)$/ { record = 1 }
+    record && /^ *commit: / { commit = $2 }
+    END { if (commit != "") print commit }'
+}
 
 # Files changed on the task branch since the last recorded commit, as one
 # comma-separated header value, or - when nothing changed.
@@ -450,6 +460,7 @@ cmd_handoff() {
   [ "$branch" = "$(branch_of "$id")" ] || die "worktree is on '$branch', expected '$(branch_of "$id")'"
   head="$(cd "$dir" && git rev-parse --short HEAD)"
   [ -n "$summary" ] || summary="$from work complete"
+  summary="$(one_line "$summary")"
   local files; files="$(files_since_last_record "$id" "$dir")"
   comment "$id" <<EOF
 type: handoff
@@ -466,7 +477,7 @@ EOF
 
 cmd_ask() {
   local id; id="$(bug_id "${1:-}")"; shift
-  local text="${*:-}"; [ -n "$text" ] || die "ask needs a question"
+  local text; text="$(one_line "${*:-}")"; [ -n "$text" ] || die "ask needs a question"
   local from; from="$(acting_role "$id")"
   comment "$id" <<EOF
 type: question
@@ -479,7 +490,7 @@ EOF
 
 cmd_answer() {
   local id; id="$(bug_id "${1:-}")"; shift
-  local text="${*:-}"; [ -n "$text" ] || die "answer needs text"
+  local text; text="$(one_line "${*:-}")"; [ -n "$text" ] || die "answer needs text"
   comment "$id" <<EOF
 type: answer
 from: operator
@@ -491,7 +502,7 @@ EOF
 
 cmd_review() {
   local id; id="$(bug_id "${1:-}")"; shift
-  local summary; summary="$(read_message "specification ready for review" "$@")"
+  local summary; summary="$(one_line "$(read_message "specification ready for review" "$@")")"
   local dir; dir="$(worktree_of "$id")"
   [ -d "$dir" ] || die "task worktree missing; run: sf start $(short_id "$id")"
   local dirty; dirty="$(cd "$dir" && git status --porcelain)"
@@ -522,7 +533,7 @@ EOF
 
 cmd_reject() {
   local id; id="$(bug_id "${1:-}")"; shift
-  local text="${*:-}"; [ -n "$text" ] || die "reject needs a reason"
+  local text; text="$(one_line "${*:-}")"; [ -n "$text" ] || die "reject needs a reason"
   require_label "$id" "needs:approval" || die "task is not waiting for approval"
   comment "$id" <<EOF
 type: changes-requested
