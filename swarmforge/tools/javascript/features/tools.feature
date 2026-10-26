@@ -1,3 +1,7 @@
+# acceptance-mutation-manifest-begin
+# {"version":1,"tested_at":"2026-10-26T16:37:13.446206594Z","feature_name":"sf-js tools","feature_path":"swarmforge/tools/javascript/features/tools.feature","background_hash":"e80ae66b77880d9562e2e1cf312f5b4c2e793f43500870531deafd3e85f2419e","implementation_hash":"sha256:a1b6c5a6da883e55f63b19a4b0c89d10450019273a03e2acb3acdb610c68d117","scenarios":[]}
+# acceptance-mutation-manifest-end
+
 Feature: sf-js tools
 
   sf-js tools checks that node and the package manager are on PATH, adds the

@@ -54,3 +54,61 @@
                                "f" {"0" 1} "statementMap" {"0" {"start" {"line" 6 "column" 2} "end" {"line" 6 "column" 9}}} "s" {"0" 1}}}
           eslint [{:file "a.ts" :line 5 :column 1 :end-line 5 :name "f" :complexity 1}]]
       (is (= [[1.0 5 9]] (map (juxt :coverage :line :last-line) (crap/score eslint coverage "/w")))))))
+
+(def ^:private entry-for
+  (fn [fn-map & {:keys [f statements s]}]
+    (cond-> {"fnMap" fn-map "statementMap" (or statements {})}
+      f (assoc "f" f)
+      s (assoc "s" s))))
+
+(defn- loc [start-line start-col end-line end-col]
+  {"start" {"line" start-line "column" start-col} "end" {"line" end-line "column" end-col}})
+
+(deftest eslint-messages-fall-back-to-defaults
+  (let [report [{"filePath" "/w/a.ts"
+                 "messages" [{"ruleId" "complexity" "line" 2 "message" "Function 'f' has a complexity of 1. Maximum allowed is 0."}
+                             {"ruleId" "complexity" "line" 4 "endLine" 6 "column" 3
+                              "message" "Function 'g' has a complexity of 2. Maximum allowed is 0."}
+                             {"ruleId" "semi" "line" 1 "message" "Missing semicolon."}]}]]
+    (is (= [{:file "a.ts" :line 2 :column 1 :end-line 2 :name "f" :complexity 1}
+            {:file "a.ts" :line 4 :column 3 :end-line 6 :name "g" :complexity 2}]
+           (crap/parse-eslint report "/w")))))
+
+(deftest coverage-ranges-include-their-boundaries
+  (testing "a statement starting where the function starts or ends counts"
+    (let [entry (entry-for {"0" {"name" "f" "loc" (loc 1 0 3 5)}}
+                           :f {"0" 1}
+                           :statements {"0" {"start" {"line" 1 "column" 0} "end" {"line" 1 "column" 4}}
+                                        "1" {"start" {"line" 3 "column" 5} "end" {"line" 3 "column" 6}}}
+                           :s {"0" 1 "1" 0})]
+      (is (= [0.5] (map :coverage (crap/function-coverage entry))))))
+  (testing "a missing column opens the range at its start and runs to the end of its line"
+    (let [entry (entry-for {"0" {"name" "f" "loc" {"start" {"line" 1 "column" nil} "end" {"line" 1 "column" nil}}}}
+                           :f {"0" 1}
+                           :statements {"0" {"start" {"line" 1 "column" 0} "end" {"line" 1 "column" 9}}
+                                        "1" {"start" {"line" 1 "column" 99999} "end" {"line" 1 "column" 99999}}}
+                           :s {"0" 1 "1" 0})]
+      (is (= [0.5] (map :coverage (crap/function-coverage entry)))))))
+
+(deftest counts-missing-from-the-report-are-zero
+  (is (= [0.0] (map :coverage (crap/function-coverage
+                               (entry-for {"0" {"name" "f" "loc" (loc 1 0 2 0)}})))))
+  (is (= [0.0] (map :coverage (crap/function-coverage
+                               (entry-for {"0" {"name" "f" "loc" (loc 1 0 2 0)}}
+                                          :f {"0" 1}
+                                          :statements {"0" {"start" {"line" 1 "column" 1} "end" {"line" 1 "column" 2}}}))))))
+
+(deftest a-function-reaches-back-to-the-start-of-its-coverage-range
+  (let [coverage {"/w/a.ts" (entry-for {"0" {"name" "f" "loc" (loc 5 0 9 1)}} :f {"0" 1})}
+        eslint [{:file "a.ts" :line 6 :column 3 :end-line 7 :name "f" :complexity 1}]]
+    (is (= [[5 9]] (map (juxt :line :last-line) (crap/score eslint coverage "/w"))))))
+
+(deftest which-function-an-eslint-head-belongs-to
+  (let [coverage {"/w/a.ts" (entry-for {"0" {"name" "outer" "loc" (loc 3 0 3 40)}
+                                         "1" {"name" "inner" "loc" (loc 3 5 3 20)}}
+                                        :f {"0" 1 "1" 0})}
+        covered-by (fn [column]
+                     (:coverage (first (crap/score [{:file "a.ts" :line 3 :column column :end-line 3 :name "f" :complexity 1}]
+                                                   coverage "/w"))))]
+    (is (= 1.0 (covered-by 5)) "column 5 is offset 4: before the inner function, so the outer one")
+    (is (= 0.0 (covered-by 6)) "column 6 is offset 5: the inner function starts there")))

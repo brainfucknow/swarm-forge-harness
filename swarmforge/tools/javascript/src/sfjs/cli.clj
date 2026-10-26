@@ -1,10 +1,10 @@
 (ns sfjs.cli
   "sf-js: JavaScript and TypeScript tool wrapper for SwarmForge roles. One
   subcommand per constitution tool."
-  (:require [babashka.cli :as cli]
-            [babashka.fs :as fs]
+  (:require [babashka.fs :as fs]
             [cheshire.core :as json]
             [clojure.string :as str]
+            [sfcore.command :as command]
             [sfcore.crap :as crap]
             [sfcore.git :as git]
             [sfcore.jscpd :as jscpd]
@@ -75,7 +75,7 @@ manager comes from packageManager in package.json, else from the lockfile.
 (defn- verdict [status]
   (if (zero? status) outcome/exit-ok outcome/exit-findings))
 
-(defn- cmd-tools []
+(defn- cmd-tools [_]
   (let [{:keys [package manager tsconfig?]} (project)
         missing (remove shell/available? (pkg/required-commands manager))]
     (when (seq missing)
@@ -90,7 +90,7 @@ manager comes from packageManager in package.json, else from the lockfile.
         (throw (outcome/usage-error "npx --yes jscpd@4 failed"))))
     outcome/exit-ok))
 
-(defn- cmd-test [args]
+(defn- cmd-test [{:keys [args]}]
   (let [{:keys [package tsconfig?] :as proj} (project)
         runner (pkg/require-runner package)
         typecheck (if tsconfig? (run-tool proj commands/typecheck-args) 0)]
@@ -98,11 +98,11 @@ manager comes from packageManager in package.json, else from the lockfile.
       (verdict (run-tool proj (commands/test-args runner args)))
       outcome/exit-findings)))
 
-(defn- cmd-property [args]
+(defn- cmd-property [{:keys [args]}]
   (let [{:keys [package] :as proj} (project)]
     (verdict (run-tool proj (commands/property-args (pkg/require-runner package) args)))))
 
-(defn- cmd-coverage [args]
+(defn- cmd-coverage [{:keys [args]}]
   (let [{:keys [package] :as proj} (project)
         runner (pkg/require-runner package)]
     (delete-file commands/coverage-report)
@@ -123,7 +123,7 @@ manager comes from packageManager in package.json, else from the lockfile.
       (throw (outcome/usage-error (str "eslint exited " status " without " commands/eslint-report))))
     (read-json commands/eslint-report)))
 
-(defn- cmd-crap [opts]
+(defn- cmd-crap [{:keys [opts]}]
   (let [dir (or (:report opts) commands/coverage-dir)
         coverage (str (fs/path dir commands/coverage-file))]
     (when-not (exists? coverage)
@@ -137,7 +137,7 @@ manager comes from packageManager in package.json, else from the lockfile.
                       [])]
       (shell/emit (crap/review (jscrap/select functions changed) crap/format-row "function" changed)))))
 
-(defn- cmd-dry [opts]
+(defn- cmd-dry [{:keys [opts]}]
   (when-not (:report-only opts)
     (fs/create-dirs (shell/in-dir commands/jscpd-dir))
     (let [[command & args] (commands/jscpd-args (or (:min-tokens opts) 50))
@@ -167,7 +167,7 @@ manager comes from packageManager in package.json, else from the lockfile.
             (throw (outcome/usage-error (str "stryker exited " status " without " mutate/report-path)))))
         true))))
 
-(defn- cmd-mutate [opts extra]
+(defn- cmd-mutate [{:keys [opts extra]}]
   (if (and (not (:report-only opts)) (not (run-stryker opts extra)))
     outcome/exit-ok
     (do
@@ -175,29 +175,12 @@ manager comes from packageManager in package.json, else from the lockfile.
         (throw (outcome/usage-error (str mutate/report-path " not found"))))
       (shell/emit (stryker/review (stryker/parse-mutants (read-json mutate/report-path)))))))
 
-(def ^:private command-table
-  {"tools" (fn [_] (cmd-tools))
-   "test" (fn [{:keys [args]}] (cmd-test args))
-   "property" (fn [{:keys [args]}] (cmd-property args))
-   "coverage" (fn [{:keys [args]}] (cmd-coverage args))
-   "crap" (fn [{:keys [opts]}] (cmd-crap opts))
-   "dry" (fn [{:keys [opts]}] (cmd-dry opts))
-   "mutate" (fn [{:keys [opts extra]}] (cmd-mutate opts extra))})
-
-(defn- dispatch [command args]
-  (let [[before after] (split-with #(not= "--" %) args)
-        run (command-table command)]
-    (when-not run
-      (throw (outcome/usage-error (str "unknown command '" command "'\n" usage))))
-    (run {:args (vec args)
-          :opts (:opts (cli/parse-args (vec before) option-spec))
-          :extra (vec (rest after))})))
+(def ^:private commands
+  {"tools" cmd-tools "test" cmd-test "property" cmd-property "coverage" cmd-coverage
+   "crap" cmd-crap "dry" cmd-dry "mutate" cmd-mutate})
 
 (defn main [argv]
-  (let [[command & args] argv]
-    (if (or (nil? command) (#{"help" "--help" "-h"} command))
-      (do (println usage) outcome/exit-ok)
-      (dispatch command args))))
+  (command/main {:usage usage :commands commands :option-spec option-spec :help-option? false} argv))
 
 (defn -main [& argv]
   (shell/run-main "sf-js" main argv))

@@ -71,7 +71,7 @@
   [source-lines first-line]
   (loop [line first-line]
     (let [above (str/trim (or (nth source-lines (- line 2) nil) ""))]
-      (if (or (<= line 1) (= above "") (str/starts-with? above "//") (re-find #"[;{}]$" above))
+      (if (or (= above "") (str/starts-with? above "//") (re-find #"[;{}]$" above))
         line
         (recur (dec line))))))
 

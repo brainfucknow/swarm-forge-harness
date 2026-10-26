@@ -235,7 +235,7 @@
     (is (= 0 (:status result)))
     (is (str/starts-with? (first (:calls result)) "npm install --save-dev "))
     (is (= "npx --yes jscpd@4 --version" (last (:calls result)))))
-  (is (str/includes? (usage-failure (fails-tool "npm") "tools") "failed"))
+  (is (= "npm install --save-dev failed" (usage-failure (fails-tool "npm") "tools")))
   (is (str/includes? (usage-failure (fails-tool "jscpd@4") "tools") "npx --yes jscpd@4 failed")))
 
 (deftest tools-notes-when-everything-is-installed
@@ -253,3 +253,26 @@
   (binding [shell/*dir* *project*]
     (with-redefs [shell/available? (constantly false)]
       (is (thrown-with-msg? Exception #"missing on PATH: node, npx, npm" (cli/main ["tools"]))))))
+
+(defn- failing-jscpd [line]
+  (when-not (some #{"--version"} line)
+    (write! "tmp/jscpd/jscpd-report.json" (json/generate-string {"duplicates" []})))
+  1)
+
+(deftest dry-reads-the-report-when-jscpd-exits-nonzero
+  (let [result (run-sf-js failing-jscpd "dry" "--all")]
+    (is (= 0 (:status result)))
+    (is (str/includes? (:out result) "0 of 0 clone(s)"))))
+
+(deftest dry-over-everything-needs-no-git
+  (fs/delete-tree (project-file ".git"))
+  (is (= 1 (:status (run-sf-js jscpd-tool "dry" "--all")))))
+
+(deftest extra-arguments-follow-the-double-dash
+  (let [result (run-sf-js stryker-tool "mutate" "--all" "--" "--concurrency" "2" "--logLevel" "debug")]
+    (is (str/ends-with? (first (:calls result)) "--concurrency 2 --logLevel debug"))
+    (is (not (str/includes? (first (:calls result)) "-- --concurrency")))))
+
+(deftest help-after-a-command-reaches-the-runner
+  (is (= ["npx --no-install vitest run --exclude **/*.property.test.* --help"]
+         (:calls (run-sf-js ok "test" "--help")))))

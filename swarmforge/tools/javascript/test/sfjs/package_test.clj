@@ -65,3 +65,13 @@
   (testing "dependencies count as listed"
     (is (not-any? #{"vitest" "fast-check"}
                   (pkg/missing-packages {"dependencies" {"vitest" "1" "fast-check" "1"}} false)))))
+
+(deftest a-missing-lockfile-names-the-files-the-declared-manager-uses
+  (is (= "no lockfile (pnpm-lock.yaml); install the dependencies first"
+         (message-of #(pkg/detect-manager {"packageManager" "pnpm@9"} []))))
+  (is (= "no lockfile (npm-shrinkwrap.json, package-lock.json); install the dependencies first"
+         (message-of #(pkg/detect-manager {"packageManager" "npm@10"} []))))
+  (is (= "no lockfile (bun.lock, bun.lockb); install the dependencies first"
+         (message-of #(pkg/detect-manager {"packageManager" "bun@1"} []))))
+  (is (= "no lockfile (bun.lock, bun.lockb, npm-shrinkwrap.json, package-lock.json, pnpm-lock.yaml, yarn.lock); install the dependencies first"
+         (message-of #(pkg/detect-manager {} [])))))

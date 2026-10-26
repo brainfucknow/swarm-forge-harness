@@ -1,3 +1,7 @@
+# acceptance-mutation-manifest-begin
+# {"version":1,"tested_at":"2026-10-26T16:29:09.149877073Z","feature_name":"sf-js changes","feature_path":"swarmforge/tools/javascript/features/changes.feature","background_hash":"74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b","implementation_hash":"sha256:8f8b19550e7ca4d79d3642a9357aa8ee5bc5c12f81e3ec77256aae9d0cd62a29","scenarios":[{"index":1,"name":"sf-js changes 2: committed, uncommitted, and untracked work all count","scenario_hash":"003e9f37e3bd55712c7b7f6d6c45a1fc255a4d5403a8d074977b6ab2c2a45526","mutation_count":9,"result":{"Total":9,"Killed":9,"Survived":0,"Errors":0},"tested_at":"2026-10-26T16:12:46.373882876Z"}]}
+# acceptance-mutation-manifest-end
+
 Feature: sf-js changes
 
   "Changed" means the task: every line changed since the merge base with the

@@ -36,7 +36,7 @@
 (defn dispatch [steps world text]
   (let [matches (keep (fn [[regex handler]]
                         (when-let [found (re-matches regex text)]
-                          [handler (if (string? found) [] (rest found))]))
+                          [handler (if (string? found) [] (drop 1 found))]))
                       steps)]
     (case (count matches)
       0 (throw (ex-info (str "unsupported step: " text) {}))

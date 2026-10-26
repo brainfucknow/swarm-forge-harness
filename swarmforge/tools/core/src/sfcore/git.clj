@@ -23,9 +23,13 @@
   (zero? (:exit (p/shell {:out :string :err :string :dir (or dir shell/*dir*) :continue true}
                          "git" "rev-parse" "--verify" "--quiet" (str ref "^{commit}")))))
 
+(defn first-existing
+  "The first of `refs` that is non-nil and satisfies `exists?`."
+  [refs exists?]
+  (some (fn [ref] (when (and ref (exists? ref)) ref)) refs))
+
 (defn default-base [dir]
-  (or (some (fn [ref] (when (and ref (ref-exists? ref dir)) ref))
-            [(System/getenv "SWARMFORGE_BASE") "main" "master"])
+  (or (first-existing [(System/getenv "SWARMFORGE_BASE") "main" "master"] #(ref-exists? % dir))
       (throw (outcome/usage-error "no base branch found; pass --base <ref> or set SWARMFORGE_BASE"))))
 
 (defn base-ref

@@ -2,8 +2,9 @@
   (:require [babashka.fs :as fs]
             [cheshire.core :as json]
             [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
+            [clojure.test :as t :refer [deftest is testing]]
             [sfjs.acceptance.generator :as generator]
+            [sfjs.acceptance.pipeline :as pipeline]
             [sfjs.acceptance.runtime :as runtime]
             [sfjs.acceptance.worker :as worker]))
 
@@ -98,4 +99,77 @@
       (let [request (json/generate-string {"id" "j9" "feature_json" (str (fs/path dir "feature.json")) "generated_dir" dir})
             output (with-out-str (with-in-str (str request "\n\n") (worker/run)))]
         (is (= ["j9"] (map #(get % "id") (map json/parse-string (str/split-lines output))))))
+      (finally (fs/delete-tree dir)))))
+
+(deftest scenarios-report-each-execution-to-clojure-test
+  (let [counts (binding [t/*report-counters* (ref t/*initial-report-counters*)
+                         t/*test-out* (java.io.StringWriter.)]
+                 (runtime/run-scenario handlers (json/generate-string feature) 0)
+                 (select-keys @t/*report-counters* [:pass :fail]))]
+    (is (= {:pass 1 :fail 1} counts)))
+  (let [passing {"scenarios" [{"name" "p" "steps" [{"keyword" "Given" "text" "a world"}] "examples" []}]}
+        counts (binding [t/*report-counters* (ref t/*initial-report-counters*)
+                         t/*test-out* (java.io.StringWriter.)]
+                 (runtime/run-scenario handlers (json/generate-string passing) 0)
+                 (select-keys @t/*report-counters* [:pass :fail]))]
+    (is (= {:pass 1 :fail 0} counts))))
+
+(deftest a-bound-feature-replaces-the-embedded-one
+  (is (= {"scenarios" []} (binding [runtime/*feature* {"scenarios" []}] (runtime/feature "{\"scenarios\":[1]}"))))
+  (is (= {"scenarios" [1]} (runtime/feature "{\"scenarios\":[1]}"))))
+
+(deftest generated-metadata
+  (let [dir (fs/create-temp-dir {:prefix "sfjs-metadata"})
+        ir (str (fs/path dir "crap.json"))]
+    (try
+      (spit ir "{\"scenarios\":[{\"name\":\"one\"},{\"name\":\"two\"}]}")
+      (let [entry (generator/generate ir (str (fs/path dir "out")))
+            metadata-path (str (fs/path dir "out" "metadata" "swarmforge-tools-javascript-features-crap-feature.json"))
+            metadata (json/parse-string (slurp metadata-path))]
+        (is (= [1 "swarmforge/tools/javascript/features/crap.feature" ir "generated_files" [entry]]
+               ((juxt #(get % "schema_version") #(get % "feature_path") #(get % "ir_path")
+                      #(get % "hash_scope") #(get % "generated_files")) metadata)))
+        (is (re-matches #"sha256:[0-9a-f]{64}" (get metadata "implementation_hash")))
+        (is (str/includes? (slurp metadata-path) "\n  \"schema_version\""))
+        (is (str/includes? (slurp entry) "(deftest scenario-1\n"))
+        (is (str/includes? (slurp entry) "(deftest scenario-2\n")))
+      (finally (fs/delete-tree dir)))))
+
+(deftest the-parser-is-the-one-on-path-else-the-executable-wrapper
+  (let [dir (fs/create-temp-dir {:prefix "sfjs-parser"})
+        wrapper (fs/path dir "gherkin-parser")]
+    (try
+      (is (= "/usr/bin/gherkin-parser" (pipeline/parser-command (fs/path "/usr/bin/gherkin-parser") #(throw (ex-info "not asked" {})))))
+      (is (thrown-with-msg? Exception #"gherkin-parser not found" (pipeline/parser-command nil (constantly wrapper))))
+      (spit (str wrapper) "#!/bin/sh\n")
+      (fs/set-posix-file-permissions wrapper "rwxr-xr-x")
+      (is (= (str wrapper) (pipeline/parser-command nil (constantly wrapper))))
+      (finally (fs/delete-tree dir)))))
+
+(deftest features-are-the-named-ones-or-all-of-them
+  (let [dir (fs/create-temp-dir {:prefix "sfjs-features"})]
+    (try
+      (run! #(spit (str (fs/path dir %)) "") ["b.feature" "a.feature" "notes.txt"])
+      (with-redefs [pipeline/features-dir (str dir)]
+        (is (= [(str (fs/path dir "a.feature")) (str (fs/path dir "b.feature"))] (pipeline/feature-files nil)))
+        (is (= ["c.feature"] (pipeline/feature-files ["c.feature"]))))
+      (finally (fs/delete-tree dir)))))
+
+(deftest the-pipeline-exits-nonzero-on-any-failure-or-error
+  (is (= 0 (pipeline/exit-status {:fail 0 :error 0})))
+  (is (= 1 (pipeline/exit-status {:fail 1 :error 0})))
+  (is (= 1 (pipeline/exit-status {:fail 0 :error 1})))
+  (is (= 1 (pipeline/exit-status {:fail 1 :error 1}))))
+
+(deftest worker-jobs-count-failures-and-errors-together
+  (let [dir (generated-dir "true")]
+    (try
+      (spit (str (fs/path dir "second.clj"))
+            (str "(ns sfjs.generated.second-" (str/replace (str (fs/file-name dir)) #"\W" "-") "\n"
+                 "  (:require [clojure.test :refer [deftest is]]))\n"
+                 "(deftest broken (is false))\n"
+                 "(deftest raises (is (throw (ex-info \"boom\" {}))))\n"))
+      (is (= "test_failure" (:outcome (job dir))))
+      (is (< 0 (:duration (job dir)) (* 30 1000000000)))
+      (is (< 0 (:duration (worker/run-job {"id" "j3"})) (* 30 1000000000)))
       (finally (fs/delete-tree dir)))))

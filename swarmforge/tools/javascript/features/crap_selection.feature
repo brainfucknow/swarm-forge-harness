@@ -1,3 +1,7 @@
+# acceptance-mutation-manifest-begin
+# {"version":1,"tested_at":"2026-10-26T16:31:39.023834292Z","feature_name":"sf-js crap selection","feature_path":"swarmforge/tools/javascript/features/crap_selection.feature","background_hash":"c269d7fec536e35e08c592be7c2c24d21d5e938a789def25a03c9622e5acf5a5","implementation_hash":"sha256:ca24ce3dddfcf931a00b043159ad8fc8ec4b5e1257fd13e738b67dbbdd21cecc","scenarios":[{"index":1,"name":"sf-js crap selection 2: a change outside every function lists nothing","scenario_hash":"5ac6feac9a7cef56bc0e8dd4f907bcf52ccf00b9ec1a381b7f10809b49a355db","mutation_count":2,"result":{"Total":2,"Killed":2,"Survived":0,"Errors":0},"tested_at":"2026-10-26T16:15:52.774788024Z"}]}
+# acceptance-mutation-manifest-end
+
 Feature: sf-js crap selection
 
   sf-js crap lists the functions that span a changed line, from their first

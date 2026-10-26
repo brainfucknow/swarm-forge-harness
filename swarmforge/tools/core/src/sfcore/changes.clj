@@ -4,7 +4,7 @@
   (:require [clojure.string :as str]))
 
 (defn- hunk-header [line]
-  (re-find #"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@" line))
+  (re-find #"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@" line))
 
 (defn- note-line [{:keys [current cursor] :as state}]
   (cond-> (-> state (update :pending-new dec) (update :cursor inc))
@@ -17,21 +17,18 @@
       file (update :result #(if (contains? % file) % (assoc % file (sorted-set)))))))
 
 (defn- read-hunk-line [state raw]
-  (cond (str/starts-with? raw "+") (note-line state)
-        (str/starts-with? raw "-") (update state :pending-old dec)
-        :else state))
+  (if (str/starts-with? raw "+") (note-line state) state))
 
 (defn- read-header-line [state raw]
-  (if-let [[_ old-count new-start new-count] (hunk-header raw)]
+  (if-let [[_ new-start new-count] (hunk-header raw)]
     (assoc state
-           :pending-old (if old-count (parse-long old-count) 1)
            :cursor (parse-long new-start)
            :pending-new (if new-count (parse-long new-count) 1))
     state))
 
-(defn- read-diff-line [{:keys [pending-new pending-old] :as state} raw]
+(defn- read-diff-line [{:keys [pending-new] :as state} raw]
   (cond
-    (or (pos? pending-new) (pos? pending-old)) (read-hunk-line state raw)
+    (pos? pending-new) (read-hunk-line state raw)
     (str/starts-with? raw "+++ ") (start-file state raw)
     :else (read-header-line state raw)))
 
@@ -40,7 +37,7 @@
   of line numbers that were added or rewritten."
   [text]
   (:result (reduce read-diff-line
-                   {:current nil :pending-new 0 :pending-old 0 :cursor 0 :result {}}
+                   {:current nil :pending-new 0 :result {}}
                    (str/split-lines text))))
 
 (defn relative-path

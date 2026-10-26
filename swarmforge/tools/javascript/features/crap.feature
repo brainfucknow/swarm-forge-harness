@@ -1,3 +1,7 @@
+# acceptance-mutation-manifest-begin
+# {"version":1,"tested_at":"2026-10-26T16:31:25.220055529Z","feature_name":"sf-js crap","feature_path":"swarmforge/tools/javascript/features/crap.feature","background_hash":"a6be7b8e271949a5c9294cd79d75fbac3083ec9d2045cbb6b39e6fefaa1aeb2d","implementation_hash":"sha256:5c1133dc1e7293a7f4d3a3b78355d8ec0cb91a44bbe5f9dc4d942b3152289db4","scenarios":[{"index":2,"name":"sf-js crap 3: a function missing from the coverage report counts as uncovered","scenario_hash":"b59ca1065a5b9afcf5f90192ffdaa99254b923e53e2e5ca60d2e3d3fcf56fec8","mutation_count":6,"result":{"Total":6,"Killed":6,"Survived":0,"Errors":0},"tested_at":"2026-10-26T16:15:35.089169587Z"}]}
+# acceptance-mutation-manifest-end
+
 Feature: sf-js crap
 
   sf-js crap runs ESLint's complexity rule (typescript-eslint parser, with

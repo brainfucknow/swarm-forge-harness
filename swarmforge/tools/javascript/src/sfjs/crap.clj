@@ -10,7 +10,7 @@
   [message]
   (let [kind (first (str/split message #" has a complexity of "))]
     (or (second (re-find #"'(.+)'" kind))
-        (second (re-find #"(#\S+)$" kind))
+        (re-find #"#\S+$" kind)
         "(anonymous)")))
 
 (defn parse-eslint
