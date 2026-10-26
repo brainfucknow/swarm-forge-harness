@@ -151,6 +151,7 @@ manager comes from packageManager in package.json, else from the lockfile.
 (defn- cmd-dry [{:keys [opts]}]
   (when-not (:report-only opts)
     (fs/create-dirs (shell/in-dir commands/jscpd-dir))
+    (delete-file commands/jscpd-report)
     (let [[command & args] (commands/jscpd-args (or (:min-tokens opts) 50))
           status (shell/run command args)]
       (when (and (not (zero? status)) (not (exists? commands/jscpd-report)))
