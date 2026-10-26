@@ -25,7 +25,9 @@ git add -A && git commit -q -m seed
 
 fake="$scratch/fakebin"; mkdir -p "$fake"
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@"\n' > "$fake/bb"; chmod +x "$fake/bb"
-export PATH="$repo/swarmforge/bin:$fake:$PATH"
+export PATH="$repo/swarmforge/bin:$PATH"
+# Wrappers run the fake bb; sf itself needs the real one.
+fake_bb() { PATH="$fake:$PATH" "$@"; }
 src="$scratch/tool-src"; mkdir -p "$src"; echo '{}' > "$src/bb.edn"
 export SWARMFORGE_TOOL_SRC="$src"
 
@@ -41,15 +43,15 @@ assert_match "ensure installs the tool" "$out" "INSTALLED: clj-mutate .*/.swarmf
 assert_match "require passes after ensure" "$(sf tool require clj-mutate)" "^OK: clj-mutate $repo/.swarmforge/bin/clj-mutate$"
 assert_match "cloverage wrapper runs the Clojure CLI" "$(head -2 .swarmforge/bin/cloverage | tail -1)" "^exec clojure -Sdeps .* -M -m cloverage.coverage -p src -s spec -s test -r speclj"
 
-run="$(.swarmforge/bin/clj-mutate --mutate-all --max-workers 9 src/a.clj | paste -sd ' ' -)"
+run="$(fake_bb .swarmforge/bin/clj-mutate --mutate-all --max-workers 9 src/a.clj | paste -sd ' ' -)"
 assert_eq "mutate wrapper drops --mutate-all and forces four workers" "$run" "--config $src/bb.edn clj-mutate src/a.clj --max-workers 4"
-run="$(.swarmforge/bin/clj-mutate --scan src/a.clj | paste -sd ' ' -)"
+run="$(fake_bb .swarmforge/bin/clj-mutate --scan src/a.clj | paste -sd ' ' -)"
 assert_eq "mutate wrapper leaves a scan alone" "$run" "--config $src/bb.edn clj-mutate --scan src/a.clj"
 
 sf tool ensure gherkin-mutator >/dev/null
-run="$(.swarmforge/bin/gherkin-mutator --level full --workers 8 features | paste -sd ' ' -)"
+run="$(fake_bb .swarmforge/bin/gherkin-mutator --level full --workers 8 features | paste -sd ' ' -)"
 assert_eq "gherkin wrapper caps the level and workers" "$run" "--config $src/bb.edn gherkin-mutator --level hard features --workers 4"
-run="$(.swarmforge/bin/gherkin-mutator --level soft features | paste -sd ' ' -)"
+run="$(fake_bb .swarmforge/bin/gherkin-mutator --level soft features | paste -sd ' ' -)"
 assert_eq "gherkin wrapper keeps soft" "$run" "--config $src/bb.edn gherkin-mutator --level soft features --workers 4"
 
 sf tool ensure sf-cs >/dev/null

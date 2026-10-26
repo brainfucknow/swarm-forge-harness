@@ -19,7 +19,7 @@ jobs:
           curl -sSL https://raw.githubusercontent.com/babashka/babashka/master/install -o install-bb
           bash install-bb --dir "$HOME/bin"
       - name: Probe git-bug read-after-write
-        run: bash test/probe_gitbug.sh 30
+        run: bb test/probe_gitbug.clj 30
       - name: Test sf
         run: bash test/sf_test.sh
       - name: Test sf tool
