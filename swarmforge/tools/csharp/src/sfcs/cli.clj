@@ -32,7 +32,8 @@
 Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, main, or master."))
 
 (def option-spec
-  {:coerce {:all :boolean :report-only :boolean :help :boolean :min-tokens :long}
+  {:coerce {:all :boolean :report-only :boolean :help :boolean :min-tokens :long
+            :base :string :report :string}
    :alias {:h :help}})
 
 (defn- base-of [opts]
