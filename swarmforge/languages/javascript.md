@@ -14,7 +14,7 @@ Babashka (`bb`) on PATH, plus `node`, `npx`, and the project's package manager.
 | Coverage | `sf-js coverage [runner args]` | The tests without property tests, writing Istanbul JSON to `tmp/coverage/coverage-final.json`: Vitest with `--coverage.provider=v8 --coverage.reporter=json`, Jest with `--coverage --coverageReporters=json`. A run that writes no report exits 2. |
 | CRAP | `sf-js crap [--all] [--base REF] [--report DIR]` | ESLint's `complexity` rule (typescript-eslint parser) with sf-js's own config, joined with `coverage-final.json`: `comp² × (1 − coverage)³ + comp`. Lists changed functions, or all with `--all`. Exit 1 when any is over 10. |
 | DRY | `sf-js dry [--all] [--base REF] [--min-tokens N]` | `npx --yes jscpd@4 --format javascript,typescript,jsx,tsx` with a JSON report under `tmp/jscpd/`, then the clones that touch a changed line. Exit 1 when any. |
-| Language mutation | `sf-js mutate [--base REF] [--all] [-- stryker args]` | `stryker run` with `--mutate` set to the changed source files, `--incremental --incrementalFile tmp/stryker/incremental.json`, the project's runner (`--testRunner vitest` or `jest`), `--checkers typescript` when `tsconfig.json` exists, and `--concurrency 4` unless you pass your own. The JSON report goes to `tmp/stryker/mutation.json`; every `Survived` or `NoCoverage` mutant is listed. Exit 1 when any. `--all` drops `--mutate` so Stryker's own configuration picks the files. |
+| Language mutation | `sf-js mutate [--base REF] [--all] [-- stryker args]` | `stryker run` with `--mutate` set to the changed source files, `--incremental --incrementalFile tmp/stryker/incremental.json`, the runner (`--testRunner jest` when `jest` is listed, else `vitest`), `--checkers typescript` when `tsconfig.json` exists, and `--concurrency 4` unless you pass your own. The JSON report goes to `tmp/stryker/mutation.json`; every `Survived` or `NoCoverage` mutant is listed. Exit 1 when any. `--all` drops `--mutate` so Stryker's own configuration picks the files. |
 
 Every command exits 0 when clean, 1 on a finding (including failing tests or a
 type error), and 2 on a usage or input error such as a missing report, a
@@ -27,7 +27,8 @@ rerunning the tool. Every tool run is echoed first as a `$ ` line.
 - The `packageManager` field of `package.json` names the manager (`pnpm@9.1.0` means pnpm). Its lockfile must exist; another manager's lockfile alone is an error.
 - Without the field, the lockfile decides: `package-lock.json` or `npm-shrinkwrap.json` for npm, `pnpm-lock.yaml` for pnpm, `yarn.lock` for yarn, `bun.lock` or `bun.lockb` for bun. No lockfile, or lockfiles of several managers, is an error.
 - Project tools run through the manager: `npx --no-install`, `pnpm exec`, `yarn`, or `bunx`. jscpd always runs as `npx --yes jscpd@4`.
-- The runner is Vitest when `package.json` lists `vitest` in `dependencies` or `devDependencies`, else Jest when it lists `jest`. `sf-js tools` installs Vitest when neither is listed.
+- `test`, `property` and `coverage` run Vitest when `package.json` lists `vitest` in `dependencies` or `devDependencies`, else Jest when it lists `jest`.
+- `mutate` and `tools` pick the other way round when both are listed: Jest when `package.json` lists `jest`, else Vitest. `sf-js tools` installs Vitest when neither is listed.
 - The tool packages are the runner, `@vitest/coverage-v8` for Vitest, `typescript`, `eslint`, `typescript-eslint`, `@stryker-mutator/core`, the Stryker runner plugin for the runner, `@stryker-mutator/typescript-checker` when `tsconfig.json` exists, and `fast-check`.
 - sf-js works on the `package.json` in the current directory. Workspaces and monorepos are out of scope.
 

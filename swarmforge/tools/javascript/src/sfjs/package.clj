@@ -67,20 +67,35 @@
 (defn- listed? [package name]
   (some #(contains? (get package %) name) ["dependencies" "devDependencies"]))
 
+(defn- first-listed [package names]
+  (some #(when (listed? package %) %) names))
+
+(defn- required [runner]
+  (or runner (throw (shell/usage-error "no test runner (vitest or jest) in package.json"))))
+
 (defn runner
-  "vitest when package.json lists it, else jest when listed, else nil."
+  "The runner for test, property and coverage: vitest when package.json
+  lists it, else jest when listed, else nil."
   [package]
-  (some #(when (listed? package %) %) ["vitest" "jest"]))
+  (first-listed package ["vitest" "jest"]))
 
 (defn require-runner [package]
-  (or (runner package)
-      (throw (shell/usage-error "no test runner (vitest or jest) in package.json"))))
+  (required (runner package)))
+
+(defn stryker-runner
+  "The runner for mutate and tools: jest when package.json lists it, else
+  vitest when listed, else nil."
+  [package]
+  (first-listed package ["jest" "vitest"]))
+
+(defn require-stryker-runner [package]
+  (required (stryker-runner package)))
 
 (defn tool-packages
   "Every package the sf-js commands run, for the project's runner (vitest
   when none is listed)."
   [package tsconfig?]
-  (let [runner (or (runner package) "vitest")]
+  (let [runner (or (stryker-runner package) "vitest")]
     (cond-> [runner "typescript" "eslint" "typescript-eslint" "fast-check"
              "@stryker-mutator/core" (str "@stryker-mutator/" runner "-runner")]
       (= runner "vitest") (conj "@vitest/coverage-v8")

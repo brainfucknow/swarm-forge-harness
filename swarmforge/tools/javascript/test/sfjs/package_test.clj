@@ -42,6 +42,14 @@
   (is (= "no test runner (vitest or jest) in package.json"
          (message-of #(pkg/require-runner {"devDependencies" {"mocha" "^10"}})))))
 
+(deftest stryker-runner-choice
+  (testing "mutate and tools prefer jest when it is listed"
+    (is (= "jest" (pkg/stryker-runner {"devDependencies" {"vitest" "1" "jest" "1"}})))
+    (is (= "vitest" (pkg/stryker-runner {"dependencies" {"vitest" "1"}})))
+    (is (nil? (pkg/stryker-runner {"devDependencies" {"mocha" "1"}})))
+    (is (= "no test runner (vitest or jest) in package.json"
+           (message-of #(pkg/require-stryker-runner {}))))))
+
 (deftest tool-packages
   (testing "vitest is the default runner"
     (is (= ["@stryker-mutator/core" "@stryker-mutator/vitest-runner" "@vitest/coverage-v8" "eslint"
@@ -51,6 +59,9 @@
     (is (= ["@stryker-mutator/core" "@stryker-mutator/jest-runner" "@stryker-mutator/typescript-checker"
             "fast-check" "typescript-eslint"]
            (pkg/missing-packages {"devDependencies" {"jest" "1" "typescript" "1" "eslint" "1"}} true))))
+  (testing "with both runners listed, the jest tools are added"
+    (is (= ["@stryker-mutator/core" "@stryker-mutator/jest-runner" "eslint" "fast-check" "typescript" "typescript-eslint"]
+           (pkg/missing-packages {"devDependencies" {"vitest" "1" "jest" "1"}} false))))
   (testing "dependencies count as listed"
     (is (not-any? #{"vitest" "fast-check"}
                   (pkg/missing-packages {"dependencies" {"vitest" "1" "fast-check" "1"}} false)))))

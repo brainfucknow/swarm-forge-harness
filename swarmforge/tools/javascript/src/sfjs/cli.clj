@@ -162,7 +162,7 @@ manager comes from packageManager in package.json, else from the lockfile.
   "Runs Stryker; false when there was nothing to mutate."
   [opts extra]
   (let [{:keys [package tsconfig?] :as proj} (project)
-        runner (pkg/require-runner package)
+        runner (pkg/require-stryker-runner package)
         files (when-let [changed (changed-for opts)] (commands/production-sources (keys changed)))]
     (if (and files (empty? files))
       (do (println "no changed source files to mutate") false)
