@@ -9,6 +9,12 @@
 (def eslint-dir "tmp/eslint")
 (def stryker-dir "tmp/stryker")
 
+(def coverage-file "coverage-final.json")
+(def coverage-report (str coverage-dir "/" coverage-file))
+(def jscpd-report (str jscpd-dir "/jscpd-report.json"))
+(def eslint-config-path (str eslint-dir "/eslint.config.mjs"))
+(def eslint-report (str eslint-dir "/eslint.json"))
+
 (def extensions ["js" "jsx" "ts" "tsx" "mjs" "cjs" "mts" "cts"])
 (def ^:private declarations ["d.ts" "d.mts" "d.cts"])
 
@@ -58,10 +64,14 @@
 (def ^:private ignored-paths
   ["**/node_modules/**" "**/dist/**" "**/build/**" "**/coverage/**" "**/tmp/**" "**/*.d.ts" "**/*.min.js"])
 
+(def ^:private jscpd ["npx" "--yes" "jscpd@4"])
+
+(def jscpd-version-args (conj jscpd "--version"))
+
 (defn jscpd-args [min-tokens]
-  ["npx" "--yes" "jscpd@4" "--format" "javascript,typescript,jsx,tsx"
-   "--min-tokens" (str min-tokens) "--reporters" "json" "--output" jscpd-dir
-   "--ignore" (str/join "," ignored-paths) "."])
+  (into jscpd ["--format" "javascript,typescript,jsx,tsx"
+               "--min-tokens" (str min-tokens) "--reporters" "json" "--output" jscpd-dir
+               "--ignore" (str/join "," ignored-paths) "."]))
 
 (def ^:private lint-ignores
   (into ignored-paths ["**/*.d.mts" "**/*.d.cts" "**/*.test.*" "**/*.spec.*" "**/__tests__/**"]))

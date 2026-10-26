@@ -6,7 +6,9 @@
             [clojure.string :as str]
             [sfcore.changes :as changes]
             [sfcore.crap :as crap]
+            [sfcore.git :as git]
             [sfcore.jscpd :as jscpd]
+            [sfcore.outcome :as outcome]
             [sfcore.shell :as shell]
             [sfcore.stryker :as stryker]
             [sfcs.cobertura :as cob]))
@@ -37,17 +39,13 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
             :base :string :report :string}
    :alias {:h :help}})
 
-(defn- base-of [opts]
-  (or (:base opts) (changes/default-base nil)))
-
 (defn- changed-for [opts]
-  (when-not (:all opts)
-    (changes/collect-changed-lines {:base (base-of opts) :pathspecs ["*.cs"]})))
+  (git/changed-since-base opts ["*.cs"]))
 
 (defn- cmd-tools []
   (let [missing (remove shell/available? ["dotnet" "node" "npx"])]
     (when (seq missing)
-      (throw (shell/usage-error (str "missing on PATH: " (str/join ", " missing))))))
+      (throw (outcome/usage-error (str "missing on PATH: " (str/join ", " missing))))))
   (let [manifest (fs/path ".config" "dotnet-tools.json")]
     (when-not (fs/exists? manifest)
       (shell/run "dotnet" ["new" "tool-manifest"]))
@@ -78,7 +76,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
           (throw (ex-info (str "no coverage.cobertura.xml under " coverage-dir
                                "; is coverlet.collector referenced by the test projects?") {})))
         (println (count files) "coverage file(s) under" coverage-dir)
-        shell/exit-ok))))
+        outcome/exit-ok))))
 
 (defn- merge-methods
   "Keeps the best-covered entry when several test runs cover the same method."
@@ -117,16 +115,14 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
   (let [dir (or (:report opts) coverage-dir)
         files (cob/find-cobertura-files dir)]
     (when (empty? files)
-      (throw (shell/usage-error (str "no coverage.cobertura.xml under " dir "; run sf-cs coverage first"))))
-    (let [root (shell/repo-root)
+      (throw (outcome/usage-error (str "no coverage.cobertura.xml under " dir "; run sf-cs coverage first"))))
+    (let [root (git/repo-root)
           changed (changed-for opts)
           read-source (memoize (partial source-lines root))
           selected (->> (merge-methods files)
                         (keep (partial select-method root changed read-source))
                         (sort-by (juxt (comp - :crap) :file :first-line)))]
-      (doseq [method selected] (println (cob/format-method method)))
-      (println (crap/format-summary selected "method" changed))
-      (if (some crap/over? selected) shell/exit-findings shell/exit-ok))))
+      (shell/emit (crap/review selected cob/format-method "method" changed)))))
 
 (defn- read-json [path]
   (json/parse-string (slurp path)))
@@ -143,40 +139,33 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
         (when (and (not (zero? status)) (not (fs/exists? report-path)))
           (System/exit status))))
     (when-not (fs/exists? report-path)
-      (throw (shell/usage-error (str report-path " not found"))))
+      (throw (outcome/usage-error (str report-path " not found"))))
     (let [clones (jscpd/parse-clones (read-json report-path))
-          changed (changed-for opts)
-          shown (if changed (jscpd/clones-touching-changes clones changed (shell/repo-root)) clones)]
-      (doseq [clone shown] (println (jscpd/format-clone clone)))
-      (println (jscpd/format-summary shown clones changed))
-      (if (seq shown) shell/exit-findings shell/exit-ok))))
+          changed (changed-for opts)]
+      (shell/emit (jscpd/review clones changed (when changed (git/repo-root)))))))
 
 (defn- cmd-mutate [opts extra]
   (let [report-path (str (fs/path stryker-dir "reports" "mutation-report.json"))]
     (when-not (:report-only opts)
       (fs/create-dirs stryker-dir)
       (let [args (cond-> ["stryker" "--reporter" "json" "--reporter" "progress" "--output" stryker-dir]
-                   (not (:all opts)) (conj (str "--since:" (base-of opts))))
+                   (not (:all opts)) (conj (str "--since:" (git/base-ref opts))))
             status (shell/run "dotnet" (into args extra))]
         (when-not (fs/exists? report-path)
           (System/exit status))))
     (when-not (fs/exists? report-path)
-      (throw (shell/usage-error (str report-path " not found"))))
-    (let [mutants (stryker/parse-mutants (read-json report-path))
-          alive (stryker/survivors mutants)]
-      (doseq [mutant alive] (println (stryker/format-mutant mutant)))
-      (println (stryker/format-summary (stryker/summarize mutants)))
-      (if (seq alive) shell/exit-findings shell/exit-ok))))
+      (throw (outcome/usage-error (str report-path " not found"))))
+    (shell/emit (stryker/review (stryker/parse-mutants (read-json report-path))))))
 
 (defn main [argv]
   (let [[command & args] argv]
     (if (or (nil? command) (#{"help" "--help" "-h"} command))
-      (do (println usage) shell/exit-ok)
+      (do (println usage) outcome/exit-ok)
       (let [[before after] (split-with #(not= "--" %) args)
             extra (vec (rest after))
             {:keys [opts]} (cli/parse-args (vec before) option-spec)]
         (if (:help opts)
-          (do (println usage) shell/exit-ok)
+          (do (println usage) outcome/exit-ok)
           (case command
             "tools" (cmd-tools)
             "test" (cmd-test (vec args))
@@ -185,7 +174,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
             "crap" (cmd-crap opts)
             "dry" (cmd-dry opts)
             "mutate" (cmd-mutate opts extra)
-            (throw (shell/usage-error (str "unknown command '" command "'\n" usage)))))))))
+            (throw (outcome/usage-error (str "unknown command '" command "'\n" usage)))))))))
 
 (defn -main [& argv]
   (shell/run-main "sf-cs" main argv))

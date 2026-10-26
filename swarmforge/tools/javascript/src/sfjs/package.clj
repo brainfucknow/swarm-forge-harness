@@ -2,7 +2,7 @@
   "package.json facts: the package manager, the test runner, and the tool
   packages sf-js needs."
   (:require [clojure.string :as str]
-            [sfcore.shell :as shell]))
+            [sfcore.outcome :as outcome]))
 
 (def lockfile-managers
   {"package-lock.json" "npm"
@@ -23,11 +23,11 @@
   (when-let [declared (get package "packageManager")]
     (let [name (first (str/split declared #"@" 2))]
       (when-not (managers name)
-        (throw (shell/usage-error (str "unknown packageManager '" declared "'"))))
+        (throw (outcome/usage-error (str "unknown packageManager '" declared "'"))))
       name)))
 
 (defn- no-lockfile [expected]
-  (shell/usage-error (str "no lockfile (" (str/join ", " expected) "); install the dependencies first")))
+  (outcome/usage-error (str "no lockfile (" (str/join ", " expected) "); install the dependencies first")))
 
 (defn detect-manager
   "The package manager: packageManager's name when declared, which its own
@@ -39,12 +39,12 @@
       (cond
         (some #{declared} found) declared
         (empty? present) (throw (no-lockfile (lockfiles-of declared)))
-        :else (throw (shell/usage-error (str "packageManager names " declared " but the lockfile is "
+        :else (throw (outcome/usage-error (str "packageManager names " declared " but the lockfile is "
                                              (str/join ", " present)))))
       (case (count found)
         0 (throw (no-lockfile lockfiles))
         1 (first found)
-        (throw (shell/usage-error (str "lockfiles for several package managers: " (str/join ", " present))))))))
+        (throw (outcome/usage-error (str "lockfiles for several package managers: " (str/join ", " present))))))))
 
 (def ^:private exec-prefix
   {"npm" ["npx" "--no-install"] "pnpm" ["pnpm" "exec"] "yarn" ["yarn"] "bun" ["bunx"]})
@@ -71,7 +71,7 @@
   (some #(when (listed? package %) %) names))
 
 (defn- required [runner]
-  (or runner (throw (shell/usage-error "no test runner (vitest or jest) in package.json"))))
+  (or runner (throw (outcome/usage-error "no test runner (vitest or jest) in package.json"))))
 
 (def ^:private test-runners
   "Preference for test, property and coverage: vitest, else jest."

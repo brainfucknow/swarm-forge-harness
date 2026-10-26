@@ -105,12 +105,18 @@ Stryker's sandbox stays in its default `.stryker-tmp/`.
 
 ```sh
 bb --config swarmforge/tools/javascript/bb.edn test
+bb --config swarmforge/tools/javascript/bb.edn property
 swarmforge/bin/sf tool ensure gherkin-parser
 bb --config swarmforge/tools/javascript/bb.edn acceptance [feature ...]
 ```
 
-The first runs the unit tests against fixture reports. The second and third
-parse `swarmforge/tools/javascript/features/*.feature`, generate entry points
+The first runs the unit tests against fixture reports, including
+`sfjs.architecture-test`, which reads the `ns` forms under
+`swarmforge/tools/` and fails when a policy namespace requires an IO one
+(`sfcore.shell`, `sfcore.git`, a CLI, `babashka.fs`, `babashka.process`), when
+the shared core requires a language namespace, or on an import cycle. The
+second runs the test.check properties under `property/` for sf-js and the
+shared core. The third and fourth parse `swarmforge/tools/javascript/features/*.feature`, generate entry points
 under `tmp/sf-js/acceptance/`, and drive the real `sf-js` in scratch
 repositories with fake `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, and `bunx`
 on PATH. For Gherkin acceptance mutation, generate first with the
@@ -124,5 +130,9 @@ gherkin-mutator --feature swarmforge/tools/javascript/features/crap.feature \
   --runner-worker "bb --config swarmforge/tools/javascript/bb.edn acceptance-worker"
 ```
 
-The shared report readers (changed lines, jscpd, Stryker, CRAP formatting)
-live in `swarmforge/tools/core/` and serve `sf-cs` as well.
+The shared core in `swarmforge/tools/core/` serves `sf-cs` as well. Its
+policy namespaces are pure: `sfcore.changes` (diff parsing, path matching),
+`sfcore.crap`, `sfcore.jscpd`, `sfcore.stryker` (each with the `review` both
+wrappers print), and `sfcore.outcome` (exit statuses, usage errors). Its IO
+lives in `sfcore.git` (the task's changed lines) and `sfcore.shell`
+(processes, PATH, printing).

@@ -1,4 +1,6 @@
-(ns sfcore.crap)
+(ns sfcore.crap
+  "crap4j scoring, the limit, and the report every sf-* crap command prints."
+  (:require [sfcore.outcome :as outcome]))
 
 (def crap-limit 10)
 
@@ -32,3 +34,10 @@
   [units noun changed?]
   (str (count units) " " (when changed? "changed ") noun "(s), "
        (count (filter over? units)) " over CRAP " crap-limit))
+
+(defn review
+  "Each unit as `format-unit` renders it, then the summary; findings when any
+  unit is over the limit. `units` arrive in the order to print."
+  [units format-unit noun changed?]
+  (outcome/report (conj (mapv format-unit units) (format-summary units noun changed?))
+                  (some over? units)))

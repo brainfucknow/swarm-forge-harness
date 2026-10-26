@@ -1,5 +1,8 @@
 (ns sfcore.stryker
-  (:require [clojure.string :as str]))
+  "Stryker mutation-testing-elements reports: mutants, survivors, the score,
+  and the report every sf-* mutate command prints."
+  (:require [clojure.string :as str]
+            [sfcore.outcome :as outcome]))
 
 (def surviving #{"Survived" "NoCoverage"})
 
@@ -41,3 +44,10 @@
   (let [parts (str/join ", " (map (fn [[status n]] (str status " " n)) (sort counts)))]
     (str "mutation score " (String/format java.util.Locale/ROOT "%.1f" (to-array [(double score)]))
          "% (" (if (str/blank? parts) "no mutants" parts) ")")))
+
+(defn review
+  "Every surviving mutant, then the score; findings when any survived."
+  [mutants]
+  (let [alive (survivors mutants)]
+    (outcome/report (conj (mapv format-mutant alive) (format-summary (summarize mutants)))
+                    (seq alive))))

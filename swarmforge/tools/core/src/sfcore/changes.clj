@@ -1,7 +1,7 @@
 (ns sfcore.changes
-  (:require [babashka.fs :as fs]
-            [clojure.string :as str]
-            [sfcore.shell :as shell]))
+  "Changed-line sets: reading them from a unified diff and asking whether a
+  tool-reported file and line range touch one. sfcore.git collects them."
+  (:require [clojure.string :as str]))
 
 (defn- hunk-header [line]
   (re-find #"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@" line))
@@ -42,29 +42,6 @@
   (:result (reduce read-diff-line
                    {:current nil :pending-new 0 :pending-old 0 :cursor 0 :result {}}
                    (str/split-lines text))))
-
-(defn default-base [dir]
-  (or (some (fn [ref] (when (and ref (shell/ref-exists? ref dir)) ref))
-            [(System/getenv "SWARMFORGE_BASE") "main" "master"])
-      (throw (shell/usage-error "no base branch found; pass --base <ref> or set SWARMFORGE_BASE"))))
-
-(defn- whole-file-lines [root file]
-  (let [count (count (str/split (slurp (str (fs/file root file))) #"\n" -1))]
-    (into (sorted-set) (range 1 (inc count)))))
-
-(defn collect-changed-lines
-  "Changed source lines for the task: everything since the merge base with
-  `base`, committed or not, plus whole untracked files. `pathspecs` are git
-  pathspecs naming the source files, such as *.cs. Paths are repo-relative."
-  [{:keys [base dir pathspecs]}]
-  (let [root (shell/repo-root :dir dir)
-        merge-base (str/trim (shell/git ["merge-base" base "HEAD"] :dir dir))
-        committed (changed-lines-from-diff
-                   (shell/git (into ["diff" "-U0" "--no-color" "--no-ext-diff" merge-base "--"] pathspecs) :dir root))
-        untracked (remove str/blank?
-                          (str/split-lines
-                           (shell/git (into ["ls-files" "--others" "--exclude-standard" "--full-name" "--"] pathspecs) :dir root)))]
-    (reduce (fn [changed file] (assoc changed file (whole-file-lines root file))) committed untracked)))
 
 (defn relative-path
   "Normalizes a path reported by a tool (absolute, relative, Windows) to one

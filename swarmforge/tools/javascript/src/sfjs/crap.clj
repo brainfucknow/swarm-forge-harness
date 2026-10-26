@@ -89,3 +89,11 @@
                       :last-line (max end-line (or (first (:end covered)) end-line))
                       :coverage coverage
                       :crap (crap/crap-score complexity coverage)))))))
+
+(defn select
+  "The scored functions that touch a changed line (every one when `changed`
+  is nil), worst first."
+  [functions changed]
+  (->> functions
+       (filter #(or (nil? changed) (changes/overlaps? (:file %) (:line %) (:last-line %) changed)))
+       crap/sort-worst-first))

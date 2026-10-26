@@ -1,14 +1,9 @@
 (ns sfcore.shell
+  "Processes, PATH and the console: the IO edge every sf-* command runs through."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
-            [clojure.string :as str]))
-
-(def exit-ok 0)
-(def exit-findings 1)
-(def exit-usage 2)
-
-(defn usage-error [message]
-  (ex-info message {:usage true}))
+            [clojure.string :as str]
+            [sfcore.outcome :as outcome]))
 
 (def ^:dynamic *dir*
   "The directory commands run in and project paths resolve against; nil is the
@@ -22,22 +17,6 @@
     (str (.resolve (fs/path *dir*) (str path)))
     (str path)))
 
-(defn git
-  "Runs git with the given arguments and returns its stdout; throws on failure."
-  [args & {:keys [dir]}]
-  (let [result (apply p/shell {:out :string :err :string :dir (or dir *dir*) :continue true}
-                      "git" "-c" "core.quotePath=false" args)]
-    (when-not (zero? (:exit result))
-      (throw (ex-info (str "git " (str/join " " args) ": " (str/trim (:err result))) {})))
-    (:out result)))
-
-(defn repo-root [& {:keys [dir]}]
-  (str/trim (git ["rev-parse" "--show-toplevel"] :dir dir)))
-
-(defn ref-exists? [ref dir]
-  (zero? (:exit (p/shell {:out :string :err :string :dir (or dir *dir*) :continue true}
-                         "git" "rev-parse" "--verify" "--quiet" (str ref "^{commit}")))))
-
 (defn run
   "Runs a tool in the foreground, streaming its output; returns its exit status."
   [command args]
@@ -50,6 +29,12 @@
 (defn available? [command]
   (some? (fs/which command)))
 
+(defn emit
+  "Prints a report's lines; returns its exit status."
+  [{:keys [lines status]}]
+  (run! println lines)
+  status)
+
 (defn run-main
   "Exits with what `main` returns; an exception is a usage error on stderr
   prefixed with the tool name."
@@ -59,4 +44,4 @@
      (main argv)
      (catch Exception e
        (binding [*out* *err*] (println (str tool ": " (ex-message e))))
-       exit-usage))))
+       outcome/exit-usage))))

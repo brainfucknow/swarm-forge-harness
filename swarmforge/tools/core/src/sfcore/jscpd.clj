@@ -1,5 +1,8 @@
 (ns sfcore.jscpd
-  (:require [sfcore.changes :as changes]))
+  "jscpd JSON reports: the clones, which of them touch changed lines, and the
+  report every sf-* dry command prints."
+  (:require [sfcore.changes :as changes]
+            [sfcore.outcome :as outcome]))
 
 (defn- side [fragment]
   {:file (get fragment "name") :start (get fragment "start") :end (get fragment "end")})
@@ -36,3 +39,11 @@
 
 (defn format-summary [shown clones changed?]
   (str (count shown) " of " (count clones) " clone(s)" (when changed? " touch changed lines")))
+
+(defn review
+  "The clones touching `changed` (every clone when it is nil), then the
+  summary; findings when any is shown."
+  [clones changed root]
+  (let [shown (if changed (clones-touching-changes clones changed root) clones)]
+    (outcome/report (conj (mapv format-clone shown) (format-summary shown clones changed))
+                    (seq shown))))

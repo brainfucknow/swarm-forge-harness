@@ -185,12 +185,15 @@ bash test/sf_test.sh
 bash test/sf_tool_test.sh
 bb --config swarmforge/tools/csharp/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn test
+bb --config swarmforge/tools/javascript/bb.edn property
 bb --config swarmforge/tools/javascript/bb.edn acceptance
 ```
 
 The first drives `sf` against a real git-bug in a scratch repository, the
 second drives `sf tool` against a local tool source and a fake `bb`, and the
-third drives `sf-cs` against fixture reports and a fake `dotnet`. The last two
-test `sf-js`: unit tests against fixture reports, then its Gherkin features
+third drives `sf-cs` against fixture reports and a fake `dotnet`. The last
+three test `sf-js`: unit tests against fixture reports (with dependency rules
+for `tools/`), test.check properties of `sf-js` and the shared core, then its
+Gherkin features
 through the Acceptance Pipeline (`sf tool ensure gherkin-parser` first) with
 fake Node tools on PATH. None pins prompt wording.
