@@ -14,13 +14,16 @@ Babashka (`bb`) on PATH, plus `node`, `npx`, and the project's package manager.
 | Coverage | `sf-js coverage [runner args]` | The tests without property tests, writing Istanbul JSON to `tmp/coverage/coverage-final.json`: Vitest with `--coverage.provider=v8 --coverage.reporter=json`, Jest with `--coverage --coverageReporters=json`. A run that writes no report exits 2. |
 | CRAP | `sf-js crap [--all] [--base REF] [--report DIR]` | ESLint's `complexity` rule (typescript-eslint parser) with sf-js's own config, joined with `coverage-final.json`: `comp² × (1 − coverage)³ + comp`. Lists changed functions, or all with `--all`. Exit 1 when any is over 10. |
 | DRY | `sf-js dry [--all] [--base REF] [--min-tokens N]` | `npx --yes jscpd@4 --format javascript,typescript,jsx,tsx` with a JSON report under `tmp/jscpd/`, then the clones that touch a changed line. Exit 1 when any. |
-| Language mutation | `sf-js mutate [--base REF] [--all] [-- stryker args]` | `stryker run` with `--mutate` set to the changed source files, `--incremental --incrementalFile tmp/stryker/incremental.json`, the runner (`--testRunner jest` when `jest` is listed, else `vitest`), `--checkers typescript` when `tsconfig.json` exists, and `--concurrency 4` unless you pass your own. The JSON report goes to `tmp/stryker/mutation.json`; every `Survived` or `NoCoverage` mutant is listed. Exit 1 when any. `--all` drops `--mutate` so Stryker's own configuration picks the files. |
+| Language mutation | `sf-js mutate [--base REF] [--all] [-- stryker args]` | `stryker run` with `--mutate` set to the changed source files, each glob character (`[ ] * ? { } ( )`) wrapped in a one-character class so `pages/[id].ts` matches only itself, `--incremental --incrementalFile tmp/stryker/incremental.json`, the runner (`--testRunner jest` when `jest` is listed, else `vitest`), `--checkers typescript` when `tsconfig.json` exists, and `--concurrency 4` unless you pass your own. The JSON report goes to `tmp/stryker/mutation.json`; every `Survived` or `NoCoverage` mutant in the changed source files is listed (the incremental report also keeps mutants from earlier runs on other files). Exit 1 when any. A changed source file whose name has a comma exits 2 before Stryker runs, since Stryker splits `--mutate` on commas. `--all` drops `--mutate` so Stryker's own configuration picks the files, and judges every mutant in the report. |
 
 Every command exits 0 when clean, 1 on a finding (including failing tests or a
 type error), and 2 on a usage or input error such as a missing report, a
 missing lockfile, or no test runner. Errors go to stderr prefixed `sf-js: `.
 `--report-only` on `dry` and `mutate` re-reads the last report without
-rerunning the tool. Every tool run is echoed first as a `$ ` line.
+rerunning the tool, with the same changed-file scope. `crap` exits 2 when
+ESLint could not analyze a file (a fatal message such as a parse error,
+printed as `eslint could not analyze FILE:LINE: MESSAGE`) or when ESLint itself
+exits 2; its exit 1 is normal, since every complexity message is an error. Every tool run is echoed first as a `$ ` line.
 
 ## Package manager and runner
 
@@ -38,8 +41,10 @@ rerunning the tool. Every tool run is echoed first as a `$ ` line.
 "Changed" means the task: everything since the merge base with `--base`,
 committed or not, plus untracked files, in files ending `.js`, `.jsx`, `.ts`,
 `.tsx`, `.mjs`, `.cjs`, `.mts`, or `.cts`; declaration files (`.d.ts`,
-`.d.mts`, `.d.cts`) are left out. `--base` defaults to `SWARMFORGE_BASE`, then
-`main`, then `master`.
+`.d.mts`, `.d.cts`) are left out. Deleting lines changes the line that now
+follows the deletion (line 1 at the top of a file), so a function whose change
+only deletes lines still counts as changed. `--base` defaults to
+`SWARMFORGE_BASE`, then `main`, then `master`.
 
 `crap` and `mutate` look only at production sources: test files
 (`*.test.*`, `*.spec.*`, `*.property.test.*`, anything under `__tests__/`) are

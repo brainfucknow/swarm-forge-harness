@@ -28,6 +28,16 @@
           :name (function-name text)
           :complexity (parse-long (second (re-find #"has a complexity of (\d+)" text)))})))
 
+(defn fatal-messages
+  "Each fatal message in an ESLint JSON report (a file ESLint could not
+  parse) as FILE:LINE: MESSAGE, with the file relative to `root`."
+  [report root]
+  (vec (for [result report
+             message (get result "messages")
+             :when (true? (get message "fatal"))]
+         (str (changes/relative-path (get result "filePath") root) ":"
+              (get message "line") ": " (get message "message")))))
+
 (defn- position [point default-column]
   [(get point "line") (or (get point "column") default-column)])
 

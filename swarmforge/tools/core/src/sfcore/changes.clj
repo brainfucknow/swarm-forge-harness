@@ -19,11 +19,19 @@
 (defn- read-hunk-line [state raw]
   (if (str/starts-with? raw "+") (note-line state) state))
 
+(defn- note-deletion
+  "A deletion-only hunk sits between new-side lines `start` and `start`+1; the
+  line after it counts as changed, so the function holding it is selected."
+  [{:keys [current] :as state} start]
+  (cond-> state
+    current (update-in [:result current] (fnil conj (sorted-set)) (inc start))))
+
 (defn- read-header-line [state raw]
   (if-let [[_ new-start new-count] (hunk-header raw)]
-    (assoc state
-           :cursor (parse-long new-start)
-           :pending-new (if new-count (parse-long new-count) 1))
+    (let [start (parse-long new-start)
+          pending (if new-count (parse-long new-count) 1)]
+      (cond-> (assoc state :cursor start :pending-new pending)
+        (zero? pending) (note-deletion start)))
     state))
 
 (defn- read-diff-line [{:keys [pending-new] :as state} raw]
@@ -34,7 +42,8 @@
 
 (defn changed-lines-from-diff
   "Reads `git diff -U0` output into a map from new-side path to the sorted set
-  of line numbers that were added or rewritten."
+  of line numbers that were added or rewritten, plus the line that follows
+  each deletion-only hunk."
   [text]
   (:result (reduce read-diff-line
                    {:current nil :pending-new 0 :result {}}
