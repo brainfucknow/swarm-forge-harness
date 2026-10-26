@@ -17,7 +17,7 @@ Implement handoff validation
 By coder.
 ```
 
-- `sf init` and `sf start` install a `commit-msg` hook that appends `By <role>.` when it is missing, using the task's current stage as the role. Do not skip hooks (`--no-verify`). If `sf start` prints `HOOK:`, the hook could not be installed and the byline is yours to write.
+- `sf init` and `sf start` install a `commit-msg` hook that appends `By <role>.` when it is missing, using the task's current stage as the role (`SWARMFORGE_ROLE` overrides it). It acts only on commits in task worktrees, and refuses a task commit when it cannot find the role. Do not skip hooks (`--no-verify`). If `sf start` prints `HOOK:`, the hook could not be installed and the byline is yours to write.
 
 ## Temporary Files
 - Use `./tmp/` in the task worktree for temporary files; do not use `/tmp`.
