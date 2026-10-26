@@ -157,7 +157,26 @@ branch_of() { echo "${BRANCH_PREFIX}$(short_id "$1")"; }
 
 worktree_of() { echo "$(repo_root)/$WORKTREE_DIR/$(short_id "$1")"; }
 
-has_label() { labels_of "$1" | grep -qx "$2"; }
+has_label() {
+  local labels
+  labels="$(labels_of "$1")"
+  grep -qx "$2" <<< "$labels"
+}
+
+# A label that must be present for a command to proceed. Reads are repeated
+# for a few seconds, and a late appearance is reported, so an inconsistent
+# read shows up in logs instead of as a wrong refusal.
+require_label() {
+  local id="$1" label="$2" try
+  for try in 1 2 3 4 5; do
+    if has_label "$id" "$label"; then
+      [ "$try" = 1 ] || echo "sf: $label on $(short_id "$id") appeared after $((try - 1)) retries" >&2
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
 
 # git-bug can serve the next process a label list that predates the previous
 # process's write. Every label write is therefore verified by reading it back,
@@ -406,7 +425,7 @@ EOF
 
 cmd_approve() {
   local id; id="$(bug_id "${1:-}")"
-  labels_of "$id" | grep -qx "needs:approval" || die "task is not waiting for approval"
+  require_label "$id" "needs:approval" || die "task is not waiting for approval"
   comment "$id" <<EOF
 type: approval
 from: operator
@@ -418,7 +437,7 @@ EOF
 cmd_reject() {
   local id; id="$(bug_id "${1:-}")"; shift
   local text="${*:-}"; [ -n "$text" ] || die "reject needs a reason"
-  labels_of "$id" | grep -qx "needs:approval" || die "task is not waiting for approval"
+  require_label "$id" "needs:approval" || die "task is not waiting for approval"
   comment "$id" <<EOF
 type: changes-requested
 from: operator
