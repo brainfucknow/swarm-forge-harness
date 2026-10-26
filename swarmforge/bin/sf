@@ -316,6 +316,7 @@ audit_file() { echo "$(repo_root)/.swarmforge/audit/$(short_id "$1")"; }
 # the same HEAD goes through. Returns 1 when the attempt was refused.
 audit_gate() {
   local id="$1" role="$2" head="$3" file
+  [ -z "${SF_AUDIT_PASSED:-}" ] || return 0
   role_audits "$role" || return 0
   file="$(audit_file "$id")"
   if [ -f "$file" ] && [ "$(cat "$file")" = "$head" ]; then
@@ -626,7 +627,12 @@ type: approval
 from: operator
 EOF
   rm_label "$id" "needs:approval"
-  SWARMFORGE_ROLE="${SWARMFORGE_ROLE:-$(stage_of "$id")}" cmd_handoff "$id"
+  # The review that asked for approval already passed any audit gate, so the
+  # handoff that approval performs must not re-gate at the same commit.
+  if ! (SF_AUDIT_PASSED=1 SWARMFORGE_ROLE="${SWARMFORGE_ROLE:-$(stage_of "$id")}" cmd_handoff "$id"); then
+    add_label "$id" "needs:approval"
+    die "approval recorded but the handoff failed; the task still waits for approval"
+  fi
 }
 
 cmd_reject() {

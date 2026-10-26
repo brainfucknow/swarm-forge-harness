@@ -207,6 +207,15 @@ sf handoff "$id6" >/dev/null || true
 git -C ".worktrees/$id6" commit -q --allow-empty -m "Second"
 set +e; sf handoff "$id6" >/dev/null; rc=$?; set -e
 assert_eq "a new commit restarts the audit" "$rc" "3"
+sed -i 's/^specifier frontier subagent$/specifier frontier subagent audit/' swarmforge/roles.conf
+id7="$(sf new "Audited spec" -m "x" --route "specifier,coder")"
+sf start "$id7" >/dev/null
+git -C ".worktrees/$id7" commit -q --allow-empty -m "Spec. By specifier."
+set +e; sf review "$id7" >/dev/null; rc=$?; set -e
+assert_eq "first review of an audited specifier exits 3" "$rc" "3"
+assert_match "second review is recorded" "$(sf review "$id7")" "waits for operator approval"
+assert_match "approval does not re-gate the audited review" "$(sf approve "$id7")" "^HANDOFF: $id7 specifier -> coder"
+sed -i 's/^specifier frontier subagent audit$/specifier frontier subagent/' swarmforge/roles.conf
 sed -i 's/^coder strong subagent audit$/coder strong subagent bogus/' swarmforge/roles.conf
 assert_fails "check rejects an unknown role flag" sf check
 cp "$HERE/swarmforge/roles.conf" swarmforge/roles.conf
