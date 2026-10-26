@@ -15,6 +15,23 @@ assert_fails() { if "$@" >/dev/null 2>&1; then fail "$1 should fail"; else pass 
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 export HOME="$scratch/home"; mkdir -p "$HOME"
+
+# On an unexpected failure, dump the git-bug state so a CI log explains itself.
+diagnose() {
+  echo "=== diagnostics after failure at line $1 ===" >&2
+  [ -d "$repo/.git" ] || return 0
+  cd "$repo"
+  echo "--- refs" >&2; git for-each-ref refs/bugs >&2 || true
+  echo "--- git-bug files" >&2; ls -laR .git/git-bug 2>&1 | head -40 >&2 || true
+  echo "--- clocks" >&2; for c in .git/git-bug/clocks/*; do printf '%s: ' "$c" >&2; od -An -tu8 "$c" >&2 || true; done
+  echo "--- bugs" >&2
+  for b in $(git-bug bug --format id 2>/dev/null); do
+    git-bug bug show "$b" >&2 || true
+    echo "--- ref log for $b" >&2
+    git log --format='%h %ci %s' "refs/bugs/$b" >&2 || true
+  done
+}
+trap 'diagnose $LINENO' ERR
 git config --global user.name tester
 git config --global user.email tester@example.com
 git config --global init.defaultBranch main
