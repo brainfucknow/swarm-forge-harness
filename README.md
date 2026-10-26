@@ -22,7 +22,7 @@ project repository, and they talk to you in chat.
 - `git`, `bash`
 - [`git-bug`](https://github.com/git-bug/git-bug) on PATH (release binaries are
   single files)
-- [Babashka](https://babashka.org) (`bb`) for the C# tool wrapper and the
+- [Babashka](https://babashka.org) (`bb`) for the C# and JavaScript tool wrappers and the
   Clojure constitution tools
 - One of Claude Code, Codex CLI, or Copilot CLI
 
@@ -131,7 +131,8 @@ it. It is off by default.
 
 ## Languages
 
-The constitution's tool table covers Go, Clojure, Java, and C#. For C#,
+The constitution's tool table covers Go, Clojure, Java, C#, and
+JavaScript/TypeScript. For C#,
 `swarmforge/bin/sf-cs` wraps the tools so each role runs one command:
 
 | Command | Tool |
@@ -147,6 +148,15 @@ Each exits 0 when clean, 1 on a finding, 2 on a usage error. See
 Babashka, like the rest of the SwarmForge family; jscpd itself still runs on
 Node.
 
+For JavaScript and TypeScript, `swarmforge/bin/sf-js` offers the same commands
+with the same exit codes: `sf-js test` and `sf-js property` (Vitest or Jest,
+with `tsc --noEmit` first when there is a `tsconfig.json`, property tests named
+`*.property.test.*`), `sf-js coverage` (Istanbul JSON), `sf-js crap` (ESLint
+complexity joined with coverage), `sf-js dry` (jscpd), and `sf-js mutate`
+(StrykerJS on changed files, incremental). It runs project tools through the
+package manager that `packageManager` or the lockfile names. See
+`swarmforge/languages/javascript.md`.
+
 ## Layout
 
 ```text
@@ -156,6 +166,9 @@ swarmforge/
   bin/sf-tool  tools.conf        constitution tool installer and catalogue (sf tool ...)
   bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers (Babashka)
   languages/csharp.md            what each sf-cs command runs and prints
+  bin/sf-js  tools/javascript/   JavaScript/TypeScript tool wrapper, its features and acceptance runtime
+  languages/javascript.md        what each sf-js command runs and prints
+  tools/core/                    report readers shared by sf-cs and sf-js
   roles.conf  routes.conf  tiers.conf   catalogue, routes, models
   constitution.md  constitution/articles/
   roles/                         specifier, coder, cleaner, architect, hardener, qa, orchestrator
@@ -171,9 +184,13 @@ test/sf_test.sh                  behavioral tests for sf (needs git-bug)
 bash test/sf_test.sh
 bash test/sf_tool_test.sh
 bb --config swarmforge/tools/csharp/bb.edn test
+bb --config swarmforge/tools/javascript/bb.edn test
+bb --config swarmforge/tools/javascript/bb.edn acceptance
 ```
 
 The first drives `sf` against a real git-bug in a scratch repository, the
 second drives `sf tool` against a local tool source and a fake `bb`, and the
-third drives `sf-cs` against fixture reports and a fake `dotnet`. None pins
-prompt wording.
+third drives `sf-cs` against fixture reports and a fake `dotnet`. The last two
+test `sf-js`: unit tests against fixture reports, then its Gherkin features
+through the Acceptance Pipeline (`sf tool ensure gherkin-parser` first) with
+fake Node tools on PATH. None pins prompt wording.

@@ -4,10 +4,11 @@
             [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing use-fixtures]]
-            [sfcs.changes :as changes]
+            [sfcore.changes :as changes]
+            [sfcore.crap :as crap]
             [sfcs.cobertura :as cob]
-            [sfcs.jscpd :as jscpd]
-            [sfcs.stryker :as stryker]))
+            [sfcore.jscpd :as jscpd]
+            [sfcore.stryker :as stryker]))
 
 (def here (str (fs/parent (fs/parent (fs/parent *file*)))))
 (def fixtures (str (fs/path here "fixtures")))
@@ -46,9 +47,9 @@
     (is (false? (changes/overlaps? "Bank/Ledger.cs" 8 9 changed)))))
 
 (deftest crap-formula
-  (is (= 1.0 (cob/crap-score 1 1)))
-  (is (= 20.0 (cob/crap-score 4 0)))
-  (is (= "10.750" (cob/fmt "%.3f" (cob/crap-score 4 0.25)))))
+  (is (= 1.0 (crap/crap-score 1 1)))
+  (is (= 20.0 (crap/crap-score 4 0)))
+  (is (= "10.750" (crap/fmt "%.3f" (crap/crap-score 4 0.25)))))
 
 (deftest cobertura-methods
   (let [methods (cob/parse-cobertura (fixture "coverage" "coverage.cobertura.xml"))]

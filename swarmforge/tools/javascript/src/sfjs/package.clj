@@ -1,0 +1,90 @@
+(ns sfjs.package
+  "package.json facts: the package manager, the test runner, and the tool
+  packages sf-js needs."
+  (:require [clojure.string :as str]
+            [sfcore.shell :as shell]))
+
+(def lockfile-managers
+  {"package-lock.json" "npm"
+   "npm-shrinkwrap.json" "npm"
+   "pnpm-lock.yaml" "pnpm"
+   "yarn.lock" "yarn"
+   "bun.lock" "bun"
+   "bun.lockb" "bun"})
+
+(def lockfiles (sort (keys lockfile-managers)))
+
+(def ^:private managers (set (vals lockfile-managers)))
+
+(defn- lockfiles-of [manager]
+  (sort (keep (fn [[file owner]] (when (= owner manager) file)) lockfile-managers)))
+
+(defn- declared-manager [package]
+  (when-let [declared (get package "packageManager")]
+    (let [name (first (str/split declared #"@" 2))]
+      (when-not (managers name)
+        (throw (shell/usage-error (str "unknown packageManager '" declared "'"))))
+      name)))
+
+(defn- no-lockfile [expected]
+  (shell/usage-error (str "no lockfile (" (str/join ", " expected) "); install the dependencies first")))
+
+(defn detect-manager
+  "The package manager: packageManager's name when declared, which its own
+  lockfile must back; else the one manager whose lockfiles are present."
+  [package present]
+  (let [present (sort (filter lockfile-managers present))
+        found (distinct (map lockfile-managers present))]
+    (if-let [declared (declared-manager package)]
+      (cond
+        (some #{declared} found) declared
+        (empty? present) (throw (no-lockfile (lockfiles-of declared)))
+        :else (throw (shell/usage-error (str "packageManager names " declared " but the lockfile is "
+                                             (str/join ", " present)))))
+      (case (count found)
+        0 (throw (no-lockfile lockfiles))
+        1 (first found)
+        (throw (shell/usage-error (str "lockfiles for several package managers: " (str/join ", " present))))))))
+
+(def ^:private exec-prefix
+  {"npm" ["npx" "--no-install"] "pnpm" ["pnpm" "exec"] "yarn" ["yarn"] "bun" ["bunx"]})
+
+(def ^:private add-prefix
+  {"npm" ["npm" "install" "--save-dev"] "pnpm" ["pnpm" "add" "--save-dev"]
+   "yarn" ["yarn" "add" "--dev"] "bun" ["bun" "add" "--dev"]})
+
+(defn exec-command
+  "Runs a project-installed tool through the package manager."
+  [manager tool-args]
+  (into (exec-prefix manager) tool-args))
+
+(defn add-command [manager packages]
+  (into (add-prefix manager) packages))
+
+(defn required-commands [manager]
+  (distinct (concat ["node" "npx" manager] (take 1 (exec-prefix manager)))))
+
+(defn- listed? [package name]
+  (some #(contains? (get package %) name) ["dependencies" "devDependencies"]))
+
+(defn runner
+  "vitest when package.json lists it, else jest when listed, else nil."
+  [package]
+  (some #(when (listed? package %) %) ["vitest" "jest"]))
+
+(defn require-runner [package]
+  (or (runner package)
+      (throw (shell/usage-error "no test runner (vitest or jest) in package.json"))))
+
+(defn tool-packages
+  "Every package the sf-js commands run, for the project's runner (vitest
+  when none is listed)."
+  [package tsconfig?]
+  (let [runner (or (runner package) "vitest")]
+    (cond-> [runner "typescript" "eslint" "typescript-eslint" "fast-check"
+             "@stryker-mutator/core" (str "@stryker-mutator/" runner "-runner")]
+      (= runner "vitest") (conj "@vitest/coverage-v8")
+      tsconfig? (conj "@stryker-mutator/typescript-checker"))))
+
+(defn missing-packages [package tsconfig?]
+  (vec (sort (remove #(listed? package %) (tool-packages package tsconfig?)))))

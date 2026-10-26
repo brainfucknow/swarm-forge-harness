@@ -22,6 +22,8 @@ operator ──► session: orchestrator ──► subagents on the task's route
 | `roles/*.md` | What each role owns, verifies, and hands off. `orchestrator.md` is the session's own role. |
 | `bin/sf` | The only writer of task state. `sf --help` lists the commands. |
 | `bin/sf-cs`, `languages/csharp.md` | C# tool wrapper: tests, coverage, CRAP, DRY, mutation, each scoped to the task's changes. |
+| `bin/sf-js`, `languages/javascript.md` | JavaScript and TypeScript tool wrapper: the same commands for Vitest or Jest, ESLint complexity with Istanbul coverage, jscpd, and StrykerJS. |
+| `tools/core/` | Report readers shared by `sf-cs` and `sf-js`: changed lines, jscpd, Stryker, CRAP. |
 | `handoff-protocol.md` | Task labels, records, and lifecycle. |
 
 Prerequisites: `git`, `bash`, and [`git-bug`](https://github.com/git-bug/git-bug)

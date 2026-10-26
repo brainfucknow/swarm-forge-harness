@@ -26,3 +26,9 @@ jobs:
         run: bash test/sf_tool_test.sh
       - name: Test sf-cs
         run: bb --config swarmforge/tools/csharp/bb.edn test
+      - name: Test sf-js
+        run: bb --config swarmforge/tools/javascript/bb.edn test
+      - name: Accept sf-js
+        run: |
+          swarmforge/bin/sf tool ensure gherkin-parser
+          bb --config swarmforge/tools/javascript/bb.edn acceptance

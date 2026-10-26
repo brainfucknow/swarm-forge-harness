@@ -1,4 +1,4 @@
-{:paths ["src" "test"]
+{:paths ["src" "test" "../core/src"]
  :tasks
  {test {:doc "Run the sf-cs tests"
         :task (do

@@ -1,0 +1,13 @@
+{:paths ["src" "test" "acceptance/src" "../core/src"]
+ :tasks
+ {test {:doc "Run the sf-js unit tests"
+        :task (let [namespaces '[sfjs.package-test sfjs.commands-test sfjs.crap-test sfjs.mutate-test sfjs.reports-test sfjs.acceptance-test]]
+                (apply require 'clojure.test namespaces)
+                (let [{:keys [fail error]} (apply clojure.test/run-tests namespaces)]
+                  (System/exit (+ fail error))))}
+  acceptance {:doc "Parse the sf-js features, generate entry points, and run them; pass feature paths to run only those"
+              :requires ([sfjs.acceptance.pipeline :as pipeline])
+              :task (apply pipeline/run *command-line-args*)}
+  acceptance-worker {:doc "Persistent runner adapter for gherkin-mutator --runner-worker"
+                     :requires ([sfjs.acceptance.worker :as worker])
+                     :task (worker/run)}}}

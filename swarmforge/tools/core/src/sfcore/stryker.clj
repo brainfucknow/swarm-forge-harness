@@ -1,4 +1,4 @@
-(ns sfcs.stryker
+(ns sfcore.stryker
   (:require [clojure.string :as str]))
 
 (def surviving #{"Survived" "NoCoverage"})
@@ -23,9 +23,11 @@
 (defn survivors [mutants]
   (filterv #(surviving (:status %)) mutants))
 
+(def ^:private unscored #{"Ignored" "CompileError" "RuntimeError"})
+
 (defn summarize [mutants]
   (let [counts (frequencies (map :status mutants))
-        scored (remove #(#{"Ignored" "CompileError"} (:status %)) mutants)
+        scored (remove #(unscored (:status %)) mutants)
         killed (count (remove #(surviving (:status %)) scored))
         score (if (empty? scored) 100.0 (* 100.0 (/ killed (count scored))))]
     {:counts counts :score score}))
@@ -34,3 +36,8 @@
   (let [detail (if (str/blank? description) replacement description)]
     (str (format "%-10s" status) " " file ":" line "  " mutator
          (when-not (str/blank? detail) (str "  " detail)))))
+
+(defn format-summary [{:keys [counts score]}]
+  (let [parts (str/join ", " (map (fn [[status n]] (str status " " n)) (sort counts)))]
+    (str "mutation score " (String/format java.util.Locale/ROOT "%.1f" (to-array [(double score)]))
+         "% (" (if (str/blank? parts) "no mutants" parts) ")")))

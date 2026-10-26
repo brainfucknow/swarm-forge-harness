@@ -18,7 +18,7 @@ up. The real tools appear only in the QA procedure (`../qa/sf-js.md`).
 | `package.json lists "P" in S` | `P` is a key in `S` (`dependencies` or `devDependencies`) of `./package.json`. |
 | `package.json lists the devDependencies "A B"` | `devDependencies` holds exactly the space-separated names, and no other section lists a runner. An empty value means an empty `devDependencies`. |
 | `package.json declares packageManager "X"` | `"packageManager": "X"` in `./package.json`. If no step declares it, the field is absent. |
-| `the worktree has the lockfile "L"` | An empty file `L` at the worktree root. |
+| `the worktree has the lockfile "L"` | An empty file `L` at the worktree root, and a `package.json` (empty unless other steps fill it). |
 | `tsconfig.json is present/absent` | Whether `./tsconfig.json` exists. |
 | `"F" is added on the task branch` | A new 20-line file `F` committed on the task branch. |
 | `line N of "F" changed on the task branch` | Line N of `F` is rewritten and committed on the task branch. The changes feature also uses "changed but not committed" and "changed on main after the task began". |
@@ -39,6 +39,6 @@ up. The real tools appear only in the QA procedure (`../qa/sf-js.md`).
 | `sf-js added the devDependencies "A B"` | One add command line was printed: `npm install --save-dev`, `pnpm add --save-dev`, `yarn add --dev` or `bun add --dev`. The arguments that follow it are exactly `A B`, in that order. |
 | `sf-js ran nothing` | sf-js printed no `$ ` line. |
 | `the command line that runs "T" …` | The printed `$ ` line that runs tool `T`. `contains` and `does not contain` test it as a substring; `ends with` tests its end. |
-| `the output has the line "X"` / `ends with the line` / `output line N is` | Stdout lines, compared exactly. |
+| `the output has the line "X"` / `ends with the line` / `output line N is` | Stdout lines, compared exactly. `output line N` counts only lines that are not `$ ` command lines. |
 | `the output mentions "X"` / `does not mention` | Substring of stdout. |
 | `the error output contains "X"` | Substring of stderr. |

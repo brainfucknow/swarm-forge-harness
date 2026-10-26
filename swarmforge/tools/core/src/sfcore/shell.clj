@@ -1,4 +1,4 @@
-(ns sfcs.shell
+(ns sfcore.shell
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [clojure.string :as str]))
@@ -37,3 +37,14 @@
 
 (defn available? [command]
   (some? (fs/which command)))
+
+(defn run-main
+  "Exits with what `main` returns; an exception is a usage error on stderr
+  prefixed with the tool name."
+  [tool main argv]
+  (System/exit
+   (try
+     (main argv)
+     (catch Exception e
+       (binding [*out* *err*] (println (str tool ": " (ex-message e))))
+       exit-usage))))

@@ -4,11 +4,12 @@
             [babashka.fs :as fs]
             [cheshire.core :as json]
             [clojure.string :as str]
-            [sfcs.changes :as changes]
-            [sfcs.cobertura :as cob]
-            [sfcs.jscpd :as jscpd]
-            [sfcs.shell :as shell]
-            [sfcs.stryker :as stryker]))
+            [sfcore.changes :as changes]
+            [sfcore.crap :as crap]
+            [sfcore.jscpd :as jscpd]
+            [sfcore.shell :as shell]
+            [sfcore.stryker :as stryker]
+            [sfcs.cobertura :as cob]))
 
 (def tmp "tmp")
 (def coverage-dir (str (fs/path tmp "coverage")))
@@ -23,7 +24,7 @@
   test [dotnet test args]     unit and acceptance tests (Category!=Property)
   property                    property tests only (Category=Property)
   coverage [dotnet test args] tests with coverlet; cobertura files under " coverage-dir "/
-  crap [--all] [--base REF]   CRAP per changed method from " coverage-dir "/; exit 1 over " cob/crap-limit "
+  crap [--all] [--base REF]   CRAP per changed method from " coverage-dir "/; exit 1 over " crap/crap-limit "
   dry [--all] [--base REF] [--min-tokens N]
                               jscpd clones touching changed lines; exit 1 if any
   mutate [--base REF] [--all] [--report-only] [-- stryker args]
@@ -41,7 +42,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
 
 (defn- changed-for [opts]
   (when-not (:all opts)
-    (changes/collect-changed-lines {:base (base-of opts)})))
+    (changes/collect-changed-lines {:base (base-of opts) :pathspecs ["*.cs"]})))
 
 (defn- cmd-tools []
   (let [missing (remove shell/available? ["dotnet" "node" "npx"])]
@@ -122,11 +123,10 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
           read-source (memoize (partial source-lines root))
           selected (->> (merge-methods files)
                         (keep (partial select-method root changed read-source))
-                        (sort-by (juxt (comp - :crap) :file :first-line)))
-          over (count (filter #(> (:crap %) cob/crap-limit) selected))]
+                        (sort-by (juxt (comp - :crap) :file :first-line)))]
       (doseq [method selected] (println (cob/format-method method)))
-      (println (str (count selected) " " (when changed "changed ") "method(s), " over " over CRAP " cob/crap-limit))
-      (if (pos? over) shell/exit-findings shell/exit-ok))))
+      (println (crap/format-summary selected "method" changed))
+      (if (some crap/over? selected) shell/exit-findings shell/exit-ok))))
 
 (defn- read-json [path]
   (json/parse-string (slurp path)))
@@ -148,7 +148,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
           changed (changed-for opts)
           shown (if changed (jscpd/clones-touching-changes clones changed (shell/repo-root)) clones)]
       (doseq [clone shown] (println (jscpd/format-clone clone)))
-      (println (str (count shown) " of " (count clones) " clone(s)" (when changed " touch changed lines")))
+      (println (jscpd/format-summary shown clones changed))
       (if (seq shown) shell/exit-findings shell/exit-ok))))
 
 (defn- cmd-mutate [opts extra]
@@ -163,11 +163,9 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
     (when-not (fs/exists? report-path)
       (throw (shell/usage-error (str report-path " not found"))))
     (let [mutants (stryker/parse-mutants (read-json report-path))
-          alive (stryker/survivors mutants)
-          {:keys [counts score]} (stryker/summarize mutants)
-          parts (str/join ", " (map (fn [[status n]] (str status " " n)) (sort counts)))]
+          alive (stryker/survivors mutants)]
       (doseq [mutant alive] (println (stryker/format-mutant mutant)))
-      (println (str "mutation score " (cob/fmt "%.1f" (double score)) "% (" (if (str/blank? parts) "no mutants" parts) ")"))
+      (println (stryker/format-summary (stryker/summarize mutants)))
       (if (seq alive) shell/exit-findings shell/exit-ok))))
 
 (defn main [argv]
@@ -190,9 +188,4 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
             (throw (shell/usage-error (str "unknown command '" command "'\n" usage)))))))))
 
 (defn -main [& argv]
-  (System/exit
-   (try
-     (main argv)
-     (catch Exception e
-       (binding [*out* *err*] (println (str "sf-cs: " (ex-message e))))
-       shell/exit-usage))))
+  (shell/run-main "sf-cs" main argv))
