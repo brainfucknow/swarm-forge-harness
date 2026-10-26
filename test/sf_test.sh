@@ -119,6 +119,13 @@ echo "Feature: login v2" > ".worktrees/$id/login.feature"
 git -C ".worktrees/$id" add -A && git -C ".worktrees/$id" commit -q -m "Add logout"
 SWARMFORGE_ROLE=coder sf handoff "$id" --to coder >/dev/null
 assert_match "handoff lists files since the previous record" "$(sf show "$id")" "^ *files: login.feature,logout.feature$"
+sf ask "$id" "$(printf 'which hash?\ncommit: deadbee looked fine')" >/dev/null
+assert_match "free text is flattened to one header line" "$(sf show "$id")" "^ *question: which hash\? commit: deadbee looked fine$"
+sf answer "$id" "argon2id" >/dev/null
+echo "Feature: reset" > ".worktrees/$id/reset.feature"
+git -C ".worktrees/$id" add -A && git -C ".worktrees/$id" commit -q -m "Add reset"
+SWARMFORGE_ROLE=coder sf handoff "$id" --to coder >/dev/null
+assert_match "files ignore commit mentions outside records" "$(sf show "$id")" "^ *files: reset.feature$"
 assert_fails "approve when not waiting" sf approve "$id"
 
 # questions
