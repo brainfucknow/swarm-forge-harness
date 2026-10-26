@@ -114,6 +114,8 @@ Stryker's sandbox stays in its default `.stryker-tmp/`.
 ```sh
 bb --config swarmforge/tools/javascript/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn property
+swarmforge/bin/sf tool ensure gherkin-parser
+bb --config swarmforge/tools/javascript/bb.edn acceptance [feature ...]
 ```
 
 The first runs the unit tests against fixture reports, including
@@ -122,7 +124,23 @@ The first runs the unit tests against fixture reports, including
 (`sfcore.shell`, `sfcore.git`, a CLI, `babashka.fs`, `babashka.process`), when
 the shared core requires a language namespace, or on an import cycle. The
 second runs the test.check properties under `property/` for sf-js and the
-shared core.
+shared core. The third and fourth parse `swarmforge/tools/javascript/features/*.feature`, generate entry points
+under `tmp/sf-js/acceptance/`, and drive the real `sf-js` in scratch
+repositories with fake `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, and `bunx`
+on PATH. For Gherkin acceptance mutation, generate first with the
+`acceptance` task, then pass the adapter and that feature's generated
+directory to the mutator:
+
+```sh
+gherkin-mutator --feature swarmforge/tools/javascript/features/crap.feature \
+  --generated-dir tmp/sf-js/acceptance/generated/crap \
+  --work-dir tmp/sf-js/mutation/crap \
+  --runner-worker "bb --config swarmforge/tools/javascript/bb.edn acceptance-worker"
+```
+
+The end-to-end QA procedure for sf-js is `qa/sf-js.md`. It runs against real
+npm, pnpm, yarn and bun projects with the real Vitest, Jest, tsc, ESLint,
+jscpd and StrykerJS, and needs the npm registry.
 
 The shared core in `swarmforge/tools/core/` serves `sf-cs` as well. Its
 policy namespaces are pure: `sfcore.changes` (diff parsing, path matching),

@@ -30,3 +30,7 @@ jobs:
         run: bb --config swarmforge/tools/javascript/bb.edn test
       - name: Property-test sf-js
         run: bb --config swarmforge/tools/javascript/bb.edn property
+      - name: Accept sf-js
+        run: |
+          swarmforge/bin/sf tool ensure gherkin-parser
+          bb --config swarmforge/tools/javascript/bb.edn acceptance
