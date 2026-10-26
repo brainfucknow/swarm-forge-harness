@@ -262,10 +262,12 @@ check_roles() {
 }
 
 check_tiers() {
-  local file="$(conf_dir)/tiers.conf" tier a b c extra
+  local file="$(conf_dir)/tiers.conf" tier a b c extra seen=""
   [ -f "$file" ] || { problem "tiers.conf: missing"; return 0; }
   while read -r tier a b c extra; do
     if [ -z "$c" ] || [ -n "$extra" ]; then problem "tiers.conf: '$tier' needs exactly <tier> <claude-model> <codex-effort> <copilot-model>"; fi
+    echo "$seen" | grep -qx "$tier" && problem "tiers.conf: tier '$tier' listed twice"
+    seen="$seen"$'\n'"$tier"
   done < <(conf_lines "$file")
 }
 
@@ -283,9 +285,11 @@ check_routes() {
 }
 
 check_tools() {
-  local file="$(conf_dir)/tools.conf" name kind source task rewrite needs extra
+  local file="$(conf_dir)/tools.conf" name kind source task rewrite needs extra seen=""
   [ -f "$file" ] || return 0
   while read -r name kind source task rewrite needs extra; do
+    echo "$seen" | grep -qx "$name" && problem "tools.conf: tool '$name' listed twice"
+    seen="$seen"$'\n'"$name"
     if [ -z "$needs" ] || [ -n "$extra" ]; then problem "tools.conf: '$name' needs exactly <name> <kind> <source> <task> <rewrite> <needs>"; continue; fi
     case "$kind" in bb|clj|local) ;; *) problem "tools.conf: '$name' has unknown kind '$kind'" ;; esac
     case "$rewrite" in mutate|gherkin|-) ;; *) problem "tools.conf: '$name' has unknown rewrite '$rewrite'" ;; esac
