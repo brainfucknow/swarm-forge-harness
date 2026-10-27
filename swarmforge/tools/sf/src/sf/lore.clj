@@ -37,9 +37,9 @@
   trailer-keys are the keys of the trailers that git reads from the message's
   last paragraph, empty when it has no trailer block. The byline goes in its own
   paragraph before that block, or at the end when there is none. A block with a
-  Lore trailer and no Lore-id gets `Lore-id: <(new-id)>` as its first line. A
+  Lore trailer and no Lore-id gets `Lore-id: <(make-id)>` as its first line. A
   message that needs neither is returned as it is."
-  [message role trailer-keys new-id]
+  [message role trailer-keys make-id]
   (let [text (str/replace message #"\s+\z" "")
         byline (str "By " role ".")
         add-byline? (not-any? #{byline} (str/split-lines text))
@@ -48,7 +48,7 @@
     (if (or add-byline? add-id?)
       (str (str/join "\n\n" (remove nil? [head
                                           (when add-byline? byline)
-                                          (if add-id? (str "Lore-id: " (new-id) "\n" block) block)]))
+                                          (if add-id? (str "Lore-id: " (make-id) "\n" block) block)]))
            "\n")
       message)))
 
