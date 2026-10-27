@@ -50,6 +50,14 @@
       (should= ["Fix" "By qa." "Tested: x"] [head byline trailer])
       (should= 8 (count id))))
 
+  (it "keeps the trailer block above the comment block of an editor commit"
+    (should (re-matches #"Fix\n\nBy qa\.\n\nLore-id: [0-9a-f]{8}\nTested: x\n\n# Please enter the commit message\.\n"
+                        (commit-msg "qa" "Fix\n\nTested: x\n\n# Please enter the commit message.\n"))))
+
+  (it "reads a --- line as text, as git log does"
+    (should (re-matches #"Fix\n\nBefore\n---\nafter\n\nBy qa\.\n\nLore-id: [0-9a-f]{8}\nTested: x\n"
+                        (commit-msg "qa" "Fix\n\nBefore\n---\nafter\n\nTested: x\n"))))
+
   (it "leaves a signed message as it is"
     (should= "Fix\n\nBy qa.\n" (commit-msg "qa" "Fix\n\nBy qa.\n")))
 

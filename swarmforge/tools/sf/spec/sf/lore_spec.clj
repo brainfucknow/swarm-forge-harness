@@ -55,6 +55,45 @@
                   "Fix\n\nBy qa.\n\nLore-id: 22222222\nTested: x\n"]
                  (repeatedly 2 #(lore/sign "Fix\n\nTested: x\n" "qa" ["Tested"] next-id)))))))
 
+(def ^:private template "\n# Please enter the commit message for your changes.\n#\n# On branch b\n")
+
+(defn- sign-commit
+  ([message trailer-keys] (sign-commit message "#" trailer-keys))
+  ([message comment-char trailer-keys]
+   (lore/sign-commit message comment-char "qa" trailer-keys (constantly "0badc0de"))))
+
+(describe "sign-commit"
+  (it "signs a message without a comment block as sign does"
+    (should= "Fix\n\nBy qa.\n" (sign-commit "Fix\n" []))
+    (should= "Fix\n\nBy qa.\n\nLore-id: 0badc0de\nTested: x\n" (sign-commit "Fix\n\nTested: x\n" ["Tested"])))
+
+  (it "keeps the trailer block above git's comment block"
+    (should= (str "Fix\n\nBy qa.\n\nLore-id: 0badc0de\nTested: x\n" template)
+             (sign-commit (str "Fix\n\nTested: x\n" template) ["Tested"])))
+
+  (it "appends the byline above git's comment block"
+    (should= (str "Fix\n\nBy qa.\n" template) (sign-commit (str "Fix\n" template) [])))
+
+  (it "keeps a comment line with text after it in place"
+    (should= (str "Fix\n\n#1 done\nBody\n\nBy qa.\n" template) (sign-commit (str "Fix\n\n#1 done\nBody\n" template) [])))
+
+  (it "takes everything from the scissors line on as comments"
+    (let [verbose (str template "# ------------------------ >8 ------------------------\n"
+                       "# Do not modify or remove the line above.\ndiff --git a/f b/f\n+Tested: no\n")]
+      (should= (str "Fix\n\nBy qa.\n\nLore-id: 0badc0de\nTested: x\n" verbose)
+               (sign-commit (str "Fix\n\nTested: x\n" verbose) ["Tested"]))))
+
+  (it "uses the comment character it is given"
+    (should= "Fix\n\nBy qa.\n\nLore-id: 0badc0de\nTested: x\n\n; Please enter\n"
+             (sign-commit "Fix\n\nTested: x\n\n; Please enter\n" ";" ["Tested"])))
+
+  (it "leaves a signed message as it is"
+    (should= (str "Fix\n\nBy qa.\n" template) (sign-commit (str "Fix\n\nBy qa.\n" template) [])))
+
+  (it "leaves a message with no text alone, so git aborts an empty commit"
+    (should= template (sign-commit template []))
+    (should= "" (sign-commit "" []))))
+
 (describe "lore-key?"
   (it "knows every Lore trailer key"
     (should= [true true true true true true true true true true true true]

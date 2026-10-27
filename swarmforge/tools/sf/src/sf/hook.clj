@@ -34,14 +34,22 @@
           (spit (str hook) (body))
           (fs/set-posix-file-permissions hook "rwxr-xr-x")))))
 
+(defn- comment-char
+  "git's core.commentChar; # when it is not set or is auto, as git
+  interpret-trailers reads it."
+  []
+  (let [char (shell/chomp (:out (shell/run {} "git" "config" "--get" "core.commentChar")))]
+    (if (or (str/blank? char) (= "auto" char)) "#" char)))
+
 (defn commit-msg
   "Adds the byline for role and a Lore-id to the commit message in file, as
-  sf.lore/sign does. git interpret-trailers finds the trailer block."
+  sf.lore/sign-commit does. git interpret-trailers finds the trailer block as
+  git log reads it: a --- line in the message is text, not a patch divider."
   [[role file]]
   (when (or (str/blank? role) (str/blank? file))
     (shell/die "commit-msg needs a role and a message file"))
   (let [message (slurp file)
-        trailers (shell/lines (shell/must {:in message} "git" "interpret-trailers" "--parse"))
-        signed (lore/sign message role (keep lore/trailer-key trailers) lore/new-id)]
+        trailers (shell/lines (shell/must {:in message} "git" "interpret-trailers" "--parse" "--no-divider"))
+        signed (lore/sign-commit message (comment-char) role (keep lore/trailer-key trailers) lore/new-id)]
     (when (not= signed message)
       (spit file signed))))
