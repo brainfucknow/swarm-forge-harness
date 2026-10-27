@@ -179,20 +179,27 @@ Before running this command again:
     (println "---")
     (print (bug/show id))))
 
+(defn- on-task-worktree
+  "A manifest command that prints the lines report gives for the worktree of
+  the task that its argument names."
+  [report]
+  (fn [id-arg]
+    (let [id (bug/bug-id id-arg)]
+      (run! println (report (existing-worktree id (worktree-of id)))))))
+
+(def ^:private manifest-commands
+  {"load" (on-task-worktree (comp vector manifests/load!))
+   "save" (on-task-worktree (comp vector manifests/save!))
+   "tested" (on-task-worktree manifests/tested)
+   "block-in" #(manifests/block-in "." %)
+   "block-out" #(manifests/block-out "." %)})
+
 (defn manifest
   "sf manifest load|save|tested <id>, and block-in|block-out <feature> for the
   gherkin-mutator wrapper."
   [[command arg]]
-  (case command
-    "block-in" (manifests/block-in arg)
-    "block-out" (manifests/block-out arg)
-    ("load" "save" "tested")
-    (let [id (bug/bug-id arg)
-          dir (existing-worktree id (worktree-of id))]
-      (case command
-        "load" (println (manifests/load! dir))
-        "save" (println (manifests/save! dir))
-        "tested" (run! println (manifests/tested dir))))
+  (if-let [run (manifest-commands command)]
+    (run arg)
     (shell/die "usage: sf manifest load|save|tested <id>")))
 
 (defn- next-in-route [route role]

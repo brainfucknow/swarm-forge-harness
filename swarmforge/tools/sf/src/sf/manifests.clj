@@ -84,25 +84,29 @@
   [dir]
   (manifest/tested-lines (unsaved dir)))
 
-(defn- saved-block-path [feature]
-  (str (fs/path manifest/root "gherkin" feature)))
+(defn- saved-block-file [dir feature]
+  (fs/path dir manifest/root "gherkin" feature))
 
 (defn block-in
-  "Puts the saved gherkin-mutator block at the top of a feature without one."
-  [feature]
-  (let [saved (saved-block-path feature)]
-    (when (and (fs/exists? saved) (fs/exists? feature))
-      (let [text (slurp feature)]
+  "Puts the saved gherkin-mutator block at the top of a feature without one.
+  The feature path is relative to dir."
+  [dir feature]
+  (let [saved (saved-block-file dir feature)
+        file (fs/path dir feature)]
+    (when (and (fs/exists? saved) (fs/exists? file))
+      (let [text (slurp (str file))]
         (when-not (feature-block/block-lines text)
-          (spit feature (feature-block/with-block (slurp saved) text)))))))
+          (spit (str file) (feature-block/with-block (slurp (str saved)) text)))))))
 
 (defn block-out
-  "Moves the gherkin-mutator block of a feature to .metrics/gherkin/<feature>."
-  [feature]
-  (when (fs/exists? feature)
-    (let [text (slurp feature)]
-      (when-let [lines (feature-block/block-lines text)]
-        (let [saved (saved-block-path feature)]
-          (fs/create-dirs (fs/parent saved))
-          (spit saved (str (str/join "\n" lines) "\n"))
-          (spit feature (feature-block/without-block text)))))))
+  "Moves the gherkin-mutator block of a feature to .metrics/gherkin/<feature>.
+  The feature path is relative to dir."
+  [dir feature]
+  (let [file (fs/path dir feature)]
+    (when (fs/exists? file)
+      (let [text (slurp (str file))]
+        (when-let [lines (feature-block/block-lines text)]
+          (let [saved (saved-block-file dir feature)]
+            (fs/create-dirs (fs/parent saved))
+            (spit (str saved) (str (str/join "\n" lines) "\n"))
+            (spit (str file) (feature-block/without-block text))))))))
