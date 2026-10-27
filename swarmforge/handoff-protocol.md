@@ -95,6 +95,29 @@ merged-into: main
 `from` is the acting role: `SWARMFORGE_ROLE` when set, otherwise the task's
 current stage. Operator records always say `operator`.
 
+## Lore lines
+
+After the comments, `sf start` and `sf show` print the
+[Lore](https://github.com/Ian-stetsenko/lore-protocol) trailers of the task
+branch, one line per trailer:
+
+```text
+LORE: 3e1f0a2 coder Constraint: keep the byline format
+LORE: 3e1f0a2 coder Rejected: byline as a trailer | breaks old commits
+LORE: 9b07c44 qa Lore-id: 5d2c81fe
+LORE: 9b07c44 qa Tested: byline placement
+```
+
+The commits are those on `swarm/<id>` since the commit of the `created`
+record, oldest first, trailers in message order. The sha is abbreviated as
+`git rev-parse --short` prints it; the role is the commit's last
+`By <role>.` line, or `-`. Only trailers that git reads from the trailer block
+count, with folded values on one line, and only Lore keys (`Constraint`,
+`Rejected`, `Confidence`, `Scope-risk`, `Reversibility`, `Directive`,
+`Tested`, `Not-tested`, `Supersedes`, `Depends-on`, `Related`, `Lore-id`).
+After `sf finish` the branch is gone and no `LORE:` lines are printed;
+`git log --format='%(trailers)'` on the base branch still shows them.
+
 ## Lifecycle
 
 ```text
@@ -136,6 +159,19 @@ git-bug data travels with the repository: `git bug push` and `git bug pull`
 move `refs/bugs/*` and `refs/identities/*` to and from a remote, so two
 machines or two harnesses can take turns on one task. Pushing the task branch
 (`git push origin swarm/<id>`) moves the work itself.
+
+A host that accepts only branch pushes refuses `git bug push`. There, mirror
+the data to branches:
+
+```sh
+git push origin 'refs/bugs/*:refs/heads/git-bug/bugs/*' 'refs/identities/*:refs/heads/git-bug/identities/*'
+```
+
+Another clone restores it with the reverse fetch, then `git bug ls`:
+
+```sh
+git fetch origin 'refs/heads/git-bug/bugs/*:refs/bugs/*' 'refs/heads/git-bug/identities/*:refs/identities/*'
+```
 
 ## Audit
 
