@@ -4,6 +4,7 @@
             [babashka.process :as p]
             [clojure.string :as str]
             [sf.config :as config]
+            [sf.flow :as flow]
             [sf.shell :as shell]
             [sf.store :as store]))
 
@@ -53,17 +54,18 @@
   [[id-arg backend]]
   (let [id (store/resolve-id id-arg)]
     (loop []
-      (let [{:keys [stage needs]} (store/state id)]
+      (let [{:keys [stage needs] :as state} (store/state id)]
         (cond
           (= "done" stage)
           (println (str "DONE: " id "; run: sf finish " id))
 
-          (not= "none" needs)
+          (flow/waiting? state)
           (do (println (str "BLOCKED: " id " needs:" needs))
               (shell/fail 2 nil))
 
           :else
           (do (dispatch [stage id backend])
-              (when (= {:stage stage :needs "none"} (select-keys (store/state id) [:stage :needs]))
+              (when (let [after (store/state id)]
+                      (and (= stage (:stage after)) (not (flow/waiting? after))))
                 (shell/die "stage:" stage " made no progress"))
               (recur)))))))

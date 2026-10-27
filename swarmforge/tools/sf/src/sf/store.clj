@@ -64,13 +64,11 @@
       :none (shell/die "no task '" arg "'"))))
 
 (defn new-id
-  "slug-hex, with a hex part that no task has."
+  "slug-hex, with a random hex part that no task has."
   [title]
-  (let [taken (set (map record/hex-part (concat (branch-ids) (done-ids))))]
-    (->> (repeatedly #(format "%07x" (rand-int 0x10000000)))
-         (remove taken)
-         first
-         (str (record/slug title) "-"))))
+  (record/new-id title
+                 (map record/hex-part (concat (branch-ids) (done-ids)))
+                 (repeatedly #(format "%07x" (rand-int 0x10000000)))))
 
 (def ^:private log-format "%h%x1f%p%x1f%B%x1f%(trailers:only,unfold)%x1e")
 
@@ -117,8 +115,7 @@
   [id]
   (if (has-branch? id)
     (or (last (records-at (ref-of id) id)) (shell/die "swarm/" id " has no records"))
-    (let [{:strs [stage route]} (:front (task-file id))]
-      {:stage stage :route route :needs "none"})))
+    (record/archived-state (task-file id))))
 
 (defn- tree-with
   "The tree of rev with the paths in removed taken out and files (path to

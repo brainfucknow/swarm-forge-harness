@@ -1,8 +1,8 @@
-(ns sf.task-spec
+(ns sf.history-spec
   (:require [babashka.fs :as fs]
             [speclj.core :refer [describe it should= should-be-nil around]]
             [sf.shell :as shell]
-            [sf.task]))
+            [sf.history]))
 
 (def ^:dynamic *dir* nil)
 
@@ -10,7 +10,7 @@
   (shell/chomp (apply shell/must {:dir dir} "git" "-c" "user.name=t" "-c" "user.email=t@x" args)))
 
 (defn- with-repo [run-spec]
-  (let [dir (str (fs/create-temp-dir {:prefix "task-spec-"}))]
+  (let [dir (str (fs/create-temp-dir {:prefix "history-spec-"}))]
     (try
       (git dir "init" "-q" "-b" "main")
       (git dir "commit" "-q" "--allow-empty" "-m" "Base\n\nTested: base")
@@ -18,7 +18,7 @@
         (binding [*dir* dir] (run-spec)))
       (finally (fs/delete-tree dir)))))
 
-(def ^:private lore-lines @#'sf.task/lore-lines)
+(def ^:private lore-lines @#'sf.history/lore-lines)
 
 (describe "lore-lines"
   (around [it] (with-repo it))

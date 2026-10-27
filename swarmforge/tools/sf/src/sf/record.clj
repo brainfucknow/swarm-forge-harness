@@ -28,6 +28,12 @@
 (defn branch [id]
   (str "swarm/" id))
 
+(defn new-id
+  "slug-hex for the title, with the first of the hex candidates that taken
+  does not hold."
+  [title taken candidates]
+  (str (slug title) "-" (first (remove (set taken) candidates))))
+
 (defn resolve
   "[:ok id] for the full id, the hex part of one id, or a prefix of one id;
   [:ambiguous ids] or [:none] otherwise."
@@ -100,14 +106,17 @@
           (> (count paths) limit) (str (str/join "," (take limit paths)) ",+" (- (count paths) limit) " more")
           :else (str/join "," paths))))
 
-(def ^:private milestones #{"created" "review" "handoff"})
+(defn milestone?
+  "True for the records that name a role's commit: created, review and handoff."
+  [{:keys [record]}]
+  (contains? #{"created" "review" "handoff"} record))
 
 (defn with-files
   "The records with :files on each review and handoff: (diff from to) paths
   since the commit of the previous created, review or handoff record."
   [records diff]
   (first (reduce (fn [[done previous] {:keys [record commit] :as rec}]
-                   (if (milestones record)
+                   (if (milestone? rec)
                      [(conj done (cond-> rec (not= "created" record) (assoc :files (files-value (diff previous commit)))))
                       commit]
                      [(conj done rec) previous]))
@@ -163,6 +172,12 @@
      :blocks (if cut
                (mapv second (re-seq #"(?s)```text\n(.*?)\n```" (subs body cut)))
                [])}))
+
+(defn archived-state
+  "The stage and route in the front matter of an archived task file, which
+  waits on no one."
+  [{:keys [front]}]
+  {:stage (get front "stage") :route (get front "route") :needs "none"})
 
 (defn record-trailer
   "The first key that starts with SwarmForge-, in any letter case, or nil."

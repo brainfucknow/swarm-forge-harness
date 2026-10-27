@@ -171,3 +171,18 @@
 
   (it "is nil when there is none"
     (should= nil (record/record-trailer ["Tested" "SwarmForgeX"]))))
+
+(describe "new-id"
+  (it "is the slug and the first hex that no task has"
+    (should= "add-login-3333333"
+             (record/new-id "Add login" ["1111111" "2222222"] ["1111111" "2222222" "3333333"]))))
+
+(describe "archived-state"
+  (it "is the stage and route of the front matter, waiting on no one"
+    (should= {:stage "done" :route "coder,qa" :needs "none"}
+             (record/archived-state {:front {"stage" "done" "route" "coder,qa" "id" "x"}}))))
+
+(describe "milestone?"
+  (it "is true for created, review and handoff records"
+    (should= [true true true false false]
+             (map #(record/milestone? {:record %}) ["created" "review" "handoff" "question" "approval"]))))
