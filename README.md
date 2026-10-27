@@ -162,7 +162,10 @@ swarmforge/
   handoff-protocol.md            labels, records, lifecycle
 .claude/agents  .codex/agents  .github/agents     generated role agents
 .claude/skills/swarm  .agents/skills/swarm        the /swarm entry point
+swarmforge/tools/sf/spec/        Speclj unit specs for sf
 test/sf_test.sh                  behavioral tests for sf (needs git-bug)
+test/features/  test/qa/         Gherkin acceptance features and QA procedures
+test/acceptance.sh  test/acceptance/   acceptance pipeline: generator, runtime, step handlers
 test/probe_gitbug.clj            checks that git-bug reads its own label writes
 ```
 
@@ -171,10 +174,14 @@ test/probe_gitbug.clj            checks that git-bug reads its own label writes
 ```sh
 bash test/sf_test.sh
 bash test/sf_tool_test.sh
+bb --config swarmforge/tools/sf/bb.edn spec
+bash test/acceptance.sh
 bb --config swarmforge/tools/csharp/bb.edn test
 ```
 
 The first drives `sf` against a real git-bug in a scratch repository, the
-second drives `sf tool` against a local tool source and a fake `bb`, and the
-third drives `sf-cs` against fixture reports and a fake `dotnet`. None pins
-prompt wording.
+second drives `sf tool` against a local tool source and a fake `bb`, the third
+runs the Speclj unit specs of `sf`, the fourth runs the Gherkin features in
+`test/features/` through `gherkin-parser` (`swarmforge/bin/sf tool ensure
+gherkin-parser`) and the generated acceptance tests, and the last drives
+`sf-cs` against fixture reports and a fake `dotnet`. None pins prompt wording.

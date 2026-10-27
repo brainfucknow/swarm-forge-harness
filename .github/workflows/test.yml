@@ -24,5 +24,11 @@ jobs:
         run: bash test/sf_test.sh
       - name: Test sf tool
         run: bash test/sf_tool_test.sh
+      - name: Unit specs for sf
+        run: bb --config swarmforge/tools/sf/bb.edn spec
+      - name: Acceptance tests for sf
+        run: |
+          swarmforge/bin/sf tool ensure gherkin-parser
+          bash test/acceptance.sh
       - name: Test sf-cs
         run: bb --config swarmforge/tools/csharp/bb.edn test
