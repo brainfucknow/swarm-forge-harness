@@ -176,6 +176,17 @@
         (check (and (every? seq ids) (apply not= ids)) (str "Lore-ids were " (pr-str ids)))
         world))]
 
+   [#"the output ends with the lines \"(.*)\""
+    (fn [world expected]
+      (let [expected (str/split-lines (fill-names world (unescape expected)))
+            actual (output-lines world)
+            lore? #(str/starts-with? % "LORE:")]
+        (check (= expected (take-last (count expected) actual))
+               (str "output ended with " (pr-str (vec (take-last (count expected) actual)))))
+        (check (= (count (filter lore? expected)) (count (filter lore? actual)))
+               (str "LORE: lines were " (pr-str (filterv lore? actual))))
+        world))]
+
    [#"the output has no line (containing|starting with) \"(.*)\""
     (fn [world how text]
       (let [found (filter #(if (= how "containing") (str/includes? % text) (str/starts-with? % text))
