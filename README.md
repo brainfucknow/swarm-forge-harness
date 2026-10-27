@@ -163,6 +163,7 @@ swarmforge/
 .claude/agents  .codex/agents  .github/agents     generated role agents
 .claude/skills/swarm  .agents/skills/swarm        the /swarm entry point
 swarmforge/tools/sf/spec/        Speclj unit specs for sf
+swarmforge/tools/sf/property/    test.check property tests for sf (run on their own)
 test/sf_test.sh                  behavioral tests for sf (needs git-bug)
 test/features/  test/qa/         Gherkin acceptance features and QA procedures
 test/acceptance.sh  test/acceptance/   acceptance pipeline: generator, runtime, step handlers
@@ -175,13 +176,15 @@ test/probe_gitbug.clj            checks that git-bug reads its own label writes
 bash test/sf_test.sh
 bash test/sf_tool_test.sh
 bb --config swarmforge/tools/sf/bb.edn spec
+bb --config swarmforge/tools/sf/bb.edn property
 bash test/acceptance.sh
 bb --config swarmforge/tools/csharp/bb.edn test
 ```
 
 The first drives `sf` against a real git-bug in a scratch repository, the
 second drives `sf tool` against a local tool source and a fake `bb`, the third
-runs the Speclj unit specs of `sf`, the fourth runs the Gherkin features in
+runs the Speclj unit specs of `sf`, the fourth runs its test.check property
+tests (kept out of the unit specs), the fifth runs the Gherkin features in
 `test/features/` through `gherkin-parser` (`swarmforge/bin/sf tool ensure
 gherkin-parser`) and the generated acceptance tests, and the last drives
 `sf-cs` against fixture reports and a fake `dotnet`. None pins prompt wording.

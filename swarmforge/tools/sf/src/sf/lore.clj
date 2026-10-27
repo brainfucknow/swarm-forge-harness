@@ -17,6 +17,14 @@
   [line]
   (second (re-matches #"([^:]+):.*" line)))
 
+(defn- byline [role]
+  (str "By " role "."))
+
+(defn- byline-role
+  "The role in a `By <role>.` line, or nil."
+  [line]
+  (second (re-matches #"By (\S+)\." line)))
+
 (def ^:private random (SecureRandom.))
 
 (defn new-id
@@ -41,13 +49,13 @@
   message that needs neither is returned as it is."
   [message role trailer-keys make-id]
   (let [text (str/replace message #"\s+\z" "")
-        byline (str "By " role ".")
-        add-byline? (not-any? #{byline} (str/split-lines text))
+        signature (byline role)
+        add-byline? (not-any? #{signature} (str/split-lines text))
         add-id? (and (some lore-key? trailer-keys) (not-any? #{"Lore-id"} trailer-keys))
         [head block] (if (seq trailer-keys) (head-and-block text) [text nil])]
     (if (or add-byline? add-id?)
       (str (str/join "\n\n" (remove nil? [head
-                                          (when add-byline? byline)
+                                          (when add-byline? signature)
                                           (if add-id? (str "Lore-id: " (make-id) "\n" block) block)]))
            "\n")
       message)))
@@ -55,7 +63,7 @@
 (defn- role-of
   "The role of the last `By <role>.` line, or -."
   [message]
-  (or (last (keep #(second (re-matches #"By (\S+)\." %)) (str/split-lines message))) "-"))
+  (or (last (keep byline-role (str/split-lines message))) "-"))
 
 (defn lines
   "One `LORE: <sha> <role> <Key>: <value>` line per Lore trailer. commits are

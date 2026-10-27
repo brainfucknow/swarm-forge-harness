@@ -1,7 +1,8 @@
-{:paths ["src" "resources" "spec"]
+{:paths ["src" "resources" "spec" "property"]
  :deps {speclj/speclj {:mvn/version "3.12.2"}}
  :tasks
- {spec {:doc "Run the sf unit specs"
-        :requires ([babashka.fs :as fs])
-        :task (let [specs (str (fs/path (fs/parent (fs/absolutize (System/getProperty "babashka.config"))) "spec"))]
-                (apply (requiring-resolve 'speclj.main/-main) ["-c" specs]))}}}
+ {:init (def here (str (babashka.fs/parent (babashka.fs/absolutize (System/getProperty "babashka.config")))))
+  spec {:doc "Run the sf unit specs"
+        :task (apply (requiring-resolve 'speclj.main/-main) ["-c" (str (babashka.fs/path here "spec"))])}
+  property {:doc "Run the sf property tests (test.check)"
+            :task (apply (requiring-resolve 'speclj.main/-main) ["-c" (str (babashka.fs/path here "property"))])}}}
