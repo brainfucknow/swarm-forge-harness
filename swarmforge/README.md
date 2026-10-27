@@ -2,14 +2,14 @@
 
 This directory is SwarmForge installed into the project. It runs AI roles as
 harness agents in Claude Code, Codex, or Copilot CLI. Each task takes a route
-through the role catalogue, and roles pass work through git-bug tasks stored
-in this repository.
+through the role catalogue, and roles pass work through task branches in this
+repository.
 
 ```text
 operator ──► session: orchestrator ──► subagents on the task's route, e.g.
                         │                feature: specifier → coder → cleaner → architect → hardener → qa
                         │                bugfix:  specifier → coder → qa
-                        │ git-bug task, branch swarm/<id>, worktree .worktrees/<id>
+                        │ task branch swarm/<id>, worktree .worktrees/<id>
                         └─ sf review ─► operator approves ─► sf approve ─► … ─► sf finish
 ```
 
@@ -24,10 +24,10 @@ operator ──► session: orchestrator ──► subagents on the task's route
 | `bin/sf-cs`, `languages/csharp.md` | C# tool wrapper: tests, coverage, CRAP, DRY, mutation, each scoped to the task's changes. |
 | `bin/sf-js`, `languages/javascript.md` | JavaScript and TypeScript tool wrapper: the same commands for Vitest or Jest, oxlint or ESLint complexity with Istanbul coverage, jscpd, and StrykerJS. |
 | `tools/core/` | Report readers shared by the language tool wrappers: changed lines, CRAP, jscpd, Stryker. |
-| `handoff-protocol.md` | Task labels, records, and lifecycle. |
+| `handoff-protocol.md` | The task branch, task file, record commits, and lifecycle. |
 
-Prerequisites: `git`, `bash`, [Babashka](https://babashka.org) (`bb`), and
-[`git-bug`](https://github.com/git-bug/git-bug) on PATH. Run `swarmforge/bin/sf init` once per clone.
+Prerequisites: `git`, `bash`, and [Babashka](https://babashka.org) (`bb`).
+Run `swarmforge/bin/sf init` once per clone.
 
 Start a task from the harness with `/swarm <feature request>`, or by hand:
 
@@ -38,7 +38,7 @@ sf review <id>     # specifier stops for approval
 sf route <id> specifier,coder,qa   # operator narrows the route at the gate
 sf approve <id>    # operator; moves the task to the next role on the route
 sf ls              # id, stage, needs, route, title
-sf finish <id>     # after stage:done: merge, close
+sf finish <id>     # at stage done: merge, remove the branch
 ```
 
 Without harness subagents, `sf run <id>` dispatches each stage to a headless

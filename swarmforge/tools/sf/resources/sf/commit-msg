@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 {{marker}}
-# Adds "By <role>." and a Lore-id to a commit in a task worktree (sf commit-msg).
-# <role> is SWARMFORGE_ROLE or, if it is not set, the task stage. Other commits
-# do not change. A task commit is refused when its role is not known.
+# Adds "By <role>." and a Lore-id to a commit in a task worktree (sf commit-msg),
+# and refuses one with a SwarmForge-* trailer. <role> is SWARMFORGE_ROLE or, if
+# it is not set, the task stage. Other commits do not change. A task commit is
+# refused when its role is not known.
 msg="$1"
 top="$(git rev-parse --show-toplevel)"
 common="$(git rev-parse --path-format=absolute --git-common-dir)"
@@ -14,9 +15,8 @@ esac
 role="${SWARMFORGE_ROLE:-}"
 if [ -z "$role" ]; then
   role="$("$root/swarmforge/bin/sf" stage "$(basename "$top")" 2>&1)" || {
-    echo "commit-msg: cannot find the role for this task worktree ($role); set SWARMFORGE_ROLE or put git-bug on PATH" >&2
+    echo "commit-msg: cannot find the role for this task worktree ($role); set SWARMFORGE_ROLE" >&2
     exit 1
   }
 fi
-[ "$role" != done ] || exit 0
 exec "$root/swarmforge/bin/sf" commit-msg "$role" "$msg"

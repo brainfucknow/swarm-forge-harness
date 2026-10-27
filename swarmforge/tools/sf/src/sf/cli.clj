@@ -1,6 +1,7 @@
 (ns sf.cli
-  "sf: SwarmForge task helper. Each task is a git-bug issue. A role hands work
-  to the next role: it commits on the task branch and records a handoff comment."
+  "sf: SwarmForge task helper. Each task is a git branch, swarm/<id>. A role
+  hands work to the next role: it commits on the task branch and sf records a
+  handoff commit."
   (:require [sf.adapters :as adapters]
             [sf.config :as config]
             [sf.dispatch :as dispatch]
@@ -11,24 +12,26 @@
 
 (def usage "usage: sf <command> [args]
 
+<id> is a task's full id (slug-hex), its 7 hex digits, or a unique prefix.
+
 Operator commands
-  init                           create the git-bug identity if none exists
+  init                           install the commit-msg hook; print the identity of record commits
   new <title> [-m text | -F file] [--route NAME|a,b,c]
                                   create a task on a route; prints its id
   route <id> [NAME|a,b,c]         print or change the task's route
   ls [--stage ROLE] [--needs]     list open tasks
-  show <id>                       show a task with all comments
-  answer <id> <text>              answer a role's question and clear needs:operator
+  show <id>                       show a task with all records, also once finished
+  answer <id> <text>              answer a role's question and clear needs operator
   approve <id>                    accept the specification and hand it to the next role
   reject <id> <text>              send the specification back to the specifier
-  finish <id> [--into BRANCH]     merge the task branch into BRANCH (default: current) and close
+  finish <id> [--into BRANCH]     merge the task branch into BRANCH (default: current), remove it
 
 Role commands
-  next <role>                     print ids of tasks waiting at stage:<role>, or NO_TASK
+  next <role>                     print ids of tasks waiting at stage <role>, or NO_TASK
   start <id>                      create or enter the task worktree; print the task
   handoff <id> [--to ROLE] [-m text]
                                   record HEAD and move the task to the next stage
-  ask <id> <text>                 record a question and stop: labels needs:operator
+  ask <id> <text>                 record a question and stop: needs operator
   review <id> [-m text]           ask the operator to approve the specification
 
 Catalogue commands
@@ -48,7 +51,9 @@ Environment
   SWARMFORGE_ROUTE     default route for `new` (default: feature, else every role)
   SWARMFORGE_ROLE      role name used for `from:` (default: the task's stage)
   SWARMFORGE_BACKEND   default backend for dispatch/run
-  SWARMFORGE_GIT_BUG   git-bug executable (default: git-bug)
+  SWARMFORGE_USER, SWARMFORGE_EMAIL
+                       author of record commits when git has no identity
+                       (default: operator, <user>@swarmforge.local)
   SWARMFORGE_CLAUDE_ARGS, SWARMFORGE_CODEX_ARGS, SWARMFORGE_COPILOT_ARGS
                        extra arguments for the headless backend, for example
                        the permission flags an unattended run needs")

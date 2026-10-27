@@ -1,29 +1,20 @@
 (ns sf.task-spec
   (:require [babashka.fs :as fs]
             [speclj.core :refer [describe it should= should-be-nil around]]
-            [sf.bug :as bug]
             [sf.shell :as shell]
-            [sf.task :as task]))
+            [sf.task]))
 
 (def ^:dynamic *dir* nil)
 
-(def ^:private created-shown "  d1 #1 operator <o@x>\n\n  type: created\nfrom: operator\ncommit: %s\n")
-
 (defn- git [dir & args]
   (shell/chomp (apply shell/must {:dir dir} "git" "-c" "user.name=t" "-c" "user.email=t@x" args)))
-
-(defn- commit-on-branch [dir branch & messages]
-  (git dir "checkout" "-q" "-b" branch)
-  (doseq [message messages] (git dir "commit" "-q" "--allow-empty" "-m" message))
-  (git dir "rev-parse" "--short" "HEAD"))
 
 (defn- with-repo [run-spec]
   (let [dir (str (fs/create-temp-dir {:prefix "task-spec-"}))]
     (try
       (git dir "init" "-q" "-b" "main")
-      (git dir "commit" "-q" "--allow-empty" "-m" "seed")
-      (with-redefs [shell/repo-root (constantly dir)
-                    bug/short-id (fn [id] (subs id 0 7))]
+      (git dir "commit" "-q" "--allow-empty" "-m" "Base\n\nTested: base")
+      (with-redefs [shell/repo-root (constantly dir)]
         (binding [*dir* dir] (run-spec)))
       (finally (fs/delete-tree dir)))))
 
@@ -32,16 +23,20 @@
 (describe "lore-lines"
   (around [it] (with-repo it))
 
-  (it "prints the LORE: lines of the commits after the created record"
+  (it "prints the LORE: lines of the first-parent commits after the created record"
     (let [base (git *dir* "rev-parse" "--short" "HEAD")
-          head (commit-on-branch *dir* "swarm/abcdef1"
-                                 "Code\n\nBy coder.\n\nConstraint: keep it\n")]
+          _ (git *dir* "commit" "-q" "--allow-empty" "-m" "Code\n\nBy coder.\n\nConstraint: keep it\n")
+          head (git *dir* "rev-parse" "--short" "HEAD")]
       (should= [(str "LORE: " head " coder Constraint: keep it")]
-               (lore-lines "abcdef1xxxx" (format created-shown base)))))
+               (lore-lines "HEAD" [{:record "created" :commit base}]))))
 
-  (it "is nil when the task has no created record"
-    (commit-on-branch *dir* "swarm/abcdef1" "Code")
-    (should-be-nil (lore-lines "abcdef1xxxx" "no records")))
+  (it "leaves out the commits that a merge brings in"
+    (let [base (git *dir* "rev-parse" "--short" "HEAD")]
+      (git *dir* "checkout" "-q" "-b" "other")
+      (git *dir* "commit" "-q" "--allow-empty" "-m" "Other\n\nTested: other\n")
+      (git *dir* "checkout" "-q" "main")
+      (git *dir* "merge" "-q" "--no-ff" "--no-edit" "other")
+      (should= [] (lore-lines "HEAD" [{:record "created" :commit base}]))))
 
-  (it "is nil when the task branch is gone"
-    (should-be-nil (lore-lines "abcdef1xxxx" (format created-shown "abc1234")))))
+  (it "is nil when there is no created record"
+    (should-be-nil (lore-lines "HEAD" [{:record "question"}]))))
