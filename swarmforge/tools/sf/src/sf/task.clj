@@ -191,8 +191,12 @@
 
 (defn approve [[id-arg]]
   (let [id (open-task id-arg)
-        state (store/state id)]
+        state (store/state id)
+        to (flow/next-stage state nil)]
     (refuse (flow/approval-refusal state))
+    ;; The handoff's own checks run before the approval is recorded, so a
+    ;; handoff that cannot happen leaves the task waiting for approval.
+    (when (not= "done" to) (config/require-role to))
     (role-head id)
     (write! id "approval" "operator" (fn [state] (refuse (flow/approval-refusal state)) {:needs "none"}))
     ;; The review that asked for approval passed the audit gate at this commit.

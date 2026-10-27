@@ -3,7 +3,7 @@
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
             [speclj.core :refer [around describe it should should= should-contain]]
-            [sf.repo-support :refer [*dir* git with-repo]]
+            [sf.repo-support :refer [*dir* git with-repo write-conf!]]
             [sf.store :as store]
             [sf.task :as task]))
 
@@ -60,6 +60,13 @@
       (out task/review [id])
       (should-contain "stays at stage:specifier" (out task/reject [id "Too vague"]))
       (should-contain "Too vague" (out task/show [id]))))
+
+  (it "keeps the task waiting for approval when the handoff would fail"
+    (let [id (new-id "Add login")]
+      (out task/review [id])
+      (write-conf! *dir* "roles.conf" "specifier frontier subagent\ncleaner fast subagent\n")
+      (fails-with "unknown role 'coder'" #(task/approve [id]))
+      (should= (str id "\tspecifier\tapproval\tspecifier,coder,cleaner\tAdd login") (out task/ls ["--needs"]))))
 
   (it "does not approve a task that waits on nothing"
     (let [id (new-id "Add login")]
