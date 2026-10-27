@@ -129,7 +129,19 @@
 
   (it "renders a finished record"
     (should= "type: finished\nfrom: operator\nmerged-into: main"
-             (record/block {:record "finished" :from "operator" :merged-into "main"}))))
+             (record/block {:record "finished" :from "operator" :merged-into "main"})))
+
+  (it "renders an answer, a change request and a route change"
+    (should= "type: answer\nfrom: operator\nanswer: yes"
+             (record/block {:record "answer" :from "operator" :text "yes"}))
+    (should= "type: changes-requested\nfrom: operator\nreason: vague"
+             (record/block {:record "changes-requested" :from "operator" :text "vague"}))
+    (should= "type: route\nfrom: operator\nroute: coder,qa"
+             (record/block {:record "route" :from "operator" :route "coder,qa"})))
+
+  (it "renders only the type and the sender of a record without fields"
+    (should= "type: approval\nfrom: operator"
+             (record/block {:record "approval" :from "operator"}))))
 
 (describe "task file"
   (let [text (record/task-file {:id "t-1" :date "2026-10-27" :title "Add login" :request "Users log in.\n"})]

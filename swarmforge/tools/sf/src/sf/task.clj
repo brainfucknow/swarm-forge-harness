@@ -25,6 +25,12 @@
     (when (store/finished? id) (shell/die "task " id " is finished"))
     id))
 
+(defn- require-value
+  "Stops when flag, the head of args, has nothing after it."
+  [[flag :as args]]
+  (when (< (count args) 2)
+    (shell/die flag " needs " (if (= flag "-F") "a file" "a value"))))
+
 (defn- parse-options
   "Reads flags into a map. values maps a flag that takes a value to its key, or
   to [key transform]; switches maps a flag without a value to its key."
@@ -34,8 +40,7 @@
       (empty? args) opts
       (switches flag) (recur (assoc opts (switches flag) true) (rest args))
       (values flag) (let [[key transform] (if (vector? (values flag)) (values flag) [(values flag) identity])]
-                      (when (< (count args) 2)
-                        (shell/die flag " needs " (if (= flag "-F") "a file" "a value")))
+                      (require-value args)
                       (recur (assoc opts key (transform value)) (drop 2 args)))
       :else (shell/die "unknown " command " option '" flag "'"))))
 
@@ -230,8 +235,8 @@ Before running this command again:
   [default [flag value :as args]]
   (case flag
     (nil "") default
-    "-m" (if (< (count args) 2) (shell/die "-m needs a value") (str/join " " (rest args)))
-    "-F" (if (< (count args) 2) (shell/die "-F needs a file") (read-file value))
+    "-m" (do (require-value args) (str/join " " (rest args)))
+    "-F" (do (require-value args) (read-file value))
     (str/join " " args)))
 
 (defn- handoff-options
