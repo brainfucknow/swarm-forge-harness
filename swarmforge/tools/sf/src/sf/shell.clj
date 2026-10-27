@@ -66,6 +66,11 @@
   (-> (must {} "git" "rev-parse" "--path-format=absolute" "--git-common-dir")
       chomp fs/path fs/parent str))
 
+(defn checkout-root
+  "The checkout the command runs in: the task worktree or the main checkout."
+  []
+  (chomp (must {} "git" "rev-parse" "--show-toplevel")))
+
 (defn conf-rows
   "The whitespace-separated fields of each line, without blank and comment lines."
   [file]
