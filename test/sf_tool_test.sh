@@ -28,7 +28,7 @@ printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@"\n' > "$fake/bb"; chmod +x "$fa
 export PATH="$repo/swarmforge/bin:$PATH"
 # Wrappers run the fake bb; sf itself needs the real one.
 fake_bb() { PATH="$fake:$PATH" "$@"; }
-src="$scratch/tool-src"; mkdir -p "$src"; echo '{}' > "$src/bb.edn"
+src="$scratch/tool-src"; mkdir -p "$src"; echo '{:tasks {mutate {} gherkin-mutator {}}}' > "$src/bb.edn"
 export SWARMFORGE_TOOL_SRC="$src"
 
 assert_match "list prints the catalogue" "$(sf tool list)" "^clj-mutate +bb +github.com/unclebob/clj-mutate$"
@@ -44,9 +44,9 @@ assert_match "require passes after ensure" "$(sf tool require clj-mutate)" "^OK:
 assert_match "cloverage wrapper runs the Clojure CLI" "$(head -2 .swarmforge/bin/cloverage | tail -1)" "^exec clojure -Sdeps .* -M -m cloverage.coverage -p src -s spec -s test -r speclj"
 
 run="$(fake_bb .swarmforge/bin/clj-mutate --mutate-all --max-workers 9 src/a.clj | paste -sd ' ' -)"
-assert_eq "mutate wrapper drops --mutate-all and forces four workers" "$run" "--config $src/bb.edn clj-mutate src/a.clj --max-workers 4"
+assert_eq "mutate wrapper drops --mutate-all and forces four workers" "$run" "--config $src/bb.edn mutate src/a.clj --max-workers 4"
 run="$(fake_bb .swarmforge/bin/clj-mutate --scan src/a.clj | paste -sd ' ' -)"
-assert_eq "mutate wrapper leaves a scan alone" "$run" "--config $src/bb.edn clj-mutate --scan src/a.clj"
+assert_eq "mutate wrapper leaves a scan alone" "$run" "--config $src/bb.edn mutate --scan src/a.clj"
 
 sf tool ensure gherkin-mutator >/dev/null
 run="$(fake_bb .swarmforge/bin/gherkin-mutator --level full --workers 8 features | paste -sd ' ' -)"
