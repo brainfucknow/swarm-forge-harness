@@ -1,16 +1,17 @@
 Feature: sf Lore lines
 
   sf start and sf show print the Lore trailers of the task branch after the
-  task's comment history, one line per trailer:
+  task's records, one line per trailer:
   "LORE: <short sha> <role> <Key>: <value>". The commits are those on the
-  task branch since the commit of the task's "type: created" record, oldest
-  first, and each commit's trailers keep their order in the message. <short
-  sha> is the commit's abbreviated sha as git rev-parse --short prints it.
-  <role> is the role of the commit's last "By <role>." line, or "-" when it
-  has none. Only trailers that git reads from the trailer block count, with
+  first-parent history of the task branch after the task's created record,
+  oldest first, and each commit's trailers keep their order in the message.
+  <short sha> is the commit's abbreviated sha as git rev-parse --short prints
+  it. <role> is the role of the commit's last "By <role>." line, or "-" when
+  it has none. Only trailers that git reads from the trailer block count, with
   folded values joined to one line; trailers that are not Lore trailers are
-  left out. When there are no Lore trailers, or the task branch no longer
-  exists, nothing is added to the output.
+  left out. When there are no Lore trailers, nothing is added to the output.
+  sf show of a task finished with sf finish reads them from the merge's
+  second parent.
 
   Background:
     Given a project with swarmforge initialized
@@ -52,9 +53,9 @@ Feature: sf Lore lines
       | show    |
 
   # sf Lore lines 4
-  Scenario: sf Lore lines 4: show prints no Lore lines after the task is finished
+  Scenario: sf Lore lines 4: show prints the Lore lines of a finished task
     Given role "specifier" committed "Spec\n\nTested: x" in the task worktree as C1
     And the task was finished with sf finish
     When I run "sf show ID" in the main checkout
     Then the exit status is 0
-    And the output has no line starting with "LORE:"
+    And the output ends with the lines "LORE: C1 specifier Lore-id: L1\nLORE: C1 specifier Tested: x"

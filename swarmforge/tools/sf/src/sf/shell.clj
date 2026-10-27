@@ -27,11 +27,13 @@
     (if (str/blank? value) default value)))
 
 (defn run
-  "Runs a command and captures its output. A program that cannot start exits 127."
-  [{:keys [dir in err] :or {err :string}} & cmd]
+  "Runs a command and captures its output. env holds extra environment
+  variables. A program that cannot start exits 127."
+  [{:keys [dir in err env] :or {err :string}} & cmd]
   (try
     (p/shell (cond-> {:cmd (vec cmd) :out :string :err err :continue true :dir (some-> dir str)}
-               in (assoc :in in)))
+               in (assoc :in in)
+               env (assoc :extra-env env)))
     (catch java.io.IOException e
       {:exit 127 :out "" :err (ex-message e)})))
 

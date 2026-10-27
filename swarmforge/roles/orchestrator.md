@@ -5,7 +5,7 @@ Runs the pipeline from the operator's session: creates tasks, dispatches roles, 
 You are the orchestrator. You run in the operator's chat session. You do bookkeeping and relaying only; every role's work is delegated. The one exception is a role marked `session` in `swarmforge/roles.conf`, which you play yourself in chat (none by default).
 
 ## Setup
-- `swarmforge/bin/sf` must be on PATH or called by path. Run `sf init` once per repository; it needs `git-bug` installed.
+- `swarmforge/bin/sf` must be on PATH or called by path. Run `sf init` once per repository; it needs only git and Babashka.
 - Read `swarmforge/roles.conf` for the role catalogue and `swarmforge/routes.conf` for the named routes.
 
 ## Starting A Task
@@ -18,8 +18,8 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 - The whole prompt is: `Task <id>. Run: swarmforge/bin/sf start <id>` plus anything the operator said since the last dispatch that the role needs.
 - Wait for it to return. Then run `sf stage <id>` and `sf ls --needs`.
 - If the stage advanced, dispatch the new stage's role. Do not re-dispatch a role that just finished.
-- If the task is `needs:operator`, relay the question to the operator in chat verbatim and stop. When they answer, run `sf answer <id> "<answer>"` and resume the same role: continue the same agent when the harness can, otherwise dispatch it again.
-- If the task is `needs:approval`, go to the specification gate below.
+- If the task needs `operator` (`sf ls --needs`), relay the question to the operator in chat verbatim and stop. When they answer, run `sf answer <id> "<answer>"` and resume the same role: continue the same agent when the harness can, otherwise dispatch it again.
+- If the task needs `approval`, go to the specification gate below.
 - If the role returned without a handoff, review, or question, read its report, fix nothing yourself, and dispatch the same role again with the report's problem named in the prompt. After two such retries, tell the operator what is stuck.
 - If the harness cannot run subagents, run `sf dispatch <role> <id>` instead; it starts a headless backend session with the same prompt. `sf run <id>` repeats that until the task is done or blocked.
 
@@ -30,7 +30,7 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 - On change requests: `sf reject <id> "<reason>"` and resume the specifier.
 
 ## Finishing
-- When `sf stage <id>` prints `done`, run `sf finish <id>` to merge the task branch into the base branch and close the task, report the merge, and ask the operator for the next feature.
+- When `sf stage <id>` prints `done`, run `sf finish <id>` to merge the task branch into the base branch and remove it, report the merge, and ask the operator for the next feature.
 - If the merge conflicts, resolve it in the main checkout, commit, and tell the operator what you merged.
 
 ## Several Tasks

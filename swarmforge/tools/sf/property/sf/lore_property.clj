@@ -1,21 +1,10 @@
 (ns sf.lore-property
   (:require [clojure.string :as str]
-            [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [speclj.core :refer [describe it should]]
-            [sf.lore :as lore]))
-
-(def ^:private runs 200)
-
-(defn- passes? [property]
-  (let [result (tc/quick-check runs property)]
-    (when-not (:pass? result) (prn (:shrunk result)))
-    (:pass? result)))
-
-(def ^:private word (gen/not-empty gen/string-alphanumeric))
-
-(def ^:private sentence (gen/fmap #(str/join " " %) (gen/not-empty (gen/vector word 1 4))))
+            [sf.lore :as lore]
+            [sf.property-support :refer [hex7 passes? sentence]]))
 
 (def ^:private trailer-key
   (gen/one-of [(gen/elements ["Constraint" "Rejected" "Tested" "Not-tested" "Directive" "Confidence"])
@@ -78,7 +67,7 @@
                          (str/starts-with? (sign text r keys) head)))))))
 
 (def ^:private commit
-  (gen/let [sha (gen/fmap #(apply str %) (gen/vector (gen/elements (seq "0123456789abcdef")) 7))
+  (gen/let [sha hex7
             message (gen/fmap #(str (str/join "\n" %) "\n") (gen/not-empty (gen/vector gen/string-alphanumeric)))
             trailers (gen/vector (gen/fmap (fn [[k v]] (str k ": " v)) trailer) 0 4)]
     {:sha sha :message message :trailers trailers}))

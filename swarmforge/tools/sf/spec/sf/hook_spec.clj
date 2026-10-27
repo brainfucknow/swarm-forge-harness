@@ -61,6 +61,20 @@
   (it "leaves a signed message as it is"
     (should= "Fix\n\nBy qa.\n" (commit-msg "qa" "Fix\n\nBy qa.\n")))
 
+  (it "refuses a SwarmForge trailer in any letter case and leaves the file as it was"
+    (doseq [message ["Fix\n\nSwarmForge-Stage: done\n" "Fix\n\nTested: x\nswarmforge-needs: none\n"]]
+      (should-throw clojure.lang.ExceptionInfo #"SwarmForge record trailer; only sf writes those"
+                    (commit-msg "qa" message))
+      (should= message (slurp @message-file))))
+
+  (it "allows a SwarmForge line outside the trailer block"
+    (should= "Fix\n\nSwarmForge-Stage: done\n\nClosing text\n\nBy qa.\n"
+             (commit-msg "qa" "Fix\n\nSwarmForge-Stage: done\n\nClosing text\n")))
+
+  (it "refuses a SwarmForge trailer at stage done and otherwise leaves the message alone there"
+    (should-throw clojure.lang.ExceptionInfo (commit-msg "done" "Fix\n\nSwarmForge-Task: x\n"))
+    (should= "Fix\n\nTested: x\n" (commit-msg "done" "Fix\n\nTested: x\n")))
+
   (it "needs a role and a message file"
     (should-throw clojure.lang.ExceptionInfo (hook/commit-msg ["" "msg"]))
     (should-throw clojure.lang.ExceptionInfo (hook/commit-msg ["qa" ""]))))

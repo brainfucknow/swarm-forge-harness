@@ -3,9 +3,10 @@
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [clojure.string :as str]
-            [sf.bug :as bug]
             [sf.config :as config]
-            [sf.shell :as shell]))
+            [sf.flow :as flow]
+            [sf.shell :as shell]
+            [sf.store :as store]))
 
 (def backends ["claude" "codex" "copilot"])
 
@@ -38,9 +39,9 @@
 (defn dispatch [[role id-arg backend]]
   (when (str/blank? role) (shell/die "dispatch needs a role"))
   (config/require-role role)
-  (let [id (bug/bug-id id-arg)
+  (let [id (store/resolve-id id-arg)
         backend (or (not-empty backend) (detect-backend))
-        command (vec (command-for backend role (role-prompt role (bug/short-id id))))
+        command (vec (command-for backend role (role-prompt role id)))
         _ (flush)
         {:keys [exit]} (try (p/shell {:cmd command :dir (shell/repo-root) :continue true})
                             (catch java.io.IOException e
@@ -51,21 +52,20 @@
   "Dispatches stage after stage until the task is done (exit 0) or waits on the
   operator (exit 2)."
   [[id-arg backend]]
-  (let [id (bug/bug-id id-arg)
-        short (bug/short-id id)]
+  (let [id (store/resolve-id id-arg)]
     (loop []
-      (let [stage (bug/stage id)
-            needs (bug/needs id)]
+      (let [{:keys [stage needs] :as state} (store/state id)]
         (cond
           (= "done" stage)
-          (println (str "DONE: " short "; run: sf finish " short))
+          (println (str "DONE: " id "; run: sf finish " id))
 
-          (seq needs)
-          (do (println (str "BLOCKED: " short " needs:" (apply str (map #(str % " ") needs))))
+          (flow/waiting? state)
+          (do (println (str "BLOCKED: " id " needs:" needs))
               (shell/fail 2 nil))
 
           :else
           (do (dispatch [stage id backend])
-              (when (and (= stage (bug/stage id)) (empty? (bug/needs id)))
+              (when (let [after (store/state id)]
+                      (and (= stage (:stage after)) (not (flow/waiting? after))))
                 (shell/die "stage:" stage " made no progress"))
               (recur)))))))

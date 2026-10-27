@@ -29,30 +29,37 @@ Feature: sf task archive
     And the worktree of task "A" has no uncommitted change
 
   # sf task archive 2
-  Scenario Outline: sf task archive 2: every way to stage done archives the task file
+  Scenario Outline: sf task archive 2: every handoff that reaches done archives the task file
     Given task "A" titled "Add login" was started on route "<route>"
-    And I ran "<setup>"
     When I run "<command>"
     Then the exit status is 0
     And the file "tasks/done/$A.md" on the branch of task "A" has the line "stage: done"
     And the file "tasks/$A.md" does not exist on the branch of task "A"
 
     Examples:
-      | route     | setup        | command                 |
-      | coder     | sf stage $A  | sf handoff $A           |
-      | coder,qa  | sf stage $A  | sf handoff $A --to done |
-      | specifier | sf review $A | sf approve $A           |
+      | route    | command                 |
+      | coder    | sf handoff $A           |
+      | coder,qa | sf handoff $A --to done |
 
   # sf task archive 3
-  Scenario: sf task archive 3: a handoff that does not reach done leaves the task file in place
+  Scenario: sf task archive 3: sf approve on a route that ends at the specifier archives the task file
+    Given task "A" titled "Add login" was started on route "specifier"
+    And I ran "sf review $A"
+    When I run "sf approve $A"
+    Then the exit status is 0
+    And the file "tasks/done/$A.md" on the branch of task "A" has the line "stage: done"
+    And the file "tasks/$A.md" does not exist on the branch of task "A"
+
+  # sf task archive 4
+  Scenario: sf task archive 4: a handoff that does not reach done leaves the task file in place
     Given task "A" titled "Add login" was started on route "coder,qa"
     When I run "sf handoff $A"
     Then the exit status is 0
     And the tip commit of task "A" changes no file
     And the file "tasks/done/$A.md" does not exist on the branch of task "A"
 
-  # sf task archive 4
-  Scenario: sf task archive 4: sf finish merges the task with a finished record and removes its branch
+  # sf task archive 5
+  Scenario: sf task archive 5: sf finish merges the task with a finished record and removes its branch
     Given task "A" titled "Add login" was started on route "coder"
     And I ran "sf handoff $A"
     And the tip of the branch of task "A" is named T1

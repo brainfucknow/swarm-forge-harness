@@ -1,65 +1,13 @@
 (ns acceptance.steps
-  "Step handlers for test/features. Each execution works in a fresh copy of a
-  scratch git repository that holds this checkout's swarmforge/ and has had
-  sf init. The real sf, git, and git-bug run there. Scratch files go under
-  ./tmp/acceptance/ and are removed when the process exits."
-  (:require [babashka.fs :as fs]
-            [babashka.process :as p]
+  "Step handlers for test/features/lore_trailers. The scratch repositories come
+  from acceptance.support."
+  (:require [acceptance.support :as support :refer [run must unescape check require-ok]]
+            [babashka.fs :as fs]
             [clojure.string :as str]))
 
-(def ^:private checkout
-  (str (fs/canonicalize (fs/path (fs/parent *file*) ".." ".." ".." ".."))))
-
-(def ^:private scratch
-  (delay (let [base (fs/path checkout "tmp" "acceptance")
-               _ (fs/create-dirs base)
-               dir (str (fs/create-temp-dir {:dir base :prefix "work-"}))]
-           (.addShutdownHook (Runtime/getRuntime) (Thread. #(fs/delete-tree dir)))
-           dir)))
-
-(defn- clean-env
-  "The process environment without SWARMFORGE_ and GIT_ variables, and with HOME
-  in the scratch directory."
-  []
-  (-> (into {} (remove (fn [[k _]] (re-find #"^(SWARMFORGE_|GIT_)" k)) (System/getenv)))
-      (assoc "HOME" (str (fs/path @scratch "home")))))
-
-(defn- run
-  "Runs cmd in dir and returns {:exit :out :err}. extra-env is added to the
-  clean environment."
-  ([dir cmd] (run dir cmd {}))
-  ([dir cmd extra-env]
-   (p/shell {:cmd (vec cmd) :dir (str dir) :out :string :err :string :continue true
-             :env (merge (clean-env) extra-env)})))
-
-(defn- must [dir & cmd]
-  (let [{:keys [exit out err]} (run dir cmd)]
-    (when-not (zero? exit)
-      (throw (ex-info (str (str/join " " cmd) " exited " exit ": " (str/trim (str out err))) {})))
-    (str/trim-newline out)))
-
-(defn- sf [world] (str (fs/path (:repo world) "swarmforge" "bin" "sf")))
-
-(def ^:private template
-  (delay (let [home (fs/path @scratch "home")
-               repo (str (fs/path @scratch "template"))]
-           (fs/create-dirs home)
-           (fs/create-dirs repo)
-           (spit (str (fs/path home ".gitconfig"))
-                 "[user]\n\tname = tester\n\temail = tester@example.com\n[init]\n\tdefaultBranch = main\n")
-           (must repo "git" "init" "-q" ".")
-           (fs/copy-tree (fs/path checkout "swarmforge") (fs/path repo "swarmforge"))
-           (must repo "git" "add" "-A")
-           (must repo "git" "commit" "-q" "-m" "seed")
-           (must repo (str (fs/path repo "swarmforge" "bin" "sf")) "init")
-           repo)))
-
-(def ^:private copies (atom 0))
+(defn- sf [world] (support/sf-path (:repo world)))
 
 (defn new-world [] {:names {}})
-
-(defn- unescape [text]
-  (str/replace text "\\n" "\n"))
 
 (defn- fill-names
   "text with ID and the commit names (C1, L1, ...) replaced by their values."
@@ -103,22 +51,13 @@
     (cond-> (assoc-in world [:names name] (must dir "git" "rev-parse" "--short" "HEAD"))
       (seq lore) (assoc-in [:names (str/replace name #"^C" "L")] lore))))
 
-(defn- require-ok [{:keys [exit err]} what]
-  (when-not (zero? exit)
-    (throw (ex-info (str what " exited " exit ": " (str/trim err)) {}))))
-
-(defn- check [ok? message]
-  (when-not ok? (throw (ex-info message {}))))
-
 (defn- output-lines [world]
   (str/split-lines (:out world)))
 
 (def ^:private task-handlers
   [[#"a project with swarmforge initialized"
     (fn [world]
-      (let [repo (str (fs/path @scratch (str "run-" (swap! copies inc))))]
-        (must @scratch "cp" "-a" @template repo)
-        (assoc world :repo repo)))]
+      (assoc world :repo (support/project true)))]
 
    [#"the main checkout has the commit \"(.*)\""
     (fn [world message]
@@ -222,7 +161,7 @@
                    "CFG" (str (fs/path (:repo world) ".swarmforge" "tools" "crap4clj-coverage" "bb.edn"))))))
 
 (defn- scratch-dir [prefix]
-  (str (fs/create-temp-dir {:dir @scratch :prefix prefix})))
+  (str (fs/create-temp-dir {:dir @support/scratch :prefix prefix})))
 
 (defn- write-script [file text]
   (fs/create-dirs (fs/parent file))
@@ -413,7 +352,7 @@
                     outside? (assoc :outside (scratch-dir "outside-"))
                     (= "another git repository" place) (assoc :other (other-repository)))]
         (merge world (run-wrapper world "sf-cs" (place-dir world place) []
-                                  (if outside? {"GIT_CEILING_DIRECTORIES" @scratch} {})))))]
+                                  (if outside? {"GIT_CEILING_DIRECTORIES" @support/scratch} {})))))]
 
    [#"bb received \"([^\"]*)\""
     (fn [world expected]

@@ -2,6 +2,7 @@
   "The catalogue files under swarmforge/: roles, tiers, routes, and tools."
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
+            [sf.flow :as flow]
             [sf.shell :as shell]))
 
 (defn conf-dir []
@@ -40,15 +41,12 @@
 (defn catalogue-route []
   (str/join "," (pipeline)))
 
-(defn route-list [route]
-  (if (str/blank? route) [] (str/split route #",")))
-
 (defn resolve-route
   "The comma-separated role list of a route name or list. The roles must exist
   and be in catalogue order."
   [spec]
   (let [route (or (field (named-routes) spec 2) spec)
-        roles (route-list route)
+        roles (flow/route-list route)
         catalogue (vec (pipeline))]
     (when (empty? roles) (shell/die "empty route"))
     (reduce (fn [last role]

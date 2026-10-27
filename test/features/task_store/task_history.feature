@@ -93,6 +93,7 @@ Feature: sf task history
   Scenario: sf task history 6: sf show of a squash-merged task prints the archived records and the LORE lines of its branch
     Given task "A" titled "Add login" was started on route "specifier"
     And I ran "sf ask $A Which?"
+    And I ran "sf answer $A yes"
     And role "specifier" committed "Spec\n\nTested: x" in the worktree of task "A" as C1
     And task "A" was handed off to done and squash-merged into main
     When I run "sf show $A"
