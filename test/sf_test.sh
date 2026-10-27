@@ -87,6 +87,12 @@ git -C ".worktrees/$id" commit -q --allow-empty -m "$(printf 'Already signed\n\n
 assert_eq "hook does not duplicate a byline" "$(git -C ".worktrees/$id" log -1 --format=%B | grep -c '^By specifier\.$')" "1"
 SWARMFORGE_ROLE=coder git -C ".worktrees/$id" commit -q --allow-empty -m "Forced role"
 assert_eq "SWARMFORGE_ROLE overrides the stage" "$(git -C ".worktrees/$id" log -1 --format=%B | grep -v "^$" | tail -1)" "By coder."
+printf '#!/bin/sh\nprintf "$1" | cat - "$2" > "$2.new" && mv "$2.new" "$2"\n' > "$scratch/type-above-template"
+chmod +x "$scratch/type-above-template"
+GIT_EDITOR="'$scratch/type-above-template' 'Edited\n\nTested: x\n'" git -C ".worktrees/$id" commit -q --allow-empty
+assert_eq "editor commit keeps the trailer block last" "$(git -C ".worktrees/$id" log -1 --format='%(trailers:key=Tested,valueonly)' | head -1)" "x"
+assert_eq "editor commit gets the byline" "$(git -C ".worktrees/$id" log -1 --format=%B | grep -c '^By specifier\.$')" "1"
+assert_fails "an empty editor message still aborts the commit" env GIT_EDITOR="'$scratch/type-above-template' ''" git -C ".worktrees/$id" commit -q --allow-empty
 git commit -q --allow-empty -m "On main checkout"
 assert_eq "hook leaves commits outside task worktrees alone" "$(git log -1 --format=%B)" "On main checkout"
 SWARMFORGE_ROLE=coder git commit -q --allow-empty -m "Forced role outside"
