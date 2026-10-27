@@ -160,6 +160,19 @@ move `refs/bugs/*` and `refs/identities/*` to and from a remote, so two
 machines or two harnesses can take turns on one task. Pushing the task branch
 (`git push origin swarm/<id>`) moves the work itself.
 
+A host that accepts only branch pushes refuses `git bug push`. There, mirror
+the data to branches:
+
+```sh
+git push origin 'refs/bugs/*:refs/heads/git-bug/bugs/*' 'refs/identities/*:refs/heads/git-bug/identities/*'
+```
+
+Another clone restores it with the reverse fetch, then `git bug ls`:
+
+```sh
+git fetch origin 'refs/heads/git-bug/bugs/*:refs/bugs/*' 'refs/heads/git-bug/identities/*:refs/identities/*'
+```
+
 ## Audit
 
 `sf show <id>` prints the complete history: request, every question and
