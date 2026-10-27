@@ -1,3 +1,8 @@
+# mutation-stamp: sha256=42521e499f6fc22d6567cdbd6818e0997cde368dc1de1fa9551d6547999b480c
+# acceptance-mutation-manifest-begin
+# {"version":1,"tested_at":"2026-10-27T15:12:19.591886455Z","feature_name":"sf-js dry","feature_path":"swarmforge/tools/javascript/features/dry.feature","background_hash":"5d2123b12eaf3ad0f317f89bdfa37ce12217b21f338f3cb49911179be913d719","implementation_hash":"sha256:075ed3b6770b475c9f874b6ba7feba17b6b6d0aaf8a03c6fffd741f62cd4b60e","scenarios":[{"index":4,"name":"sf-js dry 2: each listed clone names both sides and marks the changed one","scenario_hash":"19e2a3eb19b7058700b99ac05b71f0e9e4fccd702eae1efc6a6ce683bbe9c489","mutation_count":10,"result":{"Total":10,"Killed":10,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:12:19.591886455Z"},{"index":6,"name":"sf-js dry 4: jscpd runs on JavaScript and TypeScript with a JSON report in tmp/jscpd","scenario_hash":"a6544e70cd957b100c034701aa3746718a69f5e3a661dcfc500223dbd78261e0","mutation_count":11,"result":{"Total":11,"Killed":11,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:12:19.591886455Z"},{"index":7,"name":"sf-js dry 5: --min-tokens sets the clone size","scenario_hash":"cbc4400488f896fc97d5e97839d8b5def65e592002d8d51dc77ddd9d90a9aa64","mutation_count":4,"result":{"Total":4,"Killed":4,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:12:19.591886455Z"}]}
+# acceptance-mutation-manifest-end
+
 Feature: sf-js dry
 
   sf-js dry runs jscpd over JavaScript and TypeScript with a JSON report in

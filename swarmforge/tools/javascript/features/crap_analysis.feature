@@ -1,3 +1,8 @@
+# mutation-stamp: sha256=77f3c744a8828d01a83e21d4fceec45be552fd79b997066a2f2b6e068ade72dc
+# acceptance-mutation-manifest-begin
+# {"version":1,"tested_at":"2026-10-27T15:11:04.618082952Z","feature_name":"sf-js crap analysis errors","feature_path":"swarmforge/tools/javascript/features/crap_analysis.feature","background_hash":"22b488197f7bd48476b9bcf1eece623637b117b0ff274972ff3147fe9e82a8e5","implementation_hash":"sha256:e34bc18f4442fc183c9bfbfda4f7c7660a99d70a361870c0f6928d507f243f1b","scenarios":[{"index":0,"name":"sf-js crap analysis errors 1: a fatal ESLint message fails the run","scenario_hash":"a93fe292cb7050b570f54bde849dbb096a835695e51e550a4e93d84799d704b5","mutation_count":6,"result":{"Total":6,"Killed":6,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:11:04.618082952Z"}]}
+# acceptance-mutation-manifest-end
+
 Feature: sf-js crap analysis errors
 
   If package.json lists eslint and not oxlint, sf-js crap fails with exit 2

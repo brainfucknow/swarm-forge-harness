@@ -1,3 +1,8 @@
+# mutation-stamp: sha256=f53ac50128556a1e46b6b2700e13e7c80616903f9fea126a1b2ef38df54747ef
+# acceptance-mutation-manifest-begin
+# {"version":1,"tested_at":"2026-10-27T15:11:45.251777716Z","feature_name":"sf-js crap oxlint analysis errors","feature_path":"swarmforge/tools/javascript/features/crap_oxlint_analysis.feature","background_hash":"2445320ce4672eda4501a5c0652880ac05a83bb50dcf8f178e5e3d098590108e","implementation_hash":"sha256:4ab5b9a8f250be4c53dedf25869105a46f3d49ecf6313b0d3becc1721294e8d9","scenarios":[{"index":0,"name":"sf-js crap oxlint analysis errors 1: an oxlint diagnostic with no code fails the run","scenario_hash":"e03437fda1f08c2adf80493ee64a1b748cdae8d86fea270289dac5311b31c952","mutation_count":6,"result":{"Total":6,"Killed":6,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:11:45.251777716Z"}]}
+# acceptance-mutation-manifest-end
+
 Feature: sf-js crap oxlint analysis errors
 
   With oxlint as the complexity source, sf-js crap fails with exit 2 when
