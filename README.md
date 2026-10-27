@@ -156,6 +156,7 @@ swarmforge/
   bin/sf-tool  tools.conf        constitution tool installer and catalogue (sf tool ...)
   bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers (Babashka)
   languages/csharp.md            what each sf-cs command runs and prints
+  tools/core/                    changed-line, CRAP, jscpd and Stryker readers shared by the tool wrappers
   roles.conf  routes.conf  tiers.conf   catalogue, routes, models
   constitution.md  constitution/articles/
   roles/                         specifier, coder, cleaner, architect, hardener, qa, orchestrator
@@ -187,4 +188,5 @@ runs the Speclj unit specs of `sf`, the fourth runs its test.check property
 tests (kept out of the unit specs), the fifth runs the Gherkin features in
 `test/features/` through `gherkin-parser` (`swarmforge/bin/sf tool ensure
 gherkin-parser`) and the generated acceptance tests, and the last drives
-`sf-cs` against fixture reports and a fake `dotnet`. None pins prompt wording.
+`sf-cs` against fixture reports and a fake `dotnet`, together with the shared
+`tools/core/` readers. None pins prompt wording.

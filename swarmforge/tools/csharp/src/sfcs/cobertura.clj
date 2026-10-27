@@ -1,14 +1,8 @@
 (ns sfcs.cobertura
   (:require [babashka.fs :as fs]
             [clojure.data.xml :as xml]
-            [clojure.string :as str]))
-
-(def crap-limit 10)
-
-(defn crap-score
-  "crap4j: comp² × (1 − coverage)³ + comp, with coverage as a fraction."
-  [complexity coverage]
-  (+ (* complexity complexity (Math/pow (- 1.0 coverage) 3.0)) complexity))
+            [clojure.string :as str]
+            [sfcore.crap :as crap]))
 
 (defn- elements [tag node]
   (filter #(and (map? %) (= tag (:tag %))) (tree-seq map? :content node)))
@@ -43,7 +37,7 @@
          :file file
          :complexity complexity
          :coverage coverage
-         :crap (crap-score complexity coverage)
+         :crap (crap/crap-score complexity coverage)
          :first-line (apply min numbers)
          :last-line (apply max numbers)}))))
 
@@ -77,19 +71,11 @@
   [source-lines first-line]
   (loop [line first-line]
     (let [above (str/trim (or (nth source-lines (- line 2) nil) ""))]
-      (if (or (<= line 1) (= above "") (str/starts-with? above "//") (re-find #"[;{}]$" above))
+      (if (or (= above "") (str/starts-with? above "//") (re-find #"[;{}]$" above))
         line
         (recur (dec line))))))
 
-(defn fmt [pattern & args]
-  (String/format java.util.Locale/ROOT pattern (to-array args)))
-
-(defn- whole [n]
-  (if (== n (Math/floor n)) (str (long n)) (str n)))
-
-(defn format-method [{:keys [crap class-name complexity coverage file signature-line first-line name]}]
-  (let [verdict (if (> crap crap-limit) "OVER" "ok  ")
-        short-class (last (str/split class-name #"\."))
-        cov (fmt "%4s" (str (Math/round (* coverage 100.0)) "%"))]
-    (fmt "%s crap %6.1f  cc %3s  cov %s  %s:%s %s.%s"
-         verdict (double crap) (whole complexity) cov file (or signature-line first-line) short-class name)))
+(defn format-method [{:keys [class-name signature-line first-line name] :as method}]
+  (crap/format-row (assoc method
+                          :line (or signature-line first-line)
+                          :name (str (last (str/split class-name #"\.")) "." name))))
