@@ -151,7 +151,7 @@
   world)
 
 (defn- commas [text]
-  (mapv parse-long (str/split text #",")))
+  (mapv (comp parse-long str/trim) (str/split text #",")))
 
 (defn- clj-mutate-manifest [world path name source killed survived uncovered]
   (let [forms (mapv (fn [k s u] {:killed k :survived s :uncovered u})

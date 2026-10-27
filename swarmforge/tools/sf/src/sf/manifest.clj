@@ -55,7 +55,7 @@
     (when (and (map? manifest) (string? source) (sequential? forms))
       (let [uncovered (sum :uncovered forms)]
         (apply counts "clj-mutate" source (sum :killed forms) (sum :survived forms)
-               (when (pos? uncovered) [(str uncovered " uncovered")]))))))
+               (when-not (zero? uncovered) [(str uncovered " uncovered")]))))))
 
 (defn- gherkin-line [feature content]
   (when-let [text (feature-block/manifest-json (str/split-lines content))]

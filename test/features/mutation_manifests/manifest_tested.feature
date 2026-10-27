@@ -27,27 +27,27 @@ Feature: sf manifest tested
 
   # sf manifest tested 1
   Scenario Outline: sf manifest tested 1: a clj-mutate manifest gives the sums over its forms
-    Given the clj-mutate manifest ".metrics/mutate/sf/x.edn" of task "A" names source "<source>" with forms killed "<killed>", survived "<survived>" and uncovered "<uncovered>"
+    Given the clj-mutate manifest ".metrics/mutate/sf/x.edn" of task "A" names source "src/sf/task.clj" with forms killed "<killed>", survived "<survived>" and uncovered "<uncovered>"
     When I run "sf manifest tested A"
     Then the exit status is 0
-    And the output is "Tested: clj-mutate <source> | <counts>"
+    And the output is "Tested: clj-mutate src/sf/task.clj | <counts>"
 
     Examples:
-      | source          | killed | survived | uncovered | counts                             |
-      | src/sf/task.clj | 40,1   | 0,0      | 0,0       | 41 killed, 0 survived              |
-      | src/sf/bug.clj  | 3,0    | 1,2      | 0,2       | 3 killed, 3 survived, 2 uncovered  |
+      | killed | survived | uncovered | counts                            |
+      | 40,1   | 0,0      | 0,0       | 41 killed, 0 survived             |
+      | 3,0    | 1,2      | 0,2       | 3 killed, 3 survived, 2 uncovered |
 
   # sf manifest tested 2
   Scenario Outline: sf manifest tested 2: a gherkin-mutator manifest gives the sums over its scenarios
-    Given the gherkin-mutator manifest of feature "<feature>" in task "A" has scenarios killed "<killed>" and survived "<survived>"
+    Given the gherkin-mutator manifest of feature "test/features/x.feature" in task "A" has scenarios killed "<killed>" and survived "<survived>"
     When I run "sf manifest tested A"
     Then the exit status is 0
-    And the output is "Tested: gherkin-mutator <feature> | <counts>"
+    And the output is "Tested: gherkin-mutator test/features/x.feature | <counts>"
 
     Examples:
-      | feature                 | killed | survived | counts                |
-      | test/features/x.feature | 9,3    | 0,0      | 12 killed, 0 survived |
-      | features/y.feature      | 2      | 1        | 2 killed, 1 survived  |
+      | killed | survived | counts                |
+      | 9,3    | 0,0      | 12 killed, 0 survived |
+      | 2      | 1        | 2 killed, 1 survived  |
 
   # sf manifest tested 3
   Scenario: sf manifest tested 3: only files that save would save give lines, in path order

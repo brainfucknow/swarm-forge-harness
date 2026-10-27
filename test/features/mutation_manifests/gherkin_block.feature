@@ -28,17 +28,17 @@ Feature: sf gherkin-mutator manifest block
 
   # sf gherkin-mutator manifest block 1
   Scenario Outline: sf gherkin-mutator manifest block 1: the block of a run moves to .metrics/gherkin/
-    Given gherkin-mutator is a fake that writes the block "<block>" and exits with status <status>
+    Given gherkin-mutator is a fake that writes the block "<block>" and exits with status 0
     When I run ".swarmforge/bin/gherkin-mutator --runner-worker w --feature features/x.feature" in the worktree of task "A"
-    Then the exit status is <status>
+    Then the exit status is 0
     And the fake saw the feature file holding "Feature: x"
     And the file "features/x.feature" of task "A" is as committed
     And the worktree file ".metrics/gherkin/features/x.feature" of task "A" holds "<block>"
 
     Examples:
-      | block                                                                                                       | status |
-      | # mutation-stamp: sha256=ab\n# acceptance-mutation-manifest-begin\n# {}\n# acceptance-mutation-manifest-end | 0      |
-      | # acceptance-mutation-manifest-begin\n# {}\n# acceptance-mutation-manifest-end                              | 1      |
+      | block                                                                                                       |
+      | # mutation-stamp: sha256=ab\n# acceptance-mutation-manifest-begin\n# {}\n# acceptance-mutation-manifest-end |
+      | # acceptance-mutation-manifest-begin\n# {}\n# acceptance-mutation-manifest-end                              |
 
   # sf gherkin-mutator manifest block 2
   Scenario: sf gherkin-mutator manifest block 2: the saved block goes into the feature file before the run
@@ -49,3 +49,11 @@ Feature: sf gherkin-mutator manifest block
     And the fake saw the feature file holding "# acceptance-mutation-manifest-begin\n# {old}\n# acceptance-mutation-manifest-end\n\nFeature: x"
     And the file "features/x.feature" of task "A" is as committed
     And the worktree file ".metrics/gherkin/features/x.feature" of task "A" holds "# acceptance-mutation-manifest-begin\n# {new}\n# acceptance-mutation-manifest-end"
+
+  # sf gherkin-mutator manifest block 3
+  Scenario: sf gherkin-mutator manifest block 3: a run that fails still moves its block and the wrapper exits with its status
+    Given gherkin-mutator is a fake that writes the block "# acceptance-mutation-manifest-begin\n# {}\n# acceptance-mutation-manifest-end" and exits with status 3
+    When I run ".swarmforge/bin/gherkin-mutator --runner-worker w --feature features/x.feature" in the worktree of task "A"
+    Then the exit status is 3
+    And the file "features/x.feature" of task "A" is as committed
+    And the worktree file ".metrics/gherkin/features/x.feature" of task "A" holds "# acceptance-mutation-manifest-begin\n# {}\n# acceptance-mutation-manifest-end"

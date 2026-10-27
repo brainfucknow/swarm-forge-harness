@@ -25,18 +25,13 @@ Feature: sf manifest load
     Given a project with swarmforge initialized and .metrics/ ignored
 
   # sf manifest load 1
-  Scenario Outline: sf manifest load 1: a later task inherits the manifests of a finished task
-    Given task "A" finished with "<path>" saved as "<content>"
+  Scenario: sf manifest load 1: a later task inherits the manifests of a finished task
+    Given task "A" finished with ".metrics/mutate/sf/task.edn" saved as "v1"
     And task "B" was created
     When I run "sf start B"
     Then the exit status is 0
     And the output has the line "MANIFESTS: 1 loaded from refs/notes/mutate" before the line "---"
-    And the worktree file "<path>" of task "B" holds "<content>"
-
-    Examples:
-      | path                                         | content |
-      | .metrics/mutate/sf/task.edn                  | v1      |
-      | .metrics/gherkin/test/features/login.feature | w1      |
+    And the worktree file ".metrics/mutate/sf/task.edn" of task "B" holds "v1"
 
   # sf manifest load 2
   Scenario: sf manifest load 2: the note of a later commit wins and a deleted file comes back
@@ -116,3 +111,12 @@ Feature: sf manifest load
       | load       |
       | save       |
       | tested     |
+
+  # sf manifest load 8
+  Scenario: sf manifest load 8: a later task inherits the gherkin-mutator manifests of a finished task
+    Given task "A" finished with ".metrics/gherkin/test/features/login.feature" saved as "w1"
+    And task "B" was created
+    When I run "sf start B"
+    Then the exit status is 0
+    And the output has the line "MANIFESTS: 1 loaded from refs/notes/mutate" before the line "---"
+    And the worktree file ".metrics/gherkin/test/features/login.feature" of task "B" holds "w1"

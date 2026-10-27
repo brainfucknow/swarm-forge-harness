@@ -37,6 +37,8 @@
   (it "decode a note that is not a map of strings as empty"
     (should= {} (manifest/decode-note "not a note"))
     (should= {} (manifest/decode-note "{:a 1}"))
+    (should= {} (manifest/decode-note "{\"a\" \"1\" \"b\" 2}"))
+    (should= {} (manifest/decode-note "{\"a\" \"1\" :b \"2\"}"))
     (should= {} (manifest/decode-note "{\"a\""))))
 
 (defn- clj-manifest [source & forms]

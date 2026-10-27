@@ -20,18 +20,13 @@ Feature: sf manifest save
     Given a project with swarmforge initialized and .metrics/ ignored
 
   # sf manifest save 1
-  Scenario Outline: sf manifest save 1: the manifest files go into a note on HEAD
+  Scenario: sf manifest save 1: the manifest files go into a note on HEAD
     Given task "A" was started
-    And the worktree of task "A" has <count> manifest files
+    And the worktree of task "A" has 3 manifest files
     When I run "sf manifest save A"
     Then the exit status is 0
-    And the output is "MANIFESTS: <count> saved to refs/notes/mutate on HEAD"
+    And the output is "MANIFESTS: 3 saved to refs/notes/mutate on HEAD"
     And the HEAD commit of task "A" has a note in refs/notes/mutate
-
-    Examples:
-      | count |
-      | 1     |
-      | 3     |
 
   # sf manifest save 2
   Scenario: sf manifest save 2: no manifest files write no note
@@ -42,21 +37,16 @@ Feature: sf manifest save
     And the HEAD commit of task "A" has no note in refs/notes/mutate
 
   # sf manifest save 3
-  Scenario Outline: sf manifest save 3: only files that are not the same as the notes' copy are saved
+  Scenario: sf manifest save 3: only files that are not the same as the notes' copy are saved
     Given task "A" was started
     And the worktree file ".metrics/mutate/a.edn" of task "A" is written with "v1"
     And the worktree file ".metrics/mutate/b.edn" of task "A" is written with "w1"
     And the manifests of task "A" were saved at a new commit
     And a commit was made in the worktree of task "A"
-    And the worktree file ".metrics/mutate/b.edn" of task "A" is written with "<content>"
+    And the worktree file ".metrics/mutate/b.edn" of task "A" is written with "w2"
     When I run "sf manifest save A"
     Then the exit status is 0
-    And the output is "<output>"
-
-    Examples:
-      | content | output                                            |
-      | w1      | MANIFESTS: nothing to save                        |
-      | w2      | MANIFESTS: 1 saved to refs/notes/mutate on HEAD   |
+    And the output is "MANIFESTS: 1 saved to refs/notes/mutate on HEAD"
 
   # sf manifest save 4
   Scenario: sf manifest save 4: a second save on the same commit keeps the paths of the first
@@ -111,3 +101,14 @@ Feature: sf manifest save
     When I run "sf handoff A"
     Then the exit status is 3
     And the HEAD commit of task "A" has no note in refs/notes/mutate
+
+  # sf manifest save 9
+  Scenario: sf manifest save 9: files that are the same as the notes' copy are not saved
+    Given task "A" was started
+    And the worktree file ".metrics/mutate/a.edn" of task "A" is written with "v1"
+    And the worktree file ".metrics/mutate/b.edn" of task "A" is written with "w1"
+    And the manifests of task "A" were saved at a new commit
+    And a commit was made in the worktree of task "A"
+    When I run "sf manifest save A"
+    Then the exit status is 0
+    And the output is "MANIFESTS: nothing to save"

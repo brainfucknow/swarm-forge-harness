@@ -51,6 +51,11 @@
     (should= "MANIFESTS: 1 loaded from refs/notes/mutate" (store/load! *dir*))
     (should= clj-manifest (read-file ".metrics/mutate/a.edn")))
 
+  (it "saves a hidden file under .metrics/"
+    (write ".metrics/mutate/.hidden.edn" clj-manifest)
+    (should= (str "MANIFESTS: 1 saved to refs/notes/mutate on " (git "rev-parse" "--short" "HEAD"))
+             (store/save! *dir*)))
+
   (it "saves nothing when every file equals its copy"
     (write ".metrics/mutate/a.edn" clj-manifest)
     (store/save! *dir*)
