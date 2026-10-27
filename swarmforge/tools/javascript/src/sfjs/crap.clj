@@ -1,42 +1,17 @@
 (ns sfjs.crap
-  "CRAP per function from ESLint's complexity messages joined with Istanbul
+  "CRAP per function: a complexity linter's functions joined with Istanbul
   coverage (coverage-final.json)."
   (:require [clojure.string :as str]
             [sfcore.changes :as changes]
             [sfcore.crap :as crap]))
 
-(defn function-name
-  "The function's name in an ESLint complexity message, or (anonymous)."
+(defn complexity-message
+  "The kind of function and the complexity a linter's complexity message
+  states: \"<kind> has a complexity of <n>. ...\", the wording ESLint and
+  oxlint share."
   [message]
-  (let [kind (first (str/split message #" has a complexity of "))]
-    (or (second (re-find #"'(.+)'" kind))
-        (re-find #"#\S+$" kind)
-        "(anonymous)")))
-
-(defn parse-eslint
-  "Every complexity message in an ESLint JSON report, with the file relative
-  to `root`."
-  [report root]
-  (vec (for [result report
-             message (get result "messages")
-             :when (= "complexity" (get message "ruleId"))
-             :let [text (get message "message")]]
-         {:file (changes/relative-path (get result "filePath") root)
-          :line (get message "line")
-          :column (get message "column" 1)
-          :end-line (or (get message "endLine") (get message "line"))
-          :name (function-name text)
-          :complexity (parse-long (second (re-find #"has a complexity of (\d+)" text)))})))
-
-(defn fatal-messages
-  "Each fatal message in an ESLint JSON report (a file ESLint could not
-  parse) as FILE:LINE: MESSAGE, with the file relative to `root`."
-  [report root]
-  (vec (for [result report
-             message (get result "messages")
-             :when (true? (get message "fatal"))]
-         (str (changes/relative-path (get result "filePath") root) ":"
-              (get message "line") ": " (get message "message")))))
+  {:kind (first (str/split message #" has a complexity of "))
+   :complexity (parse-long (second (re-find #"has a complexity of (\d+)" message)))})
 
 (defn- position [point default-column]
   [(get point "line") (or (get point "column") default-column)])
@@ -76,7 +51,7 @@
   (last (sort-by :start functions)))
 
 (defn- coverage-for
-  "The innermost Istanbul function holding the ESLint function head, by
+  "The innermost Istanbul function holding the linted function head, by
   position, else by line."
   [functions {:keys [line column]}]
   (or (innermost (filter #(inside? % [line (dec column)]) functions))
@@ -87,11 +62,11 @@
              [(changes/relative-path (get entry "path" path) root) (function-coverage entry)])))
 
 (defn score
-  "Joins ESLint functions with coverage; a function missing from coverage
+  "Joins linted functions with coverage; a function missing from coverage
   counts as uncovered and spans only its head."
-  [eslint-functions coverage-report root]
+  [linted-functions coverage-report root]
   (let [by-file (coverage-by-file coverage-report root)]
-    (vec (for [{:keys [file line end-line complexity] :as function} eslint-functions
+    (vec (for [{:keys [file line end-line complexity] :as function} linted-functions
                :let [covered (coverage-for (get by-file file) function)
                      coverage (if covered (:coverage covered) 0.0)]]
            (-> (select-keys function [:file :name :complexity])

@@ -45,3 +45,8 @@
                 ["src/a.test.ts" "src/a.spec.js" "src/a.property.test.ts" "src/__tests__/a.ts" "src/attest.ts"]))))
   (is (= ["src/a.ts" "src/b.mjs"]
          (commands/production-sources ["src/b.mjs" "src/a.test.ts" "src/a.ts" "src/types.d.ts" "README.md"]))))
+
+(deftest linted-sources-leave-out-what-the-linters-ignore
+  (is (= ["lib/a.cjs" "src/a.ts" "src/distance.ts"]
+         (commands/linted-sources ["src/a.ts" "src/a.test.ts" "dist/a.js" "lib/node_modules/x/i.js" "src/vendor.min.js"
+                                   "build/b.js" "coverage/lcov.js" "tmp/x.ts" "README.md" "src/distance.ts" "lib/a.cjs"]))))

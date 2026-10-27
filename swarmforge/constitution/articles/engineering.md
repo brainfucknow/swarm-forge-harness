@@ -9,7 +9,7 @@
   - Clojure: install with Clojure CLI/deps.edn; mutation `github.com/unclebob/clj-mutate`, CRAP `github.com/unclebob/crap4clj`, DRY `github.com/unclebob/dry4clj`.
   - Java: install with Maven (`mvn`); mutation `github.com/unclebob/mutate4java`, CRAP `github.com/unclebob/crap4java`, DRY `github.com/unclebob/dry4java`.
   - C#: install with `sf-cs tools`; mutation `sf-cs mutate` (Stryker.NET), CRAP `sf-cs crap` (coverlet Cobertura), DRY `sf-cs dry` (jscpd). `swarmforge/languages/csharp.md` maps every constitution tool to its `sf-cs` command and explains the output.
-  - JavaScript/TypeScript: install with `sf-js tools`; tests `sf-js test` (Vitest, else Jest, after `tsc --noEmit`), mutation `sf-js mutate` (StrykerJS), CRAP `sf-js crap` (ESLint complexity with Istanbul coverage), DRY `sf-js dry` (jscpd). `swarmforge/languages/javascript.md` maps every constitution tool to its `sf-js` command and explains the output.
+  - JavaScript/TypeScript: install with `sf-js tools`; tests `sf-js test` (Vitest, else Jest, after `tsc --noEmit`), mutation `sf-js mutate` (StrykerJS), CRAP `sf-js crap` (oxlint or ESLint complexity with Istanbul coverage), DRY `sf-js dry` (jscpd). `swarmforge/languages/javascript.md` maps every constitution tool to its `sf-js` command and explains the output.
 - Install every listed tool with `sf tool ensure <tool>` and check it with `sf tool require <tool>`; `sf tool list` prints the catalogue. Wrappers land in `.swarmforge/bin/` at the repository root, ignored by git and shared by every task worktree, so a tool install never writes outside the project. Run tools through those wrappers (`sf tool bin` prints the directory to put on PATH); they carry the argument guardrails below.
 
 ## Language Defaults

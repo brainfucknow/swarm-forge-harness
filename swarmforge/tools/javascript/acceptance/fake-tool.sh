@@ -49,6 +49,14 @@ case "$tool" in
     messages='[]'
     if [ -f "$state/eslint.json" ]; then messages="$(< "$state/eslint.json")"; fi
     report "$(value_of --output-file "$@")" "$messages" ;;
+  oxlint)
+    if [ ! -e "$state/no-report-oxlint" ]; then
+      diagnostics='[]'
+      if [ -f "$state/oxlint.json" ]; then diagnostics="$(< "$state/oxlint.json")"; fi
+      rules=1
+      if [ -e "$state/oxlint-no-rules" ]; then rules=0; fi
+      printf '{"diagnostics": %s, "number_of_rules": %s}\n' "$diagnostics" "$rules"
+    fi ;;
   jscpd)
     if ! has --version "$@"; then
       report "$(value_of --output "$@")/jscpd-report.json" '{"duplicates":[]}'

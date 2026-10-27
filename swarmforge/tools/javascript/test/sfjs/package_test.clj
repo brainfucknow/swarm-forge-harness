@@ -50,18 +50,28 @@
     (is (= "no test runner (vitest or jest) in package.json"
            (message-of #(pkg/require-stryker-runner {}))))))
 
+(deftest complexity-linter-choice
+  (is (= "oxlint" (pkg/complexity-linter {"devDependencies" {"oxlint" "1"}})))
+  (is (= "eslint" (pkg/complexity-linter {"devDependencies" {"eslint" "1"}})))
+  (is (= "eslint" (pkg/complexity-linter {"dependencies" {"eslint" "1"}})))
+  (is (= "oxlint" (pkg/complexity-linter {"dependencies" {"oxlint" "1"} "devDependencies" {"eslint" "1"}})))
+  (is (= "oxlint" (pkg/complexity-linter {"devDependencies" {"vitest" "1"}}))))
+
 (deftest tool-packages
-  (testing "vitest is the default runner"
-    (is (= ["@stryker-mutator/core" "@stryker-mutator/vitest-runner" "@vitest/coverage-v8" "eslint"
-            "fast-check" "typescript" "typescript-eslint" "vitest"]
+  (testing "vitest is the default runner and oxlint the default linter"
+    (is (= ["@stryker-mutator/core" "@stryker-mutator/vitest-runner" "@vitest/coverage-v8" "fast-check"
+            "oxlint" "typescript" "vitest"]
            (pkg/missing-packages {} false))))
-  (testing "jest, with a tsconfig.json, keeping what is listed"
+  (testing "jest, with a tsconfig.json, keeping what is listed; eslint alone brings typescript-eslint"
     (is (= ["@stryker-mutator/core" "@stryker-mutator/jest-runner" "@stryker-mutator/typescript-checker"
             "fast-check" "typescript-eslint"]
            (pkg/missing-packages {"devDependencies" {"jest" "1" "typescript" "1" "eslint" "1"}} true))))
   (testing "with both runners listed, the jest tools are added"
-    (is (= ["@stryker-mutator/core" "@stryker-mutator/jest-runner" "eslint" "fast-check" "typescript" "typescript-eslint"]
+    (is (= ["@stryker-mutator/core" "@stryker-mutator/jest-runner" "fast-check" "oxlint" "typescript"]
            (pkg/missing-packages {"devDependencies" {"vitest" "1" "jest" "1"}} false))))
+  (testing "with oxlint listed, neither eslint nor typescript-eslint is added"
+    (is (= ["@stryker-mutator/core" "@stryker-mutator/vitest-runner" "@vitest/coverage-v8" "fast-check" "typescript"]
+           (pkg/missing-packages {"devDependencies" {"vitest" "1" "eslint" "1" "oxlint" "1"}} false))))
   (testing "dependencies count as listed"
     (is (not-any? #{"vitest" "fast-check"}
                   (pkg/missing-packages {"dependencies" {"vitest" "1" "fast-check" "1"}} false)))))

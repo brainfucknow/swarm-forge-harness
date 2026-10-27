@@ -12,7 +12,7 @@ Babashka (`bb`) on PATH, plus `node`, `npx`, and the project's package manager.
 | Unit and acceptance tests | `sf-js test [runner args]` | `tsc --noEmit` first when `tsconfig.json` exists (a type error exits 1 and skips the tests), then `vitest run --exclude '**/*.property.test.*'` or `jest --testPathIgnorePatterns /node_modules/ --testPathIgnorePatterns '\.property\.test\.'`. |
 | Property tests | `sf-js property [runner args]` | `vitest run .property.test.` or `jest '\.property\.test\.'`. No typecheck. |
 | Coverage | `sf-js coverage [runner args]` | The tests without property tests, writing Istanbul JSON to `tmp/coverage/coverage-final.json`: Vitest with `--coverage.provider=v8 --coverage.reporter=json`, Jest with `--coverage --coverageReporters=json`. A run that writes no report exits 2. |
-| CRAP | `sf-js crap [--all] [--base REF] [--report DIR]` | ESLint's `complexity` rule (typescript-eslint parser) with sf-js's own config, joined with `coverage-final.json`: `comp² × (1 − coverage)³ + comp`. Lists changed functions, or all with `--all`. Exit 1 when any is over 10. |
+| CRAP | `sf-js crap [--all] [--base REF] [--report DIR]` | The `complexity` rule of oxlint, or of ESLint with the typescript-eslint parser (see [Complexity source](#complexity-source)), with sf-js's own config, joined with `coverage-final.json`: `comp² × (1 − coverage)³ + comp`. Lists changed functions, or all with `--all`. Exit 1 when any is over 10. |
 | DRY | `sf-js dry [--all] [--base REF] [--min-tokens N]` | `npx --yes jscpd@4 --format javascript,typescript,jsx,tsx` with a JSON report under `tmp/jscpd/`, then the clones that touch a changed line. Exit 1 when any. |
 | Language mutation | `sf-js mutate [--base REF] [--all] [-- stryker args]` | `stryker run` with `--mutate` set to the changed source files, each glob character (`[ ] * ? { } ( )`) wrapped in a one-character class so `pages/[id].ts` matches only itself, `--incremental --incrementalFile tmp/stryker/incremental.json`, the runner (`--testRunner jest` when `jest` is listed, else `vitest`), `--checkers typescript` when `tsconfig.json` exists, and `--concurrency 4` unless you pass your own. The JSON report goes to `tmp/stryker/mutation.json`; every `Survived` or `NoCoverage` mutant in the changed source files is listed (the incremental report also keeps mutants from earlier runs on other files). Exit 1 when any. A changed source file whose name has a comma exits 2 before Stryker runs, since Stryker splits `--mutate` on commas. `--all` drops `--mutate` so Stryker's own configuration picks the files, and judges every mutant in the report. |
 
@@ -20,10 +20,16 @@ Every command exits 0 when clean, 1 on a finding (including failing tests or a
 type error), and 2 on a usage or input error such as a missing report, a
 missing lockfile, or no test runner. Errors go to stderr prefixed `sf-js: `.
 `--report-only` on `dry` and `mutate` re-reads the last report without
-rerunning the tool, with the same changed-file scope. `crap` exits 2 when
-ESLint could not analyze a file (a fatal message such as a parse error,
+rerunning the tool, with the same changed-file scope. With ESLint as the
+complexity source, `crap` exits 2 when ESLint could not analyze a file (a fatal message such as a parse error,
 printed as `eslint could not analyze FILE:LINE: MESSAGE`) or when ESLint itself
-exits 2; its exit 1 is normal, since every complexity message is an error. Every tool run is echoed first as a `$ ` line.
+exits 2; its exit 1 is normal, since every complexity message is an error.
+With oxlint, `crap` exits 2 when oxlint could not analyze a file: each
+diagnostic with no code (a syntax error, or a semantic error such as a
+redeclared identifier) is printed as `oxlint could not analyze FILE:LINE:
+MESSAGE`, and a file oxlint could not open (one that is not valid UTF-8) as
+`oxlint could not analyze: MESSAGE`. Either way no CRAP table is printed.
+Every tool run is echoed first as a `$ ` line.
 
 ## Package manager and runner
 
@@ -32,8 +38,8 @@ exits 2; its exit 1 is normal, since every complexity message is an error. Every
 - Project tools run through the manager: `npx --no-install`, `pnpm exec`, `yarn`, or `bunx`. jscpd always runs as `npx --yes jscpd@4`.
 - `test`, `property` and `coverage` run Vitest when `package.json` lists `vitest` in `dependencies` or `devDependencies`, else Jest when it lists `jest`.
 - `mutate` and `tools` pick the other way round when both are listed: Jest when `package.json` lists `jest`, else Vitest. `sf-js tools` installs Vitest when neither is listed.
-- The tool packages are the runner, `@vitest/coverage-v8` for Vitest, `typescript`, `eslint`, `typescript-eslint`, `@stryker-mutator/core`, the Stryker runner plugin for the runner, `@stryker-mutator/typescript-checker` when `tsconfig.json` exists, and `fast-check`.
-- `sf-js tools` adds each missing package by bare name and does not choose versions; a person keeps the project's tool versions compatible. In particular, keep `typescript` within the range `typescript-eslint` declares in its `peerDependencies` (`npm view typescript-eslint peerDependencies`). npm resolves that range by itself; pnpm, yarn and bun take the latest `typescript`, which may be newer than typescript-eslint and the Stryker TypeScript checker accept, so in those projects add a compatible `typescript` before running `sf-js tools`, or pin it afterwards.
+- The tool packages are the runner, `@vitest/coverage-v8` for Vitest, `typescript`, the complexity linter, `@stryker-mutator/core`, the Stryker runner plugin for the runner, `@stryker-mutator/typescript-checker` when `tsconfig.json` exists, and `fast-check`. The complexity linter is `eslint` and `typescript-eslint` when `package.json` lists `eslint` and not `oxlint`, else `oxlint`: a project that lists neither linter gets `oxlint`, and one that lists `oxlint` gets neither `eslint` nor `typescript-eslint`.
+- `sf-js tools` adds each missing package by bare name and does not choose versions; a person keeps the project's tool versions compatible. With ESLint, keep `typescript` within the range `typescript-eslint` declares in its `peerDependencies` (`npm view typescript-eslint peerDependencies`); npm resolves that range by itself, while pnpm, yarn and bun take the latest `typescript`. With oxlint, nothing holds `typescript` back, so every package manager, npm included, takes the latest `typescript`. The latest may be newer than typescript-eslint or StrykerJS can run (StrykerJS 10 fails on TypeScript 7), so add a compatible `typescript` before running `sf-js tools`, or pin it afterwards.
 - sf-js works on the `package.json` in the current directory. Workspaces and monorepos are out of scope.
 
 ## Changed code
@@ -51,6 +57,41 @@ only deletes lines still counts as changed. `--base` defaults to
 neither scored nor mutated. A changed set with no production source prints
 `no changed source files to mutate` and runs no Stryker.
 
+## Complexity source
+
+`crap` takes per-function complexity from oxlint when `package.json` lists
+`oxlint` in `dependencies` or `devDependencies`, else from ESLint when it lists
+`eslint`, else from oxlint. The two report the same complexity; the rows read
+the same either way.
+
+- oxlint runs with sf-js's own config, written to `tmp/oxlint/oxlintrc.json`
+  (only `eslint/complexity`, `eslint-disable` comments ignored), with
+  `--disable-nested-config` and `--format json`. The project's `.oxlintrc.json`
+  files, nested ones included, are not read. `--ignore-path` points at an
+  empty `tmp/oxlint/oxlintignore`, so the project's `.eslintignore` does not
+  hide files from CRAP. The files ESLint leaves out are
+  passed as `--ignore-pattern` options, because oxlint resolves a config's
+  `ignorePatterns` against the config's own directory. sf-js reads the JSON
+  report from stdout and does not echo it.
+- sf-js needs oxlint 1.62.0 or later. An oxlint that prints no JSON report (an
+  older oxlint rejects the config, or none is installed) or that runs no
+  complexity rule exits 2 with `sf-js needs oxlint 1.62.0 or later`; whatever
+  it printed instead of a report goes to stderr. sf-js does not fall back to
+  ESLint.
+- oxlint always honors its own `oxlint-disable` comments, so one can hide a
+  function from CRAP. For each line of a linted file with an
+  `oxlint-disable`, `oxlint-disable-line` or `oxlint-disable-next-line`
+  directive that names no rule, or names `complexity` or `eslint/complexity`,
+  `crap` prints `sf-js: warning: FILE:LINE has an oxlint-disable directive
+  that can hide a function from CRAP` on stderr. The warning does not change
+  the exit status.
+- ESLint runs with sf-js's own config, written to
+  `tmp/eslint/eslint.config.mjs` (the typescript-eslint parser and only the
+  `complexity` rule, inline `eslint-disable` comments ignored). ESLint 9.x or
+  later is assumed.
+
+Either way the project's linter setup neither helps nor breaks the gate.
+
 ## Reading the output
 
 ```text
@@ -65,11 +106,6 @@ statements of functions nested in it count only for those. A function with no
 statements is covered when it was called. A function missing from the coverage
 report counts as 0% and spans only its head. Unnamed functions show as
 `(anonymous)`. Reduce CRAP by covering the function or splitting it.
-
-sf-js lints with its own config, written to `tmp/eslint/eslint.config.mjs`
-(the typescript-eslint parser and only the `complexity` rule, inline
-`eslint-disable` comments ignored), so the project's ESLint setup neither
-helps nor breaks the gate. ESLint 9.x or later is assumed.
 
 ```text
 64 tokens  src/ledger.ts:13-15 (changed)  ==  src/legacy.ts:30-32
@@ -139,8 +175,8 @@ gherkin-mutator --feature swarmforge/tools/javascript/features/crap.feature \
 ```
 
 The end-to-end QA procedure for sf-js is `qa/sf-js.md`. It runs against real
-npm, pnpm, yarn and bun projects with the real Vitest, Jest, tsc, ESLint,
-jscpd and StrykerJS, and needs the npm registry.
+npm, pnpm, yarn and bun projects with the real Vitest, Jest, tsc, oxlint,
+ESLint, jscpd and StrykerJS, and needs the npm registry.
 
 The shared core in `swarmforge/tools/core/` serves `sf-cs` as well. Its
 policy namespaces are pure: `sfcore.changes` (diff parsing, path matching),

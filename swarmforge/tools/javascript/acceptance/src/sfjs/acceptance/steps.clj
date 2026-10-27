@@ -7,7 +7,7 @@
             [sfjs.acceptance.world :as world]))
 
 (defn- fail [& parts]
-  (throw (ex-info (apply str parts) {:assertion true})))
+  (throw (ex-info (apply str parts) {})))
 
 (defn- check [ok? & parts]
   (when-not ok? (apply fail parts)))
@@ -68,11 +68,16 @@
   (world/commit-all w (str "delete from " file))
   w)
 
+(defn- replace-line [w n file text]
+  (world/replace-line w file (parse-long n) text)
+  (world/commit-all w (str "rewrite " file))
+  w)
+
 (defn- untracked [w file n]
   (world/write-file w file (world/numbered-lines file (parse-long n)))
   w)
 
-;; ESLint, Istanbul, jscpd and Stryker reports
+;; ESLint, oxlint, Istanbul, jscpd and Stryker reports
 
 (defn- report-eslint [w file message]
   (let [w (update-in w [:eslint (world/path w file)] (fnil conj []) message)]
@@ -81,14 +86,34 @@
     w))
 
 (defn- add-eslint-message [w name line file complexity]
-  (report-eslint w file {:ruleId "complexity" :severity 1
+  (report-eslint w file {:ruleId "complexity"
                          :message (str (if (= name "(anonymous)") "Arrow function" (str "Function '" name "'"))
                                        " has a complexity of " complexity ". Maximum allowed is 0.")
-                         :line (parse-long line) :column 1 :endLine (parse-long line) :endColumn 2}))
+                         :line (parse-long line) :endLine (parse-long line)}))
 
 (defn- add-eslint-problem [w kind message line file]
   (report-eslint w file (cond-> {:severity 1 :message message :line (parse-long line) :column 1}
                           (= kind "fatal") (assoc :fatal true :severity 2))))
+
+(defn- report-oxlint [w diagnostic]
+  (let [w (update w :oxlint (fnil conj []) diagnostic)]
+    (world/state-file w "oxlint.json" (json/generate-string (:oxlint w)))
+    w))
+
+(defn- add-oxlint-diagnostic [w message code line file]
+  (report-oxlint w {:message message :code code :severity "warning" :filename file
+                    :labels [{:span {:line (parse-long line)}}]}))
+
+(defn- add-oxlint-error
+  ([w message] (report-oxlint w {:message message :severity "error" :labels []}))
+  ([w message line file]
+   (report-oxlint w {:message message :severity "error" :filename file
+                     :labels [{:span {:line (parse-long line)}}]})))
+
+(defn- add-oxlint-complexity [w name line file complexity]
+  (add-oxlint-diagnostic w (str (if (= name "(anonymous)") "function" (str "function `" name "`"))
+                                " has a complexity of " complexity ". Maximum allowed is 0.")
+                         "eslint(complexity)" line file))
 
 (defn- coverage-dir [w]
   (or (:coverage-dir w) "tmp/coverage"))
@@ -177,9 +202,13 @@
   (world/state-file w (str "status-" tool) status)
   w)
 
-(defn- stryker-without-report [w status]
-  (world/state-file w "no-report-stryker" "")
-  (fake-status w "stryker" status))
+(defn- without-report [w tool status]
+  (world/state-file w (str "no-report-" tool) "")
+  (fake-status w tool status))
+
+(defn- oxlint-runs-no-rules [w]
+  (world/state-file w "oxlint-no-rules" "")
+  w)
 
 (defn- no-coverage-report [w tool]
   (world/state-file w (str "no-coverage-" tool) "")
@@ -276,9 +305,10 @@
   (check (= text (nth (vec (report-lines w)) (dec (parse-long n)) nil)) "output line " n " is not " text (show w))
   w)
 
-(defn- error-contains [w text]
-  (check (str/includes? (:err (result w)) text) "stderr lacks " text (show w))
-  w)
+(defn- error-check [w relation text]
+  (let [contains? (str/includes? (:err (result w)) text)]
+    (check (if (= relation "contains") contains? (not contains?)) "stderr " relation " " text (show w))
+    w))
 
 (def steps
   [[#"a main branch where \"([^\"]+)\" has (\d+) lines" (fn [w file n] (assoc-in w [:main-files file] (parse-long n)))]
@@ -286,7 +316,8 @@
    [#"a task worktree branched from \"([^\"]+)\"" world/create-repo]
    [#"fake JavaScript tools on PATH" world/install-fakes]
    [#"the fake (\S+) exits with status (\d+)" fake-status]
-   [#"the fake stryker exits with status (\d+) without a report" stryker-without-report]
+   [#"the fake (stryker|oxlint) exits with status (\d+) without a report" without-report]
+   [#"the fake oxlint runs no rules" oxlint-runs-no-rules]
    [#"the fake (\S+) writes no coverage report" no-coverage-report]
    [#"a stale coverage report is (present|absent) in tmp/coverage" stale-coverage]
    [#"\"([^\"]+)\" is not on PATH" remove-from-path]
@@ -299,9 +330,14 @@
    [#"\"([^\"]+)\" is added on the task branch" add-on-task-branch]
    [#"line (\d+) of \"([^\"]+)\" (?:is )?(changed on the task branch|changed but not committed|changed on main after the task began)" change-line]
    [#"lines (\d+) to (\d+) of \"([^\"]+)\" are deleted on the task branch" delete-lines]
+   [#"line (\d+) of \"([^\"]+)\" reads \"([^\"]*)\" on the task branch" replace-line]
    [#"\"([^\"]+)\" is untracked with (\d+) lines" untracked]
    [#"ESLint reports \"([^\"]+)\" at line (\d+) of \"([^\"]+)\" with complexity (\d+)" add-eslint-message]
    [#"ESLint reports a (fatal|non-fatal) \"([^\"]+)\" at line (\d+) of \"([^\"]+)\"" add-eslint-problem]
+   [#"oxlint reports \"([^\"]+)\" at line (\d+) of \"([^\"]+)\" with complexity (\d+)" add-oxlint-complexity]
+   [#"oxlint reports an error \"([^\"]+)\" at line (\d+) of \"([^\"]+)\"" add-oxlint-error]
+   [#"oxlint reports an error \"([^\"]+)\" with no file" add-oxlint-error]
+   [#"oxlint reports \"([^\"]+)\" with code \"([^\"]+)\" at line (\d+) of \"([^\"]+)\"" add-oxlint-diagnostic]
    [#"Istanbul covers (\d+) of (\d+) statements of \"([^\"]+)\" on lines (\d+) to (\d+) of \"([^\"]+)\"" cover-statements]
    [#"Istanbul counts (\d+) calls of \"([^\"]+)\" on lines (\d+) to (\d+) of \"([^\"]+)\" with no statements" count-calls]
    [#"the coverage report is moved to \"([^\"]+)\"" move-coverage]
@@ -319,7 +355,7 @@
    [#"the command line that runs \"([^\"]+)\" (contains|does not contain|ends with) \"([^\"]*)\"" command-line-check]
    [#"the output (has the line|ends with the line|has a line starting with|mentions|does not mention) \"([^\"]*)\"" output-check]
    [#"output line (\d+) is \"([^\"]*)\"" output-line]
-   [#"the error output contains \"([^\"]*)\"" error-contains]])
+   [#"the error output (contains|does not contain) \"([^\"]*)\"" error-check]])
 
 (def handlers
   {:steps steps :fresh world/fresh :cleanup world/cleanup})

@@ -13,7 +13,9 @@
             [sfcore.stryker :as stryker]
             [sfjs.commands :as commands]
             [sfjs.crap :as jscrap]
+            [sfjs.eslint :as eslint]
             [sfjs.mutate :as mutate]
+            [sfjs.oxlint :as oxlint]
             [sfjs.package :as pkg]))
 
 (def usage
@@ -24,7 +26,7 @@
   property [runner args]      property tests only (*.property.test.*)
   coverage [runner args]      tests with Istanbul JSON coverage in " commands/coverage-report "
   crap [--all] [--base REF] [--report DIR]
-                              CRAP per changed function (ESLint complexity + coverage); exit 1 over " crap/crap-limit "
+                              CRAP per changed function (oxlint or ESLint complexity + coverage); exit 1 over " crap/crap-limit "
   dry [--all] [--base REF] [--min-tokens N] [--report-only]
                               jscpd clones touching changed lines; exit 1 if any
   mutate [--base REF] [--all] [--report-only] [-- stryker args]
@@ -72,6 +74,10 @@ manager comes from packageManager in package.json, else from the lockfile.
   (let [[command & args] (pkg/exec-command manager tool-args)]
     (shell/run command args)))
 
+(defn- capture-tool [{:keys [manager]} tool-args]
+  (let [[command & args] (pkg/exec-command manager tool-args)]
+    (shell/capture command args)))
+
 (defn- verdict [status]
   (if (zero? status) outcome/exit-ok outcome/exit-findings))
 
@@ -113,26 +119,63 @@ manager comes from packageManager in package.json, else from the lockfile.
         (throw (outcome/usage-error (str "no " commands/coverage-report " after the coverage run")))
         :else (do (println (str "coverage written to " commands/coverage-report)) outcome/exit-ok)))))
 
-(def ^:private eslint-failed
-  "ESLint's own exit status for a configuration or internal error; 1 only
-  means error messages, and every complexity message is one at maximum 0."
-  2)
-
-(defn- lint
+(defn- lint-eslint
   "Runs ESLint's complexity rule with sf-js's own config over `files`; fails
   when ESLint could not analyze them."
   [proj files root]
-  (write-file commands/eslint-config-path (commands/eslint-config))
-  (delete-file commands/eslint-report)
-  (let [status (run-tool proj (commands/eslint-args commands/eslint-config-path commands/eslint-report files))]
-    (when (= eslint-failed status)
+  (write-file eslint/config-path (eslint/config))
+  (delete-file eslint/report-path)
+  (let [status (run-tool proj (eslint/args eslint/config-path eslint/report-path files))]
+    (when (= eslint/exit-failed status)
       (throw (outcome/usage-error (str "eslint exited " status))))
-    (when-not (exists? commands/eslint-report)
-      (throw (outcome/usage-error (str "eslint exited " status " without " commands/eslint-report))))
-    (let [report (read-json commands/eslint-report)]
-      (when-let [fatal (seq (jscrap/fatal-messages report root))]
+    (when-not (exists? eslint/report-path)
+      (throw (outcome/usage-error (str "eslint exited " status " without " eslint/report-path))))
+    (let [report (read-json eslint/report-path)]
+      (when-let [fatal (seq (eslint/fatal-messages report root))]
         (throw (outcome/usage-error (str/join "\n" (map #(str "eslint could not analyze " %) fatal)))))
       report)))
+
+(defn- linted-sources
+  "The sources a lint of `files` covers: every one git knows for \".\"."
+  [files]
+  (commands/linted-sources
+   (if (= ["."] files)
+     (str/split-lines (git/git (into ["ls-files" "--cached" "--others" "--exclude-standard" "--"]
+                                     commands/source-pathspecs)))
+     files)))
+
+(defn- warn-hiding-directives
+  "Warns about each oxlint-disable directive in the linted sources that can
+  hide a function from CRAP."
+  [files]
+  (doseq [file (linted-sources files)
+          :when (exists? file)
+          line (oxlint/hiding-lines (slurp (shell/in-dir file)))]
+    (shell/warn "sf-js" (str file ":" line " has an oxlint-disable directive that can hide a function from CRAP"))))
+
+(defn- lint-oxlint
+  "Runs oxlint's complexity rule with sf-js's own config over `files`;
+  oxlint's stdout goes to stderr when it is not a report. Fails when oxlint
+  could not analyze them."
+  [proj files root]
+  (write-file oxlint/config-path (oxlint/config))
+  (write-file oxlint/ignore-path "")
+  (let [{:keys [exit out]} (capture-tool proj (oxlint/args oxlint/config-path files))]
+    (when-not (oxlint/report out)
+      (binding [*out* *err*] (print out) (flush)))
+    (let [report (oxlint/read-report exit out)]
+      (when-let [errors (seq (oxlint/analysis-errors report root))]
+        (throw (outcome/usage-error (str/join "\n" errors))))
+      report)))
+
+(defn- complexity
+  "Per-function complexity of `files` from the project's complexity linter."
+  [{:keys [package] :as proj} files root]
+  (if (= "eslint" (pkg/complexity-linter package))
+    (eslint/parse-report (lint-eslint proj files root) root)
+    (let [functions (oxlint/parse-report (lint-oxlint proj files root) root)]
+      (warn-hiding-directives files)
+      functions)))
 
 (defn- cmd-crap [{:keys [opts]}]
   (let [dir (or (:report opts) commands/coverage-dir)
@@ -144,7 +187,7 @@ manager comes from packageManager in package.json, else from the lockfile.
           changed (changed-for opts)
           files (if changed (commands/production-sources (keys changed)) ["."])
           functions (if (seq files)
-                      (jscrap/score (jscrap/parse-eslint (lint proj files root) root) (read-json coverage) root)
+                      (jscrap/score (complexity proj files root) (read-json coverage) root)
                       [])]
       (shell/emit (crap/review (jscrap/select functions changed) crap/format-row "function" changed)))))
 
