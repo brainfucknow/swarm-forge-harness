@@ -30,5 +30,8 @@ commit: 7eba524
   (it "reads only the given types"
     (should= "7518db6" (bug/record-commit shown #{"created"})))
 
+  (it "ignores a commit line before any record"
+    (should-be-nil (bug/record-commit "commit: aaaaaaa\n\n  ddff77e #0 operator <o@x>\n\n  The body\n" #{"created"})))
+
   (it "is nil when there is no such record"
     (should-be-nil (bug/record-commit shown #{"handoff"}))))

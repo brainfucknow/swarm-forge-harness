@@ -1,7 +1,9 @@
 (ns sf.hook-spec
   (:require [babashka.fs :as fs]
-            [speclj.core :refer [describe it should= should-throw after]]
-            [sf.hook :as hook]))
+            [clojure.string :as str]
+            [speclj.core :refer [describe it should should= should-throw after]]
+            [sf.hook :as hook]
+            [sf.shell :as shell]))
 
 (def ^:private message-file (atom nil))
 
@@ -11,6 +13,30 @@
     (spit file message)
     (hook/commit-msg [role file])
     (slurp file)))
+
+(defn- hook-file [repo]
+  (fs/path repo ".git" "hooks" "commit-msg"))
+
+(defn- fresh-repo []
+  (let [repo (str (fs/create-temp-dir {:prefix "hook-repo-"}))]
+    (shell/must {:dir repo} "git" "init" "--quiet")
+    repo))
+
+(describe "install"
+  (it "writes the hook into a repository without one"
+    (let [repo (fresh-repo)]
+      (hook/install repo)
+      (should (str/includes? (slurp (str (hook-file repo))) hook/marker))
+      (fs/delete-tree repo)))
+
+  (it "leaves another hook alone"
+    (let [repo (fresh-repo)
+          file (hook-file repo)]
+      (fs/create-dirs (fs/parent file))
+      (spit (str file) "#!/bin/sh\n")
+      (hook/install repo)
+      (should= "#!/bin/sh\n" (slurp (str file)))
+      (fs/delete-tree repo))))
 
 (describe "commit-msg"
   (after (some-> @message-file fs/delete-if-exists))

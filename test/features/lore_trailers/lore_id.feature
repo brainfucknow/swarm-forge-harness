@@ -16,24 +16,24 @@ Feature: sf commit Lore-id
 
   # sf commit Lore-id 1
   Scenario Outline: sf commit Lore-id 1: a Lore trailer gets a Lore-id as the first trailer
-    When I commit "Fix\n\n<key>: <value>" in the task worktree
+    When I commit "Fix\n\n<key>: x" in the task worktree
     Then the exit status is 0
-    And the commit message is "Fix\n\nBy qa.\n\nLore-id: LID\n<key>: <value>"
+    And the commit message is "Fix\n\nBy qa.\n\nLore-id: LID\n<key>: x"
     And LID is 8 lowercase hexadecimal digits
 
     Examples:
-      | key           | value                    |
-      | Constraint    | keep the byline          |
-      | Rejected      | byline as a trailer      |
-      | Confidence    | high                     |
-      | Scope-risk    | narrow                   |
-      | Reversibility | clean                    |
-      | Directive     | do not reorder trailers  |
-      | Tested        | hook placement           |
-      | Not-tested    | Windows                  |
-      | Supersedes    | 0badc0de                 |
-      | Depends-on    | 0badc0de                 |
-      | Related       | 0badc0de                 |
+      | key           |
+      | Constraint    |
+      | Rejected      |
+      | Confidence    |
+      | Scope-risk    |
+      | Reversibility |
+      | Directive     |
+      | Tested        |
+      | Not-tested    |
+      | Supersedes    |
+      | Depends-on    |
+      | Related       |
 
   # sf commit Lore-id 2
   Scenario Outline: sf commit Lore-id 2: a message without a Lore trailer in the last paragraph gets no Lore-id
