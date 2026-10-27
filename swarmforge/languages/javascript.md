@@ -23,7 +23,13 @@ missing lockfile, or no test runner. Errors go to stderr prefixed `sf-js: `.
 rerunning the tool, with the same changed-file scope. With ESLint as the
 complexity source, `crap` exits 2 when ESLint could not analyze a file (a fatal message such as a parse error,
 printed as `eslint could not analyze FILE:LINE: MESSAGE`) or when ESLint itself
-exits 2; its exit 1 is normal, since every complexity message is an error. Every tool run is echoed first as a `$ ` line.
+exits 2; its exit 1 is normal, since every complexity message is an error.
+With oxlint, `crap` exits 2 when oxlint could not analyze a file: each
+diagnostic with no code (a syntax error, or a semantic error such as a
+redeclared identifier) is printed as `oxlint could not analyze FILE:LINE:
+MESSAGE`, and a file oxlint could not open (one that is not valid UTF-8) as
+`oxlint could not analyze: MESSAGE`. Either way no CRAP table is printed.
+Every tool run is echoed first as a `$ ` line.
 
 ## Package manager and runner
 
