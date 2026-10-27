@@ -54,8 +54,9 @@ swarm/<id>  ●──────●──○──○──●────○�
    ends just before a `-` and has at most 30 characters. When the first word
    alone is longer than 30 characters, cut it at 30.
 4. Add `-` and 7 random lowercase hex digits. The hex part must differ from
-   the hex part of every task that sf can see: local and remote-tracking
-   `swarm/*` branches, and `tasks/done/*.md` in the main checkout's HEAD.
+   the hex part of every task that sf can see: local `swarm/*` branches,
+   the considered remote's `swarm/*` branches (see Reading the state), and
+   `tasks/done/*.md` in the main checkout's HEAD.
 
 A command resolves an id argument in this order:
 
@@ -168,20 +169,37 @@ main checkout.
   `sf next`, `sf ls`, the commit-msg hook (through `sf stage`), `sf run`
   and `sf dispatch` all read it.
 - **`sf ls`.** One `git for-each-ref` over `refs/heads/swarm/` and
-  `refs/remotes/*/swarm/`. Then, for each task, one `git log -1
+  `refs/remotes/<remote>/swarm/`. Then, for each task, one `git log -1
   --first-parent --grep='^SwarmForge-Task: <id>$'`, and the title from the
   task file in one `git cat-file --batch`. The cost grows with the number of
   open tasks, not with history. The output is unchanged: `id`, `stage`,
   `needs`, `route` and `title`, tab-separated, sorted by id.
-- **Local or remote.** A local `swarm/<id>` wins over a remote-tracking
-  one. A remote-tracking `swarm/<id>` without a local branch is listed,
-  unless the main checkout's HEAD already contains its tip, which means the
-  task was finished. `sf start` makes the local branch from it.
-- **Finished tasks.** The task has no branch, and `tasks/done/<id>.md` is
-  in the main checkout's HEAD. `sf show` finds the `finished` merge in
-  `git log --first-parent HEAD`, and reads the records and `LORE:` lines from
-  its second parent back to the created record. `sf start`, and every
-  command that writes, refuse a finished task.
+- **One remote.** sf considers a single remote: `SWARMFORGE_REMOTE` when
+  it is set, else `origin`. The remote-tracking branches of other remotes
+  are ignored, also when they have `swarm/<id>`.
+- **Local or remote.** A local `swarm/<id>` wins over the considered
+  remote's `<remote>/swarm/<id>`. A remote-tracking `swarm/<id>` without a
+  local branch is a task too, unless it is finished. `sf start` makes the
+  local branch from it.
+- **Finished tasks.** A task is finished when `tasks/done/<id>.md` is in
+  the main checkout's HEAD, whatever local or remote-tracking branches still
+  have `swarm/<id>`. The archived task file is the signal because it reaches
+  the base branch by every kind of merge: `sf finish`, a host merge commit,
+  or a host squash merge, where the task's tip never becomes an ancestor of
+  HEAD. `sf ls` and `sf next` skip a finished task. `sf start`, and every
+  command that writes a record, refuse it with `task <id> is finished`.
+- **Showing a finished task.** `sf show` looks for the task's `finished`
+  record in `git log --first-parent HEAD`.
+  - When the record is there (`sf finish` made the merge), sf reads the
+    records and `LORE:` lines from the merge's second parent back to the
+    created record, then the `finished` record.
+  - When it is not there (a host merge or a squash merge), sf prints the
+    records from the `## Records` section of `tasks/done/<id>.md`, which the
+    archive already carries, without their fences. There is no `finished`
+    block. `LORE:` lines are printed only while the task branch (local, or
+    the considered remote's) still exists, read from its first-parent
+    history as for an open task. Once the branch is gone, the squashed
+    commit on the base branch has lost the Lore trailers.
 
 ### sf start and sf show
 
@@ -197,8 +215,8 @@ print these sections, with one blank line between them:
    `merged-into`). In a value of several lines, each later line is indented
    by two spaces.
 3. The `LORE:` lines, as now. They come from the commits after the created
-   record's commit on the first-parent line, up to the tip (or up to the
-   merge's second parent, for a finished task).
+   record's commit on the first-parent line, up to the tip (for a finished
+   task, see Showing a finished task).
 
 There are two changes from today:
 
@@ -421,10 +439,9 @@ None of these blocks the build. They are listed for the operator.
    contains is hidden from `sf ls`. Pushing main from sf would skip a pull
    request review.
 2. **Host pull request merges.** When a host merges `swarm/<id>`, the task
-   file is already in `tasks/done/` on the base branch. The local branch
-   remains, at stage `done`. Should `sf finish` notice that the target
-   already contains the tip, delete the branch and worktree, and record
-   `finished` as an empty commit on the target?
+   counts as finished (its file is in `tasks/done/` on the base branch), but
+   the local branch and worktree remain. Should `sf finish` accept such a
+   task and only delete the branch and worktree?
 3. **Abandoning a task.** No command closes a task without a merge (git-bug
    had `status close`). Should `sf drop <id>` keep the branch under another
    name, such as `swarm-dropped/<id>`?

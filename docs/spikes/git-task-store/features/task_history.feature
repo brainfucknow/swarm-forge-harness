@@ -14,9 +14,14 @@ Feature: sf task history
   branch only, so the commits that a merge of the base branch brings in are
   left out. The LORE: lines are those of the commits after the created record.
 
-  sf show also shows a finished task: it reads the task file and the commits
-  of the finished merge from the HEAD of the main checkout. sf start refuses a
-  finished task.
+  sf show also shows a finished task (tasks/done/<id>.md is in the HEAD of
+  the main checkout). When HEAD's first-parent history has the task's
+  finished record, sf show reads the records and LORE: lines from that
+  merge's second parent and ends the records with the finished block. When it
+  has none (a host merge or a squash merge), the records are those of the
+  "## Records" section of tasks/done/<id>.md without their fences, with no
+  finished block, and LORE: lines are printed only while the task branch
+  still exists. sf start refuses a finished task.
 
   Background:
     Given a project with swarmforge initialized
@@ -83,3 +88,28 @@ Feature: sf task history
     When I run "sf start $A"
     Then the exit status is 1
     And the error output has the line "sf: task $A is finished"
+
+  # sf task history 6
+  Scenario: sf task history 6: sf show of a squash-merged task prints the archived records and the LORE lines of its branch
+    Given task "A" titled "Add login" was started on route "specifier"
+    And I ran "sf ask $A Which?"
+    And role "specifier" committed "Spec\n\nTested: x" in the worktree of task "A" as C1
+    And task "A" was handed off to done and squash-merged into main
+    When I run "sf show $A"
+    Then the exit status is 0
+    And the output has the lines "TASK: $A\nTITLE: Add login\nSTATUS: finished\nSTAGE: done\nROUTE: specifier" before the line "---"
+    And the output has the lines "type: question\nfrom: specifier\nquestion: Which?"
+    And the output has no line containing "type: finished"
+    And the output has no line containing "```"
+    And the output ends with the lines "LORE: C1 specifier Lore-id: L1\nLORE: C1 specifier Tested: x"
+
+  # sf task history 7
+  Scenario: sf task history 7: once the branch of a squash-merged task is gone, sf show prints no LORE lines
+    Given task "A" titled "Add login" was started on route "specifier"
+    And role "specifier" committed "Spec\n\nTested: x" in the worktree of task "A" as C1
+    And task "A" was handed off to done and squash-merged into main
+    And the worktree and the branch of task "A" were removed
+    When I run "sf show $A"
+    Then the exit status is 0
+    And the output has the line "STATUS: finished"
+    And the output ends with the lines "type: handoff\nfrom: specifier\nto: done\nbranch: swarm/$A\ncommit: C1\nfiles: -\nsummary: specifier work complete"

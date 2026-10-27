@@ -12,10 +12,16 @@ Feature: sf task state
   stage that need nothing, or NO_TASK.
 
   A task is a local branch swarm/<id>, or a remote-tracking branch
-  <remote>/swarm/<id> when there is no local one. A remote-tracking task
-  branch whose tip the HEAD of the main checkout contains is a finished task
-  and is not listed. sf start of a task that has only a remote-tracking
-  branch makes the local branch at its tip.
+  <remote>/swarm/<id> when there is no local one. sf considers one remote:
+  SWARMFORGE_REMOTE when it is set, else origin; other remotes are ignored.
+  sf start of a task that has only a remote-tracking branch makes the local
+  branch at its tip.
+
+  A task is finished when tasks/done/<id>.md is in the HEAD of the main
+  checkout, whatever branches still have swarm/<id>, also after a squash
+  merge. sf ls and sf next skip a finished task; sf start and every command
+  that writes a record refuse it with "task <id> is finished" and exit
+  status 1.
 
   Background:
     Given a project with swarmforge initialized and a remote "origin"
@@ -83,3 +89,47 @@ Feature: sf task state
     When I run "sf ls"
     Then the exit status is 0
     And the output is "$A\tspecifier\t\tspecifier,coder\tAdd login"
+
+  # sf task state 7
+  Scenario Outline: sf task state 7: a squash-merged task is finished although its branches remain
+    Given I ran "git push origin swarm/$B"
+    And task "B" was handed off to done and squash-merged into main
+    And I ran "git fetch origin"
+    When I run "<command>"
+    Then the exit status is 0
+    And the output is "<output>"
+
+    Examples:
+      | command          | output                                    |
+      | sf ls            | $A\tspecifier\t\tspecifier,coder\tAdd login |
+      | sf next coder    | NO_TASK                                   |
+
+  # sf task state 8
+  Scenario Outline: sf task state 8: a command that writes a record refuses a finished task
+    Given task "B" was handed off to done and squash-merged into main
+    When I run "<command>"
+    Then the exit status is 1
+    And the error output has the line "sf: task $B is finished"
+    And the branch of task "B" did not move
+
+    Examples:
+      | command                 |
+      | sf start $B             |
+      | sf ask $B Which         |
+      | sf answer $B yes        |
+      | sf route $B coder       |
+      | sf handoff $B           |
+
+  # sf task state 9
+  Scenario Outline: sf task state 9: sf considers only one remote, SWARMFORGE_REMOTE or else origin
+    Given a second remote "upstream"
+    And another clone of "upstream" created task "C" titled "Port tool" on route "qa" and pushed its branch
+    And I ran "git fetch upstream"
+    When I run "sf ls" with SWARMFORGE_REMOTE "<remote>"
+    Then the exit status is 0
+    And the output is "<output>"
+
+    Examples:
+      | remote   | output                                                                                                         |
+      | -        | $A\tspecifier\t\tspecifier,coder\tAdd login\n$B\tcoder\t\tcoder,qa\tFix bug                                    |
+      | upstream | $A\tspecifier\t\tspecifier,coder\tAdd login\n$B\tcoder\t\tcoder,qa\tFix bug\n$C\tqa\t\tqa\tPort tool          |

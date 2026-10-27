@@ -123,6 +123,15 @@ nothing (the record changes no file).
    `sf start <id>`. Expect a local branch at the remote tip and a worktree.
 5. Push a task, finish it locally, and fetch. Expect `sf ls` not to list it,
    although `origin/swarm/<id>` still exists.
+   Then push another task, hand it off to done, and squash-merge it into
+   `main` with `git merge --squash` and a commit, keeping its local and
+   remote branches. Expect `sf ls` not to list it, `sf start` and `sf ask`
+   to exit 1 with `task <id> is finished`, and `sf show` to print the
+   archived records, with no fences and no `finished` block, plus its
+   `LORE:` lines. After the branch is deleted, expect no `LORE:` lines.
+   Add a second remote `upstream` that has another task's branch, and
+   fetch it. Expect `sf ls` to list that task only with
+   `SWARMFORGE_REMOTE=upstream`.
 6. Two clones on one task. Push task D. In `S/other`, run `sf start D` and
    `SWARMFORGE_REMOTE=origin sf ask D other`.
    1. In `S/main`, run `sf ask D mine` without the variable. Expect a local

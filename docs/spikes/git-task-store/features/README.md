@@ -55,6 +55,9 @@ PATH, except in `migrate.feature`. The end-to-end procedure is `../qa.md`.
 | `task "A" titled "T" was started on route "R"` | The same, then `sf start $A`. |
 | `task "A" titled "T" with the request "Q" was started on route "R"` | `sf new "T" -m "Q" --route R`, then `sf start $A`. |
 | `task "A" was finished` | `sf handoff $A --to done` with `SWARMFORGE_ROLE` unset, then `sf finish $A`, in the main checkout. |
+| `task "A" was handed off to done and squash-merged into main` | `sf handoff $A --to done` with `SWARMFORGE_ROLE` unset, then, in the main checkout, `git merge --squash swarm/$A` and `git commit -m "Squash A"`. The branch and the worktree of A stay. |
+| `the worktree and the branch of task "A" were removed` | `git worktree remove --force .worktrees/$A`, then `git branch -D swarm/$A`, in the main checkout. |
+| `a second remote "R"` | Adds another bare repository as remote `R`. |
 | `another clone of "R" created task "C" titled "T" on route "Q" and pushed its branch` | Clones `R` into a second scratch directory, runs `sf init` and `sf new "T" -m "T" --route Q` there, then `git push R swarm/$C`. |
 | `another clone of "R" pushed the record "C" on task "A"` | Clones `R` into a second scratch directory and runs `sf init` and `sf start $A` there. Then it runs `C` (placeholders filled in, split on spaces) with `SWARMFORGE_REMOTE=R`, so the record is pushed. |
 | `role "R" committed "M" in the worktree of task "A" as C1` | `SWARMFORGE_ROLE=R git commit --allow-empty -m M` in the worktree of A. The commit is `C1`. |
@@ -65,7 +68,7 @@ PATH, except in `migrate.feature`. The end-to-end procedure is `../qa.md`.
 | `I ran "C"` / `I ran "C" in the worktree of task "A"` | Runs `C` (placeholders filled in, split on spaces) in the main checkout or that worktree. Output and status are not checked. |
 | `I ran "C" with the text "X"` | The same, with `X` (newlines expanded) added as one last argument. |
 | `I run …` | The same forms. This is the step under test, whose output and status the `Then` steps check. |
-| `I run "C" with SWARMFORGE_REMOTE "R"` | The step under test with `SWARMFORGE_REMOTE=R`. |
+| `I run "C" with SWARMFORGE_REMOTE "R"` | The step under test with `SWARMFORGE_REMOTE=R`. `-` leaves it unset. |
 | `I run sf new with the title "T"` | `sf new "T"` in the main checkout. |
 | `I run sf new with the title "T", the request "Q" and the route "R"` | `sf new "T" -m "Q" --route R`, with `\n` in Q expanded. `… with SWARMFORGE_REMOTE "X"` adds that variable. |
 | `I commit "M" in the worktree of task "A" with SWARMFORGE_ROLE "R"` | `SWARMFORGE_ROLE=R git commit --allow-empty -m M` in that worktree, with the hook active. |
