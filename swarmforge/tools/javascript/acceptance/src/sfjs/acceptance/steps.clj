@@ -95,12 +95,20 @@
   (report-eslint w file (cond-> {:severity 1 :message message :line (parse-long line) :column 1}
                           (= kind "fatal") (assoc :fatal true :severity 2))))
 
-(defn- add-oxlint-diagnostic [w message code line file]
-  (let [w (update w :oxlint (fnil conj [])
-                  {:message message :code code :severity "warning" :filename file
-                   :labels [{:span {:line (parse-long line)}}]})]
+(defn- report-oxlint [w diagnostic]
+  (let [w (update w :oxlint (fnil conj []) diagnostic)]
     (world/state-file w "oxlint.json" (json/generate-string (:oxlint w)))
     w))
+
+(defn- add-oxlint-diagnostic [w message code line file]
+  (report-oxlint w {:message message :code code :severity "warning" :filename file
+                    :labels [{:span {:line (parse-long line)}}]}))
+
+(defn- add-oxlint-error
+  ([w message] (report-oxlint w {:message message :severity "error" :labels []}))
+  ([w message line file]
+   (report-oxlint w {:message message :severity "error" :filename file
+                     :labels [{:span {:line (parse-long line)}}]})))
 
 (defn- add-oxlint-complexity [w name line file complexity]
   (add-oxlint-diagnostic w (str (if (= name "(anonymous)") "function" (str "function `" name "`"))
@@ -327,6 +335,8 @@
    [#"ESLint reports \"([^\"]+)\" at line (\d+) of \"([^\"]+)\" with complexity (\d+)" add-eslint-message]
    [#"ESLint reports a (fatal|non-fatal) \"([^\"]+)\" at line (\d+) of \"([^\"]+)\"" add-eslint-problem]
    [#"oxlint reports \"([^\"]+)\" at line (\d+) of \"([^\"]+)\" with complexity (\d+)" add-oxlint-complexity]
+   [#"oxlint reports an error \"([^\"]+)\" at line (\d+) of \"([^\"]+)\"" add-oxlint-error]
+   [#"oxlint reports an error \"([^\"]+)\" with no file" add-oxlint-error]
    [#"oxlint reports \"([^\"]+)\" with code \"([^\"]+)\" at line (\d+) of \"([^\"]+)\"" add-oxlint-diagnostic]
    [#"Istanbul covers (\d+) of (\d+) statements of \"([^\"]+)\" on lines (\d+) to (\d+) of \"([^\"]+)\"" cover-statements]
    [#"Istanbul counts (\d+) calls of \"([^\"]+)\" on lines (\d+) to (\d+) of \"([^\"]+)\" with no statements" count-calls]

@@ -150,6 +150,17 @@ Work on a throwaway copy of P1, `tmp/qa/lint`, after `$SFJS coverage` has writte
 3. Revert the syntax error. Break ESLint itself, for example by removing `node_modules/typescript-eslint`. `$SFJS crap --base main` exits 2 and stderr has `eslint exited 2`.
 4. Restore `node_modules` (`npm install`). `$SFJS crap --base main` works again, and ESLint's exit status 1 from complexity messages does not fail it.
 
+## QA-10c oxlint analysis errors (P1 copy)
+
+Work on a throwaway copy of P1, `tmp/qa/oxlint-lint`, after `$SFJS coverage` has written `tmp/coverage/coverage-final.json`. P1 takes complexity from oxlint.
+
+1. Commit a syntax error inside `withdraw`, for example a line `const = ;`. `$SFJS crap --base main` exits 2. Stderr has `oxlint could not analyze src/ledger.ts:<line>: ` followed by oxlint's message (for `const = ;`, `Unexpected token`), with the line of the syntax error. Stdout has no `function(s)` line.
+2. `$SFJS crap --all` fails the same way.
+3. Replace the syntax error with two declarations of the same name inside `withdraw`, `let a = 1;` and on the next line `let a = 2;`, and commit. `$SFJS crap --base main` exits 2. Stderr has ``oxlint could not analyze src/ledger.ts:<line of the first let>: Identifier `a` has already been declared``. Stdout has no `function(s)` line.
+4. Remove the declarations. Append a comment line holding one byte that is not valid UTF-8 (`0xFF`) to `src/ledger.ts`, for example with `printf '// \xff\n' >> src/ledger.ts`, and commit. `$SFJS crap --base main` exits 2. Stderr has `oxlint could not analyze: Failed to open file`, and that line names `src/ledger.ts`. Stdout has no `function(s)` line.
+5. Remove the byte and commit. `$SFJS crap --base main` lists `withdraw` again and exits 0 or 1 by its CRAP.
+6. `npm install --save-dev oxlint@1.62.0` and repeat step 1. It fails the same way.
+
 ## QA-11 Installation through sf tool
 
 1. From the task worktree, `swarmforge/bin/sf tool ensure sf-js` succeeds. `swarmforge/bin/sf tool require sf-js` prints `OK: sf-js <path>`.
@@ -160,7 +171,7 @@ Work on a throwaway copy of P1, `tmp/qa/lint`, after `$SFJS coverage` has writte
 2. The sf-js unit tests and the sf-js acceptance tests pass with their documented commands.
 3. Check by hand, without a script (these are documentation, not behavior), that the following exist:
    - `swarmforge/languages/javascript.md`, describing every command, its outputs and the conventions above, with Playwright and dependency-cruiser named as recommendations
-   - in it, oxlint as the complexity source (when package.json lists oxlint, or lists neither linter), ESLint when only eslint is listed, the oxlint 1.62.0 minimum, the `oxlint-disable` warning, and the tool packages `sf-js tools` adds for each case
+   - in it, oxlint as the complexity source (when package.json lists oxlint, or lists neither linter), ESLint when only eslint is listed, the oxlint 1.62.0 minimum, the `oxlint-disable` warning, exit 2 when either linter could not analyze a file, and the tool packages `sf-js tools` adds for each case
    - the `sf-js` line in `swarmforge/tools.conf`
    - the JavaScript/TypeScript row in the engineering article's tool table and its Language Defaults bullet
    - the `swarmforge/README.md` row and the `README.md` mention

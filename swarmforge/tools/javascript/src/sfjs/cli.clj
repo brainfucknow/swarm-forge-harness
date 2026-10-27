@@ -155,21 +155,25 @@ manager comes from packageManager in package.json, else from the lockfile.
 
 (defn- lint-oxlint
   "Runs oxlint's complexity rule with sf-js's own config over `files`;
-  oxlint's stdout goes to stderr when it is not a report."
-  [proj files]
+  oxlint's stdout goes to stderr when it is not a report. Fails when oxlint
+  could not analyze them."
+  [proj files root]
   (write-file oxlint/config-path (oxlint/config))
   (write-file oxlint/ignore-path "")
   (let [{:keys [exit out]} (capture-tool proj (oxlint/args oxlint/config-path files))]
     (when-not (oxlint/report out)
       (binding [*out* *err*] (print out) (flush)))
-    (oxlint/read-report exit out)))
+    (let [report (oxlint/read-report exit out)]
+      (when-let [errors (seq (oxlint/analysis-errors report root))]
+        (throw (outcome/usage-error (str/join "\n" errors))))
+      report)))
 
 (defn- complexity
   "Per-function complexity of `files` from the project's complexity linter."
   [{:keys [package] :as proj} files root]
   (if (= "eslint" (pkg/complexity-linter package))
     (eslint/parse-report (lint-eslint proj files root) root)
-    (let [functions (oxlint/parse-report (lint-oxlint proj files) root)]
+    (let [functions (oxlint/parse-report (lint-oxlint proj files root) root)]
       (warn-hiding-directives files)
       functions)))
 
