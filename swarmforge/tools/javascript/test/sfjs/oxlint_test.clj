@@ -37,6 +37,25 @@
     (is (= [{:file "src/f.js" :line 4 :column 1 :end-line 4 :name "f" :complexity 2}]
            (oxlint/parse-report report "/w")))))
 
+(deftest diagnostics-without-a-code-are-analysis-errors
+  (let [report {"diagnostics" [{"message" "Expected `,` or `}` but found `decimal`" "severity" "error"
+                                "filename" "/w/src/bad.ts"
+                                "labels" [{"label" "`,` or `}` expected" "span" {"offset" 36 "length" 1 "line" 2 "column" 14}}
+                                          {"label" "Opened here" "span" {"offset" 32 "length" 1 "line" 9 "column" 10}}]}
+                               (diagnostic "eslint(complexity)" "function `h` has a complexity of 2. Maximum allowed is 0."
+                                           "/w/src/ok.ts" 1 8)
+                               {"message" "Identifier `a` has already been declared" "severity" "error"
+                                "filename" "src/dup.ts" "labels" [{"span" {"line" 1 "column" 5}}]}
+                               {"message" "Failed to open file /w/src/x.ts with error \"stream did not contain valid UTF-8\""
+                                "severity" "error" "labels" []}]}]
+    (is (= ["oxlint could not analyze src/bad.ts:2: Expected `,` or `}` but found `decimal`"
+            "oxlint could not analyze src/dup.ts:1: Identifier `a` has already been declared"
+            "oxlint could not analyze: Failed to open file /w/src/x.ts with error \"stream did not contain valid UTF-8\""]
+           (oxlint/analysis-errors report "/w"))))
+  (testing "a report with only coded diagnostics"
+    (is (= [] (oxlint/analysis-errors {"diagnostics" [(diagnostic "eslint(no-debugger)" "m" "/w/a.ts" 1 1)]} "/w")))
+    (is (= [] (oxlint/analysis-errors {"diagnostics" []} "/w")))))
+
 (deftest recognizing-a-report
   (is (= {"diagnostics" []} (oxlint/report "{\"diagnostics\": []}")))
   (is (nil? (oxlint/report "{\"errors\": []}")))

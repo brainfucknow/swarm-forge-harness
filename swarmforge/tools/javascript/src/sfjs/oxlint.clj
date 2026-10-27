@@ -78,6 +78,21 @@
           :name (function-name text)
           :complexity (:complexity (crap/complexity-message text))})))
 
+(defn analysis-errors
+  "Each diagnostic with no code in an oxlint report: a file oxlint could not
+  parse or open, so it scored none of its functions. Each reads
+  `oxlint could not analyze FILE:LINE: MESSAGE` with the file relative to
+  `root` and the line of the first label, or `oxlint could not analyze:
+  MESSAGE` when the diagnostic names no file."
+  [parsed root]
+  (vec (for [diagnostic (get parsed "diagnostics")
+             :when (nil? (get diagnostic "code"))
+             :let [file (some-> (get diagnostic "filename") (changes/relative-path root))
+                   line (get-in diagnostic ["labels" 0 "span" "line"])
+                   location (str/join ":" (remove nil? [file line]))]]
+         (str "oxlint could not analyze" (when (seq location) (str " " location)) ": "
+              (get diagnostic "message")))))
+
 (def ^:private directive
   "An oxlint-disable comment and the rule list after it, up to the end of the
   comment."
