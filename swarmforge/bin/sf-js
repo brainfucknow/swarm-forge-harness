@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# sf-js: JavaScript and TypeScript tool wrapper for SwarmForge roles. See swarmforge/languages/javascript.md.
+set -euo pipefail
+command -v bb >/dev/null || { echo "sf-js: Babashka (bb) is required: https://babashka.org" >&2; exit 2; }
+exec bb --config "$(cd "$(dirname "$0")/../tools/javascript" && pwd)/bb.edn" -m sfjs.cli "$@"

@@ -1,0 +1,81 @@
+[
+ {
+  "filePath": "/work/src/ledger.ts",
+  "messages": [
+   {
+    "ruleId": "complexity",
+    "severity": 1,
+    "message": "Function 'deposit' has a complexity of 1. Maximum allowed is 0.",
+    "line": 3,
+    "column": 8,
+    "endLine": 3,
+    "endColumn": 10
+   },
+   {
+    "ruleId": "complexity",
+    "severity": 1,
+    "message": "Function 'withdraw' has a complexity of 4. Maximum allowed is 0.",
+    "line": 10,
+    "column": 8,
+    "endLine": 10,
+    "endColumn": 10
+   },
+   {
+    "ruleId": "complexity",
+    "severity": 1,
+    "message": "Function 'settle' has a complexity of 2. Maximum allowed is 0.",
+    "line": 20,
+    "column": 8,
+    "endLine": 20,
+    "endColumn": 10
+   },
+   {
+    "ruleId": "complexity",
+    "severity": 1,
+    "message": "Arrow function has a complexity of 1. Maximum allowed is 0.",
+    "line": 22,
+    "column": 30,
+    "endLine": 22,
+    "endColumn": 32
+   },
+   {
+    "ruleId": "complexity",
+    "severity": 1,
+    "message": "Function 'noop' has a complexity of 1. Maximum allowed is 0.",
+    "line": 32,
+    "column": 1,
+    "endLine": 32,
+    "endColumn": 3
+   },
+   {
+    "ruleId": "complexity",
+    "severity": 1,
+    "message": "Function 'refund' has a complexity of 3. Maximum allowed is 0.",
+    "line": 34,
+    "column": 1,
+    "endLine": 34,
+    "endColumn": 3
+   },
+   {
+    "ruleId": "complexity",
+    "severity": 1,
+    "message": "Private method #p has a complexity of 1. Maximum allowed is 0.",
+    "line": 36,
+    "column": 3,
+    "endLine": 36,
+    "endColumn": 5
+   },
+   {
+    "ruleId": null,
+    "severity": 1,
+    "message": "Unused eslint-disable directive (no problems were reported).",
+    "line": 40,
+    "column": 1
+   }
+  ]
+ },
+ {
+  "filePath": "/work/src/empty.js",
+  "messages": []
+ }
+]
