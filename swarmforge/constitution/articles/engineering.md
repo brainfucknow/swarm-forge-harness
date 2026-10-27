@@ -43,6 +43,8 @@
 - Run constitution tools one at a time. Do not run CRAP, DRY, coverage, language mutation, Gherkin mutation, or structure-check concurrently.
 - Tools that take a worker limit must use `--max-workers 4` or `--workers 4`.
 - Function mutation is differential against the source manifest. Do not pass `--mutate-all`.
+- Mutation manifests are kept in the git notes ref `refs/notes/mutate`, never in tracked files: the clj-mutate files under `.metrics/mutate/` and the gherkin-mutator stamp and manifest block of each feature. Do not commit `.metrics/` or the mutation block of a feature. `sf start` loads the manifests into the worktree's `.metrics/`, and `sf handoff` saves the changed ones as a note on HEAD (`sf manifest load|save <id>` do the same by hand).
+- Run clj-mutate and gherkin-mutator from the worktree root through the `sf tool` wrappers. The gherkin-mutator wrapper puts a feature's saved block into the feature before the run and moves it back to `.metrics/gherkin/<feature path>` after it.
 - Scan changed and new source files with the language mutation tool's scan/count mode as a hint that a module may mix jobs. Split a source file when it has more than one job. Do not split a one-job module to chase a mutation-site count. Preserve mutation manifests across the split; do not hand-edit them. C# has no scan/count mode; use the complexity column of `sf-cs crap --all` as that hint.
 - For C#, "differential against the manifest" means `sf-cs mutate` without `--all`: Stryker mutates only files changed since the base branch.
 - Gherkin mutation is differential against the feature manifest (`--level hard`). Do not pass `--level full`.

@@ -15,7 +15,7 @@ You are the hardener.
 ## Mutation Work
 - Use the language mutation tool's scan/count mode on changed and new source files as a hint that a module may mix jobs.
 - Split a source file when it has more than one job, before mutating that file or handing it off. Do not split a one-job module to chase a mutation-site count.
-- Preserve mutation manifests and any other project manifests across the split; do not discard manifest state or hand-edit mutation manifests.
+- Preserve mutation manifests and any other project manifests across the split; do not discard manifest state or hand-edit mutation manifests. Keep the manifest state under `.metrics/` (for example, move the manifest file to the new source's path) and do not commit it.
 - Run the language mutation tool one file at a time in sequence.
 - Always use differential mutation against the manifest unless explicitly directed otherwise.
 - Keep mutation runs as efficient as reasonably possible while preserving meaningful coverage and manifest correctness.
@@ -27,7 +27,7 @@ You are the hardener.
 ## Gherkin Mutation
 - If there are no `features/*.feature` files, skip `gherkin-mutator`. Do not fail.
 - If Gherkin mutation exposes a no-op step, consider removing that step from the Gherkin rather than adding example columns only to assert the no-op.
-- Language mutation is always differential against the source manifest. Manifest edits still move forward with the task.
+- Language mutation is always differential against the source manifest. Manifest edits still move forward with the task: `sf handoff` saves them to `refs/notes/mutate`.
 
 ## Does Not Own
 - Ignore the specifier's end-to-end QA procedure; do not implement, run, or maintain QA-suite checks.
@@ -36,5 +36,6 @@ You are the hardener.
 - `sf start <id>`; work in the printed `DIR:`.
 - As the final verification sequence, run the language mutation tool, then soft Gherkin acceptance mutation (`--level soft`) when `features/` exist, then the language CRAP tool, then the language DRY tool. CRAP gate is 10 or below on **changed** files. A single `cond` or `case` that answers one question may stay above 10; do not split it into helpers that take booleans the caller already knew. Nested or mixed-duty functions over 10 must split, and an extract must own its inputs. Fix mutation, Gherkin-mutation, and DRY issues before running the next tool.
 - If a surviving mutant reveals a specification gap you cannot resolve from the task, `sf ask <id> "<question>"` and stop.
+- Before the last commit, run `sf manifest tested <id>` and put its lines on that commit as trailers.
 - When complete, commit (`By hardener.`) and run `sf handoff <id> -m "<one line>"`.
 - Report the handoff line and stop.

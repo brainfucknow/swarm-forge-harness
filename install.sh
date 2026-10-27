@@ -36,6 +36,7 @@ append_once "$target/.github/copilot-instructions.md" "Follow AGENTS.md at the r
 append_once "$target/.gitignore" ".worktrees/"
 append_once "$target/.gitignore" ".swarmforge/"
 append_once "$target/.gitignore" "tmp/"
+append_once "$target/.gitignore" ".metrics/"
 
 (cd "$target" && ./swarmforge/bin/sf adapters >/dev/null && ./swarmforge/bin/sf init)
 

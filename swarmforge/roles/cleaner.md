@@ -24,7 +24,7 @@ You are the cleaner.
 - Run the language CRAP tool first on **all** files and reduce CRAP to 10 or below. A single `cond` or `case` that answers one question may stay above 10; do not split it into helpers that take booleans the caller already knew. Nested or mixed-duty functions over 10 must split, and an extract must own its inputs. Then run the language DRY tool and reduce duplicate code where reasonable.
 - Use the language mutation tool's scan/count mode on changed and new source files as a hint that a module may mix jobs.
 - Split a source file when it has more than one job, before handing it off. Do not split a one-job module to chase a mutation-site count.
-- Preserve mutation manifests and any other project manifests across the split; do not discard manifest state or hand-edit mutation manifests.
+- Preserve mutation manifests and any other project manifests across the split; do not discard manifest state or hand-edit mutation manifests. Keep the manifest state under `.metrics/` (for example, move the manifest file to the new source's path) and do not commit it.
 
 ## Does Not Own
 - Do not run mutation tests.

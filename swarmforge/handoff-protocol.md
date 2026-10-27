@@ -137,6 +137,14 @@ move `refs/bugs/*` and `refs/identities/*` to and from a remote, so two
 machines or two harnesses can take turns on one task. Pushing the task branch
 (`git push origin swarm/<id>`) moves the work itself.
 
+Mutation manifests live in the git notes ref `refs/notes/mutate`, one note per
+saved commit. Notes travel only when pushed explicitly:
+`git push origin refs/notes/mutate`. To fetch them, fetch into a separate ref
+and merge: `git fetch origin refs/notes/mutate:refs/notes/mutate-origin`, then
+`git notes --ref=mutate merge refs/notes/mutate-origin`. A squash or rebase
+merge leaves the notes on commits the base branch does not reach, so the next
+mutation run is a full run.
+
 ## Audit
 
 `sf show <id>` prints the complete history: request, every question and

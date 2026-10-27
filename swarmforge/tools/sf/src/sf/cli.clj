@@ -29,6 +29,8 @@ Role commands
                                   record HEAD and move the task to the next stage
   ask <id> <text>                 record a question and stop: labels needs:operator
   review <id> [-m text]           ask the operator to approve the specification
+  manifest load|save|tested <id>  move mutation manifests between .metrics/ and
+                                  refs/notes/mutate; print their Tested: trailers
 
 Catalogue commands
   roles                           print the role catalogue in canonical order
@@ -68,6 +70,7 @@ Environment
    "approve" task/approve
    "reject" task/reject
    "finish" task/finish
+   "manifest" task/manifest
    "roles" print-roles
    "pipeline" print-roles
    "routes" (fn [_] (doseq [[name route] (config/named-routes)]

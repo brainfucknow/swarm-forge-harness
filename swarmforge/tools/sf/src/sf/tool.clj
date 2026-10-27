@@ -61,27 +61,38 @@ GitHub source at one local checkout instead of cloning.")
     "-" ""
     (shell/die "unknown rewrite '" rewrite "' in swarmforge/tools.conf")))
 
+(defn- launch
+  "The wrapper line that runs command. The gherkin-mutator wrapper keeps the
+  block of the --feature file in .metrics/gherkin/ between runs."
+  [rewrite command]
+  (if (= "gherkin" rewrite)
+    (-> (shell/template "gherkin-block.sh")
+        (str/replace "{{sf}}" (sq (str (fs/path (shell/repo-root) "swarmforge" "bin" "sf"))))
+        (str/replace "{{command}}" command)
+        str/trim-newline)
+    (str "exec " command)))
+
 (def ^:private speclj-dep "speclj/speclj {:mvn/version \"3.13.0\"}")
 
 (defn- clj-command [tool coordinate main]
   (case tool
-    "cloverage" (str "exec clojure -Sdeps " (sq (str "{:paths [\"src\" \"spec\" \"test\"] :deps {cloverage/cloverage {:mvn/version \"RELEASE\"} " speclj-dep "}}"))
+    "cloverage" (str "clojure -Sdeps " (sq (str "{:paths [\"src\" \"spec\" \"test\"] :deps {cloverage/cloverage {:mvn/version \"RELEASE\"} " speclj-dep "}}"))
                      " -M -m " main " -p src -s spec -s test -r speclj \"$@\"")
-    "speclj" (str "exec clojure -Sdeps " (sq (str "{:paths [\"src\" \"spec\" \"test\"] :deps {" speclj-dep "}}"))
+    "speclj" (str "clojure -Sdeps " (sq (str "{:paths [\"src\" \"spec\" \"test\"] :deps {" speclj-dep "}}"))
                   " -M -m " main " -c spec \"$@\"")
-    (str "exec clojure -Sdeps " (sq (str "{:deps {" coordinate " {:mvn/version \"RELEASE\"}}}"))
+    (str "clojure -Sdeps " (sq (str "{:deps {" coordinate " {:mvn/version \"RELEASE\"}}}"))
          " -M -m " main " \"$@\"")))
 
 (defn- install-one [tool]
   (let [{:keys [kind source task rewrite]} (spec-of tool)
         command (case kind
-                  "bb" (str "exec bb --config " (sq (str (fs/path (ensure-source source) "bb.edn"))) " " task " \"$@\"")
+                  "bb" (str "bb --config " (sq (str (fs/path (ensure-source source) "bb.edn"))) " " task " \"$@\"")
                   "clj" (clj-command tool source task)
-                  "local" (str "exec " (sq (str (fs/path (shell/repo-root) source))) " \"$@\"")
+                  "local" (str (sq (str (fs/path (shell/repo-root) source))) " \"$@\"")
                   (shell/die "unknown kind '" kind "' for " tool))
         path (wrapper-path tool)]
     (fs/create-dirs (bin-dir))
-    (spit path (str "#!/usr/bin/env bash\n" (rewrite-for rewrite) command "\n"))
+    (spit path (str "#!/usr/bin/env bash\n" (rewrite-for rewrite) (launch rewrite command) "\n"))
     (fs/set-posix-file-permissions path "rwxr-xr-x")
     (println (str "INSTALLED: " tool " " path))))
 

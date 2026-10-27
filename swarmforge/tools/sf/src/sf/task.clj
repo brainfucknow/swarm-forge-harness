@@ -5,6 +5,7 @@
             [sf.bug :as bug]
             [sf.config :as config]
             [sf.hook :as hook]
+            [sf.manifests :as manifests]
             [sf.shell :as shell]))
 
 (defn- git [dir & args]
@@ -43,11 +44,15 @@
     (when (str/blank? text) (shell/die complaint))
     text))
 
+(defn- existing-worktree [id dir]
+  (when-not (fs/directory? dir)
+    (shell/die "task worktree missing; run: sf start " (bug/short-id id)))
+  dir)
+
 (defn- committed-head
   "HEAD of the task worktree, which must exist and have no uncommitted changes."
   [id dir]
-  (when-not (fs/directory? dir)
-    (shell/die "task worktree missing; run: sf start " (bug/short-id id)))
+  (existing-worktree id dir)
   (when (seq (git dir "status" "--porcelain"))
     (shell/die "uncommitted changes in " dir "; commit first"))
   (git dir "rev-parse" "--short" "HEAD"))
@@ -170,8 +175,25 @@ Before running this command again:
     (println (str "ROUTE: " (bug/route id)))
     (println (str "BRANCH: " branch))
     (println (str "DIR: " dir))
+    (println (manifests/load! dir))
     (println "---")
     (print (bug/show id))))
+
+(defn manifest
+  "sf manifest load|save|tested <id>, and block-in|block-out <feature> for the
+  gherkin-mutator wrapper."
+  [[command arg]]
+  (case command
+    "block-in" (manifests/block-in arg)
+    "block-out" (manifests/block-out arg)
+    ("load" "save" "tested")
+    (let [id (bug/bug-id arg)
+          dir (existing-worktree id (worktree-of id))]
+      (case command
+        "load" (println (manifests/load! dir))
+        "save" (println (manifests/save! dir))
+        "tested" (run! println (manifests/tested dir))))
+    (shell/die "usage: sf manifest load|save|tested <id>")))
 
 (defn- next-in-route [route role]
   (second (drop-while #(not= role %) (config/route-list route))))
@@ -194,6 +216,7 @@ Before running this command again:
     (when (not= branch (branch-of id))
       (shell/die "worktree is on '" branch "', expected '" (branch-of id) "'"))
     (when-not audit-passed? (audit-gate id from head))
+    (manifests/save! dir)
     (bug/record id "type" "handoff" "from" from "to" to "branch" branch "commit" head
                 "files" (files-since-last-record id dir)
                 "summary" (bug/one-line (or (not-empty summary) (str from " work complete"))))

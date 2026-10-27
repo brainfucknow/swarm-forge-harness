@@ -47,3 +47,8 @@ After editing `roles.conf`, `routes.conf`, or `tiers.conf`, run `sf adapters`
 to regenerate the agent files under `.claude/agents/`, `.codex/agents/`, and
 `.github/agents/`. `sf check` validates the configuration files and the role
 prompts; `sf init` and `sf adapters` run it first and refuse a broken setup.
+
+Mutation manifests stay out of the tree, in the git notes ref
+`refs/notes/mutate`. `sf start` loads them into the task worktree's ignored
+`.metrics/` and `sf handoff` saves them; `sf manifest tested <id>` prints the
+`Tested:` trailers for the hardener's commit.
