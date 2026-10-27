@@ -166,7 +166,7 @@ swarmforge/
   bin/sf-tool  tools.conf        constitution tool installer and catalogue (sf tool ...)
   bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers (Babashka)
   languages/csharp.md            what each sf-cs command runs and prints
-  bin/sf-js  tools/javascript/   JavaScript/TypeScript tool wrapper and its tests (Babashka)
+  bin/sf-js  tools/javascript/   JavaScript/TypeScript tool wrapper, its features and acceptance runtime
   languages/javascript.md        what each sf-js command runs and prints
   tools/core/                    changed-line, CRAP, jscpd and Stryker readers shared by the tool wrappers
   roles.conf  routes.conf  tiers.conf   catalogue, routes, models
@@ -194,6 +194,8 @@ bash test/acceptance.sh
 bb --config swarmforge/tools/csharp/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn property
+swarmforge/bin/sf tool ensure gherkin-parser
+bb --config swarmforge/tools/javascript/bb.edn acceptance
 ```
 
 The first drives `sf` against a real git-bug in a scratch repository, the
@@ -203,6 +205,7 @@ tests (kept out of the unit specs), the fifth runs the Gherkin features in
 `test/features/` through `gherkin-parser` (`swarmforge/bin/sf tool ensure
 gherkin-parser`) and the generated acceptance tests, the sixth drives `sf-cs`
 against fixture reports and a fake `dotnet`, together with the shared
-`tools/core/` readers, and the last two test `sf-js`: unit tests against
-fixture reports (with dependency rules for `tools/`), then test.check
-properties of `sf-js` and the shared core. None pins prompt wording.
+`tools/core/` readers, and the last three test `sf-js`: unit tests against
+fixture reports (with dependency rules for `tools/`), test.check properties of
+`sf-js` and the shared core, then its Gherkin features through the Acceptance
+Pipeline with fake Node tools on PATH. None pins prompt wording.
