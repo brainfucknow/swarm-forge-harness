@@ -24,11 +24,15 @@ jobs:
         run: bash test/sf_test.sh
       - name: Test sf tool
         run: bash test/sf_tool_test.sh
+      - name: Unit specs for sf
+        run: bb --config swarmforge/tools/sf/bb.edn spec
+      - name: Property tests for sf
+        run: bb --config swarmforge/tools/sf/bb.edn property
+      - name: Acceptance tests for sf
+        run: |
+          swarmforge/bin/sf tool ensure gherkin-parser
+          bash test/acceptance.sh
       - name: Test sf-cs
         run: bb --config swarmforge/tools/csharp/bb.edn test
-      - name: Unit specs for sf
-        run: cd swarmforge/tools/sf && bb spec
-      - name: Property specs for sf
-        run: cd swarmforge/tools/sf && bb property
       - name: Acceptance for mutation manifests
         run: bash test/acceptance/manifests/run.sh

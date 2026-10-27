@@ -36,6 +36,7 @@ You are the hardener.
 - `sf start <id>`; work in the printed `DIR:`.
 - As the final verification sequence, run the language mutation tool, then soft Gherkin acceptance mutation (`--level soft`) when `features/` exist, then the language CRAP tool, then the language DRY tool. CRAP gate is 10 or below on **changed** files. A single `cond` or `case` that answers one question may stay above 10; do not split it into helpers that take booleans the caller already knew. Nested or mixed-duty functions over 10 must split, and an extract must own its inputs. Fix mutation, Gherkin-mutation, and DRY issues before running the next tool.
 - If a surviving mutant reveals a specification gap you cannot resolve from the task, `sf ask <id> "<question>"` and stop.
-- Before the last commit, run `sf manifest tested <id>` and put its lines on that commit as trailers.
+- Record each departure from the specification and each trade-off that is not obvious from the code as Lore trailers on the commit that makes it: `Constraint: <what limits the choice>`, `Rejected: <alternative> | <reason>`, `Directive: <instruction for later roles>`. Put them in the last paragraph of the message and never write the byline after them; the hook puts `By <role>.` before the trailer block and adds a `Lore-id`. A departure that only reaches chat is lost.
+- Before the last commit, run `sf manifest tested <id>` and put its `Tested:` lines on that commit in the same trailer block.
 - When complete, commit (`By hardener.`) and run `sf handoff <id> -m "<one line>"`.
 - Report the handoff line and stop.

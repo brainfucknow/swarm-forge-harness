@@ -1,7 +1,9 @@
 (ns sf.hook
-  "The commit-msg hook that adds the `By <role>.` byline in task worktrees."
+  "The commit-msg hook that adds the `By <role>.` byline and a Lore-id in task
+  worktrees."
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
+            [sf.lore :as lore]
             [sf.shell :as shell]))
 
 (def marker "# swarmforge commit-msg hook")
@@ -22,12 +24,32 @@
         hook (fs/path hooks "commit-msg")]
     (cond
       (seq hooks-path)
-      (println "HOOK: core.hooksPath is set; add the 'By <role>.' byline yourself")
+      (println "HOOK: core.hooksPath is set; run 'sf commit-msg <role> <file>' on each commit message")
 
       (and (fs/exists? hook) (not (str/includes? (slurp (str hook)) marker)))
-      (println "HOOK: existing commit-msg hook left alone; add the 'By <role>.' byline yourself")
+      (println "HOOK: existing commit-msg hook left alone; run 'sf commit-msg <role> <file>' on each commit message")
 
       :else
       (do (fs/create-dirs hooks)
           (spit (str hook) (body))
           (fs/set-posix-file-permissions hook "rwxr-xr-x")))))
+
+(defn- comment-char
+  "git's core.commentChar; # when it is not set or is auto, as git
+  interpret-trailers reads it."
+  []
+  (let [char (shell/chomp (:out (shell/run {} "git" "config" "--get" "core.commentChar")))]
+    (if (or (str/blank? char) (= "auto" char)) "#" char)))
+
+(defn commit-msg
+  "Adds the byline for role and a Lore-id to the commit message in file, as
+  sf.lore/sign-commit does. git interpret-trailers finds the trailer block as
+  git log reads it: a --- line in the message is text, not a patch divider."
+  [[role file]]
+  (when (or (str/blank? role) (str/blank? file))
+    (shell/die "commit-msg needs a role and a message file"))
+  (let [message (slurp file)
+        trailers (shell/lines (shell/must {:in message} "git" "interpret-trailers" "--parse" "--no-divider"))
+        signed (lore/sign-commit message (comment-char) role (keep lore/trailer-key trailers) lore/new-id)]
+    (when (not= signed message)
+      (spit file signed))))

@@ -35,5 +35,6 @@ You are the cleaner.
 - `sf start <id>`; work in the printed `DIR:`.
 - Keep refactors small enough to verify locally. Verify by running acceptance and unit tests.
 - If a cleanup would change behavior and you cannot tell which behavior is intended, `sf ask <id> "<question>"` and stop.
+- Record each departure from the specification and each trade-off that is not obvious from the code as Lore trailers on the commit that makes it: `Constraint: <what limits the choice>`, `Rejected: <alternative> | <reason>`, `Directive: <instruction for later roles>`. Put them in the last paragraph of the message and never write the byline after them; the hook puts `By <role>.` before the trailer block and adds a `Lore-id`. A departure that only reaches chat is lost.
 - When complete, commit (`By cleaner.`) and run `sf handoff <id> -m "<one line>"`.
 - Report the handoff line and stop.
