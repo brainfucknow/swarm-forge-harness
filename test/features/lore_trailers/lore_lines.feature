@@ -24,12 +24,7 @@ Feature: sf Lore lines
     And role "qa" committed "Verify\n\nTested: placement\nNot-tested: Windows\nCo-Authored-By: A <a@b>" in the task worktree as C3
     When I run "sf <command> ID" in the main checkout
     Then the exit status is 0
-    And the output ends with the lines
-      | LORE: C1 specifier Lore-id: L1                 |
-      | LORE: C1 specifier Constraint: keep the byline |
-      | LORE: C3 qa Lore-id: L3                        |
-      | LORE: C3 qa Tested: placement                  |
-      | LORE: C3 qa Not-tested: Windows                |
+    And the output ends with the lines "LORE: C1 specifier Lore-id: L1\nLORE: C1 specifier Constraint: keep the byline\nLORE: C3 qa Lore-id: L3\nLORE: C3 qa Tested: placement\nLORE: C3 qa Not-tested: Windows"
     And the output has no line containing "Tested: base"
 
     Examples:
@@ -42,8 +37,7 @@ Feature: sf Lore lines
     Given "Fix\n\nTested: x" was committed in the task worktree with the hook skipped as C1
     When I run "sf start ID" in the main checkout
     Then the exit status is 0
-    And the output ends with the lines
-      | LORE: C1 - Tested: x |
+    And the output ends with the lines "LORE: C1 - Tested: x"
 
   # sf Lore lines 3
   Scenario Outline: sf Lore lines 3: no Lore trailers add nothing
