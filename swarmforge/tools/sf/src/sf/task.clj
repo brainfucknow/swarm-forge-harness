@@ -5,7 +5,7 @@
             [sf.bug :as bug]
             [sf.config :as config]
             [sf.hook :as hook]
-            [sf.manifests :as manifests]
+            [sf.manifest-store :as store]
             [sf.shell :as shell]))
 
 (defn- git [dir & args]
@@ -175,7 +175,7 @@ Before running this command again:
     (println (str "ROUTE: " (bug/route id)))
     (println (str "BRANCH: " branch))
     (println (str "DIR: " dir))
-    (println (manifests/load! dir))
+    (println (store/load! dir))
     (println "---")
     (print (bug/show id))))
 
@@ -188,11 +188,11 @@ Before running this command again:
       (run! println (report (existing-worktree id (worktree-of id)))))))
 
 (def ^:private manifest-commands
-  {"load" (on-task-worktree (comp vector manifests/load!))
-   "save" (on-task-worktree (comp vector manifests/save!))
-   "tested" (on-task-worktree manifests/tested)
-   "block-in" #(manifests/block-in "." %)
-   "block-out" #(manifests/block-out "." %)})
+  {"load" (on-task-worktree (comp vector store/load!))
+   "save" (on-task-worktree (comp vector store/save!))
+   "tested" (on-task-worktree store/tested)
+   "block-in" #(store/block-in "." %)
+   "block-out" #(store/block-out "." %)})
 
 (defn manifest
   "sf manifest load|save|tested <id>, and block-in|block-out <feature> for the
@@ -223,7 +223,7 @@ Before running this command again:
     (when (not= branch (branch-of id))
       (shell/die "worktree is on '" branch "', expected '" (branch-of id) "'"))
     (when-not audit-passed? (audit-gate id from head))
-    (manifests/save! dir)
+    (store/save! dir)
     (bug/record id "type" "handoff" "from" from "to" to "branch" branch "commit" head
                 "files" (files-since-last-record id dir)
                 "summary" (bug/one-line (or (not-empty summary) (str from " work complete"))))

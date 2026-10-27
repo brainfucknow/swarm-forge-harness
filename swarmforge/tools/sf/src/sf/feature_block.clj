@@ -40,6 +40,20 @@
   [block-text text]
   (str (str/join "\n" (str/split-lines block-text)) "\n\n" text))
 
+(defn restored
+  "The feature text with block-text at its top, or nil when it has a block."
+  [block-text text]
+  (when-not (block-lines text)
+    (with-block block-text text)))
+
+(defn extracted
+  "The block of the feature text as text, and the feature text without it, or
+  nil when it has no block."
+  [text]
+  (when-let [lines (block-lines text)]
+    {:block (str (str/join "\n" lines) "\n")
+     :body (without-block text)}))
+
 (defn manifest-json
   "The manifest JSON of block lines, without the comment marks, or nil."
   [lines]

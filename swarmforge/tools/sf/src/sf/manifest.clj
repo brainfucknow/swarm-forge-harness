@@ -11,6 +11,11 @@
 (def ^:private clj-mutate-root ".metrics/mutate/")
 (def ^:private gherkin-root ".metrics/gherkin/")
 
+(defn saved-block-path
+  "Where the gherkin-mutator block of a feature is kept between runs."
+  [feature]
+  (str gherkin-root feature))
+
 (defn newest-copies
   "The copy of each path from the first note that holds it. notes are maps of
   path to content, newest commit first."

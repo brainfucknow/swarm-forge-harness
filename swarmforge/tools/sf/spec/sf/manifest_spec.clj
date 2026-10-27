@@ -2,6 +2,10 @@
   (:require [speclj.core :refer [describe it should= should-be-nil]]
             [sf.manifest :as manifest]))
 
+(describe "saved-block-path"
+  (it "keeps the block of a feature under .metrics/gherkin/"
+    (should= ".metrics/gherkin/test/features/x.feature" (manifest/saved-block-path "test/features/x.feature"))))
+
 (describe "newest-copies"
   (it "takes each path from the first note that holds it"
     (should= {"a" "new" "b" "old-b" "c" "c1"}

@@ -1,5 +1,8 @@
-{:paths ["src" "resources" "spec"]
+{:paths ["src" "resources" "spec" "property"]
  :deps {speclj/speclj {:mvn/version "3.12.2"}}
  :tasks {spec {:doc "Run the sf unit specs"
                :requires ([speclj.main :as speclj])
-               :task (apply speclj/-main "-c" "spec" *command-line-args*)}}}
+               :task (apply speclj/-main "-c" "spec" *command-line-args*)}
+         property {:doc "Run the sf property specs"
+                   :requires ([speclj.main :as speclj])
+                   :task (apply speclj/-main "-c" "property" *command-line-args*)}}}

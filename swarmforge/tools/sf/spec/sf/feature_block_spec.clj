@@ -46,6 +46,22 @@
     (let [feature (text "Feature: x")]
       (should= feature (block/without-block (block/with-block (apply text stamped-lines) feature))))))
 
+(describe "restored"
+  (it "puts the saved block at the top of a feature without one"
+    (should= (apply text (concat manifest-lines ["" "Feature: x"]))
+             (block/restored (apply text manifest-lines) (text "Feature: x"))))
+
+  (it "is nil when the feature has a block"
+    (should-be-nil (block/restored "# saved\n" (apply text (concat manifest-lines ["" "Feature: x"]))))))
+
+(describe "extracted"
+  (it "splits a feature into its block text and the rest"
+    (should= {:block (apply text stamped-lines) :body (text "Feature: x")}
+             (block/extracted (apply text (concat stamped-lines ["" "Feature: x"])))))
+
+  (it "is nil for a feature without a block"
+    (should-be-nil (block/extracted (text "Feature: x")))))
+
 (describe "manifest-json"
   (it "joins the manifest lines without their comment marks"
     (should= "{\"a\":1,\"b\":2}"

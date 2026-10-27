@@ -28,5 +28,7 @@ jobs:
         run: bb --config swarmforge/tools/csharp/bb.edn test
       - name: Unit specs for sf
         run: cd swarmforge/tools/sf && bb spec
+      - name: Property specs for sf
+        run: cd swarmforge/tools/sf && bb property
       - name: Acceptance for mutation manifests
         run: bash test/acceptance/manifests/run.sh

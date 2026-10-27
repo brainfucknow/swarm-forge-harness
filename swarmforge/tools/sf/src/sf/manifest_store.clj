@@ -1,4 +1,4 @@
-(ns sf.manifests
+(ns sf.manifest-store
   "Moves mutation manifests between a task worktree's .metrics/ and the git
   notes ref refs/notes/mutate, and the gherkin-mutator block between a feature
   file and .metrics/gherkin/."
@@ -85,28 +85,24 @@
   (manifest/tested-lines (unsaved dir)))
 
 (defn- saved-block-file [dir feature]
-  (fs/path dir manifest/root "gherkin" feature))
+  (str (fs/path dir (manifest/saved-block-path feature))))
 
 (defn block-in
   "Puts the saved gherkin-mutator block at the top of a feature without one.
   The feature path is relative to dir."
   [dir feature]
   (let [saved (saved-block-file dir feature)
-        file (fs/path dir feature)]
+        file (str (fs/path dir feature))]
     (when (and (fs/exists? saved) (fs/exists? file))
-      (let [text (slurp (str file))]
-        (when-not (feature-block/block-lines text)
-          (spit (str file) (feature-block/with-block (slurp (str saved)) text)))))))
+      (some->> (feature-block/restored (slurp saved) (slurp file)) (spit file)))))
 
 (defn block-out
   "Moves the gherkin-mutator block of a feature to .metrics/gherkin/<feature>.
   The feature path is relative to dir."
   [dir feature]
-  (let [file (fs/path dir feature)]
-    (when (fs/exists? file)
-      (let [text (slurp (str file))]
-        (when-let [lines (feature-block/block-lines text)]
-          (let [saved (saved-block-file dir feature)]
-            (fs/create-dirs (fs/parent saved))
-            (spit (str saved) (str (str/join "\n" lines) "\n"))
-            (spit (str file) (feature-block/without-block text))))))))
+  (let [file (str (fs/path dir feature))]
+    (when-let [{:keys [block body]} (and (fs/exists? file) (feature-block/extracted (slurp file)))]
+      (let [saved (saved-block-file dir feature)]
+        (fs/create-dirs (fs/parent saved))
+        (spit saved block)
+        (spit file body)))))
