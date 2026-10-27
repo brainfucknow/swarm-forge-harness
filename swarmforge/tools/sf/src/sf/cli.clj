@@ -4,6 +4,7 @@
   (:require [sf.adapters :as adapters]
             [sf.config :as config]
             [sf.dispatch :as dispatch]
+            [sf.hook :as hook]
             [sf.shell :as shell]
             [sf.task :as task]
             [sf.tool :as tool]))
@@ -40,6 +41,9 @@ Catalogue commands
   tool require|ensure|list|bin    install constitution tools project-locally (sf tool --help)
   check                           validate roles.conf, tiers.conf, routes.conf, tools.conf, role prompts
 
+Hook commands
+  commit-msg <role> <file>        add the byline and a Lore-id to a commit message (the commit-msg hook runs this)
+
 Environment
   SWARMFORGE_ROUTE     default route for `new` (default: feature, else every role)
   SWARMFORGE_ROLE      role name used for `from:` (default: the task's stage)
@@ -75,7 +79,8 @@ Environment
    "dispatch" dispatch/dispatch
    "run" dispatch/run
    "adapters" adapters/adapters
-   "check" (fn [_] (config/check))})
+   "check" (fn [_] (config/check))
+   "commit-msg" hook/commit-msg})
 
 (defn main [[command & args]]
   (cond
