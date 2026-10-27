@@ -1,7 +1,3 @@
-# acceptance-mutation-manifest-begin
-# {"version":1,"tested_at":"2026-10-26T16:32:07.058140096Z","feature_name":"sf-js dry","feature_path":"swarmforge/tools/javascript/features/dry.feature","background_hash":"5d2123b12eaf3ad0f317f89bdfa37ce12217b21f338f3cb49911179be913d719","implementation_hash":"sha256:4d409f244c07e5dac9c1fb0d35e1dadec81943db84bbc4fa06e6024f94462e03","scenarios":[{"index":1,"name":"sf-js dry 2: each listed clone names both sides and marks the changed one","scenario_hash":"19e2a3eb19b7058700b99ac05b71f0e9e4fccd702eae1efc6a6ce683bbe9c489","mutation_count":10,"result":{"Total":10,"Killed":10,"Survived":0,"Errors":0},"tested_at":"2026-10-26T16:17:02.296813096Z"},{"index":3,"name":"sf-js dry 4: jscpd runs on JavaScript and TypeScript with a JSON report in tmp/jscpd","scenario_hash":"a6544e70cd957b100c034701aa3746718a69f5e3a661dcfc500223dbd78261e0","mutation_count":11,"result":{"Total":11,"Killed":11,"Survived":0,"Errors":0},"tested_at":"2026-10-26T16:17:02.296813096Z"}]}
-# acceptance-mutation-manifest-end
-
 Feature: sf-js dry
 
   sf-js dry runs jscpd over JavaScript and TypeScript with a JSON report in

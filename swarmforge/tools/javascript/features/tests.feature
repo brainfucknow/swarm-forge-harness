@@ -1,7 +1,3 @@
-# acceptance-mutation-manifest-begin
-# {"version":1,"tested_at":"2026-10-26T16:36:36.812353307Z","feature_name":"sf-js tests","feature_path":"swarmforge/tools/javascript/features/tests.feature","background_hash":"e80ae66b77880d9562e2e1cf312f5b4c2e793f43500870531deafd3e85f2419e","implementation_hash":"sha256:aa0be03771959c81efd25c5ccbda4ab4e682bac3da3fc9184c3c283c737d3746","scenarios":[{"index":0,"name":"sf-js tests 1: package.json picks the runner","scenario_hash":"3751e24f56d0998791b498fe782ba0334a9e98363a8272ab0a0aadbd3054fe9c","mutation_count":12,"result":{"Total":12,"Killed":12,"Survived":0,"Errors":0},"tested_at":"2026-10-26T16:24:45.780917077Z"},{"index":3,"name":"sf-js tests 4: test leaves out property tests","scenario_hash":"ff423c12ebfc9df23aaedadc233482c6c474972ee51c8b0bb6aebe0781521a92","mutation_count":6,"result":{"Total":6,"Killed":6,"Survived":0,"Errors":0},"tested_at":"2026-10-26T16:24:45.780917077Z"}]}
-# acceptance-mutation-manifest-end
-
 Feature: sf-js tests
 
   sf-js test runs the unit and acceptance tests without property tests;

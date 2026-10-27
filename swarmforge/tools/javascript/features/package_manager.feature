@@ -1,7 +1,3 @@
-# acceptance-mutation-manifest-begin
-# {"version":1,"tested_at":"2026-10-26T16:35:54.553707706Z","feature_name":"sf-js package manager","feature_path":"swarmforge/tools/javascript/features/package_manager.feature","background_hash":"607aa3bceb07c08cfc83cde86938518306ba29ede7b0432895c3a8e7326f5b86","implementation_hash":"sha256:64386aad40782efd3f079e444f17e5b0b7dbb7a8cd77ad64d9c4713a7b868466","scenarios":[{"index":1,"name":"sf-js package manager 2: without the field the lockfile names the manager","scenario_hash":"1f0b4b756331f02d29a9cdaec7bf364cb2f91538e78c1676e2a660851b2accae","mutation_count":12,"result":{"Total":12,"Killed":12,"Survived":0,"Errors":0},"tested_at":"2026-10-26T16:23:35.523896487Z"},{"index":6,"name":"sf-js package manager 7: lockfiles of several managers without the field fail","scenario_hash":"f73e66c76a9cfa6272722f2f122163a80853ae0290c2a123b4cbe9c815db72cb","mutation_count":4,"result":{"Total":4,"Killed":4,"Survived":0,"Errors":0},"tested_at":"2026-10-26T16:23:35.523896487Z"}]}
-# acceptance-mutation-manifest-end
-
 Feature: sf-js package manager
 
   sf-js picks the package manager from package.json's packageManager field,
