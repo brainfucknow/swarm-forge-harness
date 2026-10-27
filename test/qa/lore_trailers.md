@@ -1,13 +1,13 @@
 # QA procedure: Lore trailers (task df7e1a7)
 
-End to end through the command line only: real `git`, real `git-bug`, and
+End to end through the command line only: real `git` and
 `swarmforge/bin/sf` as an operator and roles run them. Do not call `sf`
 internals. Turn sections 1-5 into a throwaway script under `./tmp/` and do
 not commit it. Section 6 is a reading check and is not scripted.
 
 ## Setup
 
-1. `export PATH=$HOME/.local/bin:$PATH` (git-bug).
+1. Remove git-bug from PATH, if it is there; sf does not need it.
 2. Make a scratch directory `S` under `./tmp/`. In it: `git init -b main`,
    copy the task worktree's `swarmforge/` in, commit it, run
    `swarmforge/bin/sf init`. Expect exit 0 and a `roles:` line.
@@ -56,7 +56,7 @@ prints `s1`: git still reads the trailers.
 
 ## 4. sf start and sf show
 
-1. Run `sf start ID` from `S`. Expect exit 0 and, after the comment history,
+1. Run `sf start ID` from `S`. Expect exit 0 and, after the records,
    one `LORE: <short sha> <role> <Key>: <value>` line per Lore trailer of
    every commit made in sections 1-3, oldest commit first, trailers in message
    order, `Lore-id` included. For example the coder commit gives
@@ -74,8 +74,8 @@ prints `s1`: git still reads the trailers.
 ## 5. After finish
 
 Move the first task to done (`sf route ID specifier`, `sf review ID`,
-`sf approve ID`), run `sf finish ID`, then `sf show ID`. Expect exit 0 and no
-`LORE:` line. On `main`, `git log --format='%(trailers:key=Tested)'` still
+`sf approve ID`), run `sf finish ID`, then `sf show ID`. Expect exit 0 and the
+same `LORE:` lines at the end as in section 4. On `main`, `git log --format='%(trailers:key=Tested)'` still
 shows the trailers.
 
 ## 6. Reading check (manual, not scripted)
