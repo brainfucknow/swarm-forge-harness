@@ -126,8 +126,8 @@
             (if (not= 6 (count row))
               (conj (vec twice) (str "tools.conf: '" name "' needs exactly <name> <kind> <source> <task> <rewrite> <needs>"))
               (cond-> (vec twice)
-                (not (#{"bb" "clj" "local"} kind)) (conj (str "tools.conf: '" name "' has unknown kind '" kind "'"))
-                (not (#{"mutate" "gherkin" "-"} rewrite)) (conj (str "tools.conf: '" name "' has unknown rewrite '" rewrite "'"))))))))
+                (not (#{"bb" "bbmain" "clj" "local"} kind)) (conj (str "tools.conf: '" name "' has unknown kind '" kind "'"))
+                (not (#{"mutate" "gherkin" "coverage" "-"} rewrite)) (conj (str "tools.conf: '" name "' has unknown rewrite '" rewrite "'"))))))))
 
 (defn check
   "Validates the catalogue files and prints a summary; stops on any problem."
