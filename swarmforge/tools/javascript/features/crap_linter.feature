@@ -1,3 +1,8 @@
+# mutation-stamp: sha256=ebdd49704c3a52c2913cbad5478d64d8a6b9806778a0da4d131317d127f01cc5
+# acceptance-mutation-manifest-begin
+# {"version":1,"tested_at":"2026-10-27T15:11:13.435103556Z","feature_name":"sf-js crap complexity source","feature_path":"swarmforge/tools/javascript/features/crap_linter.feature","background_hash":"ff8b6fe3e7b6fbd332cb25d5737a57cc6801079f0eab42d4a63c638c75627cbd","implementation_hash":"sha256:d44955bf02e6c64fd90ec5d37943cd7dc5c56f1405191a5e561e4a2672b830e9","scenarios":[{"index":4,"name":"sf-js crap complexity source 2: a linter listed in dependencies counts as listed","scenario_hash":"acdf46df5dafb808ed66706293e123651897daed596b19632cf5bb9a060647d6","mutation_count":2,"result":{"Total":2,"Killed":2,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:11:13.435103556Z"},{"index":8,"name":"sf-js crap complexity source 4: oxlint runs with sf-js's own config and a JSON report","scenario_hash":"7f87b470ead1ea6d70024a0ef295c4488680e92da36bf492da1ae09114f83cf8","mutation_count":4,"result":{"Total":4,"Killed":4,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:11:13.435103556Z"}]}
+# acceptance-mutation-manifest-end
+
 Feature: sf-js crap complexity source
 
   sf-js crap takes per-function complexity from oxlint when package.json

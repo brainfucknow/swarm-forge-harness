@@ -1,3 +1,8 @@
+# mutation-stamp: sha256=75e799d75ac9db5a55c9d9a065d36b8c404307bea1c583ed051afc96d3cab82b
+# acceptance-mutation-manifest-begin
+# {"version":1,"tested_at":"2026-10-27T15:11:45.381256974Z","feature_name":"sf-js crap selection","feature_path":"swarmforge/tools/javascript/features/crap_selection.feature","background_hash":"e3547442afeb44677f65e21ba28c73b81a1b3d4fcf227220c4b83241facad111","implementation_hash":"sha256:6dd5594346f8e10a36ec2b233c4fcfdafdf8d4e902539fbe6891d19c2c4d94ff","scenarios":[]}
+# acceptance-mutation-manifest-end
+
 Feature: sf-js crap selection
 
   sf-js crap lists the functions that span a changed line, from their first
@@ -77,28 +82,42 @@ Feature: sf-js crap selection
     And the output ends with the line "2 function(s), 1 over CRAP 10"
 
   # sf-js crap selection 4
-  Scenario Outline: sf-js crap selection 4: a function whose change only deletes lines is listed
-    Given lines <first> to <last> of "src/ledger.ts" are deleted on the task branch
+  Scenario: sf-js crap selection 4: deleting lines 5 to 6, inside deposit, lists only deposit
+    Given lines 5 to 6 of "src/ledger.ts" are deleted on the task branch
     When I run sf-js with "crap --base main"
-    Then the exit status is <status>
-    And the output mentions "<listed>"
-    And the output does not mention "<absent>"
-    And the output ends with the line "1 changed function(s), <over> over CRAP 10"
+    Then the exit status is 0
+    And the output mentions "deposit"
+    And the output does not mention "withdraw"
+    And the output ends with the line "1 changed function(s), 0 over CRAP 10"
 
-    Examples:
-      | first | last | listed   | absent   | status | over |
-      | 5     | 6    | deposit  | withdraw | 0      | 0    |
-      | 10    | 10   | withdraw | deposit  | 1      | 1    |
-      | 12    | 13   | withdraw | deposit  | 1      | 1    |
+  # sf-js crap selection 4
+  Scenario: sf-js crap selection 4: deleting line 10, the first line of withdraw, lists only withdraw
+    Given lines 10 to 10 of "src/ledger.ts" are deleted on the task branch
+    When I run sf-js with "crap --base main"
+    Then the exit status is 1
+    And the output mentions "withdraw"
+    And the output does not mention "deposit"
+    And the output ends with the line "1 changed function(s), 1 over CRAP 10"
+
+  # sf-js crap selection 4
+  Scenario: sf-js crap selection 4: deleting lines 12 to 13, inside withdraw, lists only withdraw
+    Given lines 12 to 13 of "src/ledger.ts" are deleted on the task branch
+    When I run sf-js with "crap --base main"
+    Then the exit status is 1
+    And the output mentions "withdraw"
+    And the output does not mention "deposit"
+    And the output ends with the line "1 changed function(s), 1 over CRAP 10"
 
   # sf-js crap selection 5
-  Scenario Outline: sf-js crap selection 5: a deletion between functions lists nothing
-    Given lines <first> to <last> of "src/ledger.ts" are deleted on the task branch
+  Scenario: sf-js crap selection 5: deleting line 9, between two functions, lists nothing
+    Given lines 9 to 9 of "src/ledger.ts" are deleted on the task branch
     When I run sf-js with "crap --base main"
     Then the exit status is 0
     And the output ends with the line "0 changed function(s), 0 over CRAP 10"
 
-    Examples:
-      | first | last |
-      | 9     | 9    |
-      | 18    | 19   |
+  # sf-js crap selection 5
+  Scenario: sf-js crap selection 5: deleting lines 18 to 19, after the last function, lists nothing
+    Given lines 18 to 19 of "src/ledger.ts" are deleted on the task branch
+    When I run sf-js with "crap --base main"
+    Then the exit status is 0
+    And the output ends with the line "0 changed function(s), 0 over CRAP 10"

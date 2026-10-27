@@ -1,3 +1,8 @@
+# mutation-stamp: sha256=e8a81f98a5979d316e858ff095ded2bf2be44f48666bdb668e9b20cace5aae5c
+# acceptance-mutation-manifest-begin
+# {"version":1,"tested_at":"2026-10-27T15:18:52.363680247Z","feature_name":"sf-js usage","feature_path":"swarmforge/tools/javascript/features/usage.feature","background_hash":"e623ff98a8de5b5f8ec8c6ccd0bbeb6eb4011d4c3252f9027eeec3bc67352124","implementation_hash":"sha256:549b2364c4276c851466e51de84f2787aba46019a95b5d033e63c372dd5f61b5","scenarios":[{"index":0,"name":"sf-js usage 1: help lists every command","scenario_hash":"caf488621985f89a978046d5cfb51698707e89f9246417359822f0a85bb9c7ae","mutation_count":14,"result":{"Total":14,"Killed":14,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:18:52.363680247Z"},{"index":1,"name":"sf-js usage 2: an unknown command fails","scenario_hash":"e24a73d54d82c42131edaad671865e7eaf1c4ab626f5e0f3f64817534b03660d","mutation_count":4,"result":{"Total":4,"Killed":4,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:18:52.363680247Z"},{"index":2,"name":"sf-js usage 3: a command that runs project tools needs package.json","scenario_hash":"361ddace81cd928cc7a3ecbe994202d6cf1be69ea5bc9247cc99704fe229851d","mutation_count":3,"result":{"Total":3,"Killed":3,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:18:52.363680247Z"},{"index":3,"name":"sf-js usage 4: a report path that looks like a boolean or a number is still a path","scenario_hash":"cbf62cd431b84012e4e150df7f650e4cc01df0ed77cee1624f958f7ac0f3ad98","mutation_count":4,"result":{"Total":4,"Killed":4,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:18:52.363680247Z"},{"index":4,"name":"sf-js usage 5: a base ref that looks like a number is still a ref","scenario_hash":"2b4d90a823c274fb67519f2225d233ddd4ff9d1b3b639ff6a9dcf83259089095","mutation_count":4,"result":{"Total":4,"Killed":4,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:18:52.363680247Z"}]}
+# acceptance-mutation-manifest-end
+
 Feature: sf-js usage
 
   sf-js exits 0 when clean, 1 on a finding, and 2 on a usage or input error,
@@ -27,12 +32,12 @@ Feature: sf-js usage
   Scenario Outline: sf-js usage 2: an unknown command fails
     When I run sf-js with "<command>"
     Then the exit status is 2
-    And the error output contains "sf-js: unknown command '<command>'"
+    And the error output contains "<message>"
 
     Examples:
-      | command |
-      | nope    |
-      | lint    |
+      | command | message                       |
+      | nope    | sf-js: unknown command 'nope' |
+      | lint    | sf-js: unknown command 'lint' |
 
   # sf-js usage 3
   Scenario Outline: sf-js usage 3: a command that runs project tools needs package.json
@@ -50,26 +55,26 @@ Feature: sf-js usage
   Scenario Outline: sf-js usage 4: a report path that looks like a boolean or a number is still a path
     Given the worktree has the lockfile "package-lock.json"
     And package.json lists "vitest" in devDependencies
-    When I run sf-js with "crap <options>"
+    When I run sf-js with "crap --all --report <report>"
     Then the exit status is 2
     And the error output contains "<message>"
 
     Examples:
-      | options              | message                            |
-      | --all --report false | no coverage-final.json under false |
-      | --all --report 42    | no coverage-final.json under 42    |
+      | report | message                            |
+      | false  | no coverage-final.json under false |
+      | 42     | no coverage-final.json under 42    |
 
   # sf-js usage 5
   Scenario Outline: sf-js usage 5: a base ref that looks like a number is still a ref
     Given the jscpd report has a 64-token clone of "src/a.ts" lines 1 to 3 and "lib/old.js" lines 10 to 12
     When I run sf-js with "dry --report-only --base <base>"
     Then the exit status is 2
-    And the error output contains "<base>"
+    And the error output contains "<message>"
 
     Examples:
-      | base |
-      | 123  |
-      | 7    |
+      | base | message                        |
+      | 123  | sf-js: git merge-base 123 HEAD |
+      | 7    | sf-js: git merge-base 7 HEAD   |
 
   # sf-js usage 6
   Scenario: sf-js usage 6: sf tool installs the sf-js wrapper

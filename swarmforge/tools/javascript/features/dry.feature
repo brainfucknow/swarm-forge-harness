@@ -1,3 +1,8 @@
+# mutation-stamp: sha256=42521e499f6fc22d6567cdbd6818e0997cde368dc1de1fa9551d6547999b480c
+# acceptance-mutation-manifest-begin
+# {"version":1,"tested_at":"2026-10-27T15:12:19.591886455Z","feature_name":"sf-js dry","feature_path":"swarmforge/tools/javascript/features/dry.feature","background_hash":"5d2123b12eaf3ad0f317f89bdfa37ce12217b21f338f3cb49911179be913d719","implementation_hash":"sha256:075ed3b6770b475c9f874b6ba7feba17b6b6d0aaf8a03c6fffd741f62cd4b60e","scenarios":[{"index":4,"name":"sf-js dry 2: each listed clone names both sides and marks the changed one","scenario_hash":"19e2a3eb19b7058700b99ac05b71f0e9e4fccd702eae1efc6a6ce683bbe9c489","mutation_count":10,"result":{"Total":10,"Killed":10,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:12:19.591886455Z"},{"index":6,"name":"sf-js dry 4: jscpd runs on JavaScript and TypeScript with a JSON report in tmp/jscpd","scenario_hash":"a6544e70cd957b100c034701aa3746718a69f5e3a661dcfc500223dbd78261e0","mutation_count":11,"result":{"Total":11,"Killed":11,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:12:19.591886455Z"},{"index":7,"name":"sf-js dry 5: --min-tokens sets the clone size","scenario_hash":"cbc4400488f896fc97d5e97839d8b5def65e592002d8d51dc77ddd9d90a9aa64","mutation_count":4,"result":{"Total":4,"Killed":4,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:12:19.591886455Z"}]}
+# acceptance-mutation-manifest-end
+
 Feature: sf-js dry
 
   sf-js dry runs jscpd over JavaScript and TypeScript with a JSON report in
@@ -10,19 +15,36 @@ Feature: sf-js dry
     And fake JavaScript tools on PATH
 
   # sf-js dry 1
-  Scenario Outline: sf-js dry 1: a clone is listed when a changed line falls inside it
+  Scenario: sf-js dry 1: a change on the clone's first line lists the clone
     Given the jscpd report has a 64-token clone of "src/ledger.ts" lines 13 to 15 and "src/legacy.ts" lines 30 to 32
-    And line <changed> of "src/ledger.ts" changed on the task branch
+    And line 13 of "src/ledger.ts" changed on the task branch
     When I run sf-js with "dry --report-only --base main"
-    Then the exit status is <status>
-    And the output ends with the line "<summary>"
+    Then the exit status is 1
+    And the output ends with the line "1 of 1 clone(s) touch changed lines"
 
-    Examples:
-      | changed | status | summary                             |
-      | 13      | 1      | 1 of 1 clone(s) touch changed lines |
-      | 15      | 1      | 1 of 1 clone(s) touch changed lines |
-      | 12      | 0      | 0 of 1 clone(s) touch changed lines |
-      | 16      | 0      | 0 of 1 clone(s) touch changed lines |
+  # sf-js dry 1
+  Scenario: sf-js dry 1: a change on the clone's last line lists the clone
+    Given the jscpd report has a 64-token clone of "src/ledger.ts" lines 13 to 15 and "src/legacy.ts" lines 30 to 32
+    And line 15 of "src/ledger.ts" changed on the task branch
+    When I run sf-js with "dry --report-only --base main"
+    Then the exit status is 1
+    And the output ends with the line "1 of 1 clone(s) touch changed lines"
+
+  # sf-js dry 1
+  Scenario: sf-js dry 1: a change on the line before the clone lists nothing
+    Given the jscpd report has a 64-token clone of "src/ledger.ts" lines 13 to 15 and "src/legacy.ts" lines 30 to 32
+    And line 12 of "src/ledger.ts" changed on the task branch
+    When I run sf-js with "dry --report-only --base main"
+    Then the exit status is 0
+    And the output ends with the line "0 of 1 clone(s) touch changed lines"
+
+  # sf-js dry 1
+  Scenario: sf-js dry 1: a change on the line after the clone lists nothing
+    Given the jscpd report has a 64-token clone of "src/ledger.ts" lines 13 to 15 and "src/legacy.ts" lines 30 to 32
+    And line 16 of "src/ledger.ts" changed on the task branch
+    When I run sf-js with "dry --report-only --base main"
+    Then the exit status is 0
+    And the output ends with the line "0 of 1 clone(s) touch changed lines"
 
   # sf-js dry 2
   Scenario Outline: sf-js dry 2: each listed clone names both sides and marks the changed one
@@ -68,12 +90,12 @@ Feature: sf-js dry
   # sf-js dry 5
   Scenario Outline: sf-js dry 5: --min-tokens sets the clone size
     When I run sf-js with "dry --base main --min-tokens <tokens>"
-    Then the command line that runs "jscpd" contains "--min-tokens <tokens>"
+    Then the command line that runs "jscpd" contains "--min-tokens <passed> "
 
     Examples:
-      | tokens |
-      | 30     |
-      | 120    |
+      | tokens | passed |
+      | 30     | 30     |
+      | 120    | 120    |
 
   # sf-js dry 6
   Scenario: sf-js dry 6: --report-only needs an earlier report

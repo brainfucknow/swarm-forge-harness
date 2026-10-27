@@ -1,3 +1,8 @@
+# mutation-stamp: sha256=b19981a730347867a8c261d37d29d21121a928d2ee66d6e8dd426800dff1b54a
+# acceptance-mutation-manifest-begin
+# {"version":1,"tested_at":"2026-10-27T15:10:18.917670896Z","feature_name":"sf-js coverage","feature_path":"swarmforge/tools/javascript/features/coverage.feature","background_hash":"e80ae66b77880d9562e2e1cf312f5b4c2e793f43500870531deafd3e85f2419e","implementation_hash":"sha256:2c40f573896b8643fde62e6da50c6c5824348e3e15e572c12b7b19bf3181083a","scenarios":[{"index":0,"name":"sf-js coverage 1: the runner writes Istanbul JSON under tmp/coverage","scenario_hash":"97b912652bcbd4e4c657a4ccad3f0fd30ee9f73412f49567ee0d01a6fb5c9cdb","mutation_count":27,"result":{"Total":27,"Killed":27,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:10:18.917670896Z"},{"index":1,"name":"sf-js coverage 2: a run that writes no report fails, even over a stale one","scenario_hash":"63e0af163412a363c40aa4427a5e3c8cb7a261be8df0f5d2cdf90bb26bd3ff96","mutation_count":2,"result":{"Total":2,"Killed":2,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:10:18.917670896Z"},{"index":2,"name":"sf-js coverage 3: failing tests exit 1","scenario_hash":"249a36b702db32d8e648ced2ff9259620285011417c366cd3bf7cc2bcbd268dd","mutation_count":2,"result":{"Total":2,"Killed":2,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:10:18.917670896Z"}]}
+# acceptance-mutation-manifest-end
+
 Feature: sf-js coverage
 
   sf-js coverage runs the tests without property tests and writes Istanbul
