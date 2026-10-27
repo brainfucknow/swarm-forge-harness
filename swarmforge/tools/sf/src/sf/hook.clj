@@ -24,10 +24,10 @@
         hook (fs/path hooks "commit-msg")]
     (cond
       (seq hooks-path)
-      (println "HOOK: core.hooksPath is set; add the 'By <role>.' byline yourself")
+      (println "HOOK: core.hooksPath is set; run 'sf commit-msg <role> <file>' on each commit message")
 
       (and (fs/exists? hook) (not (str/includes? (slurp (str hook)) marker)))
-      (println "HOOK: existing commit-msg hook left alone; add the 'By <role>.' byline yourself")
+      (println "HOOK: existing commit-msg hook left alone; run 'sf commit-msg <role> <file>' on each commit message")
 
       :else
       (do (fs/create-dirs hooks)
