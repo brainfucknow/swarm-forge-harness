@@ -1,8 +1,8 @@
 # sf-js acceptance features
 
 Gherkin for `swarmforge/bin/sf-js` (task 0306e88; oxlint as the complexity
-source in task 5680706). Each feature drives the real `sf-js` command in a
-scratch git repository with fake `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`
+source in task 5680706; oxlint analysis errors in task 5f9a812). Each
+feature drives the real `sf-js` command in a scratch git repository with fake `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`
 and `bunx` on PATH. The fakes record their arguments, exit with a chosen
 status, and write the reports a scenario sets up. The real tools appear only
 in the QA procedure (`../qa/sf-js.md`).
@@ -34,6 +34,8 @@ in the QA procedure (`../qa/sf-js.md`).
 | `ESLint reports a non-fatal "M" at line N of "F"` | The same message with severity 1, no `fatal` field and no `ruleId`. |
 | `oxlint reports "NAME" at line N of "F" with complexity C` | The fake oxlint's report holds a diagnostic with `"code": "eslint(complexity)"`, `"filename": "F"` (relative to the worktree root), one label whose span has `"line": N`, and the message ``function `NAME` has a complexity of C. Maximum allowed is 0.`` For `"(anonymous)"` it is `function has a complexity of C. Maximum allowed is 0.` |
 | `oxlint reports "M" with code "K" at line N of "F"` | The same diagnostic with message `M` and code `K`. |
+| `oxlint reports an error "M" at line N of "F"` | The fake oxlint's report holds a diagnostic with no `code`, `"severity": "error"`, message `M`, `"filename": "F"` (relative to the worktree root) and one label whose span has `"line": N`, as oxlint reports a file it could not parse. |
+| `oxlint reports an error "M" with no file` | The fake oxlint's report holds a diagnostic with no `code`, `"severity": "error"`, message `M`, no `filename` and empty `labels`, as oxlint reports a file it could not open. |
 | `Istanbul covers K of S statements of "NAME" on lines A to B of "F"` | `tmp/coverage/coverage-final.json` has a function `NAME` spanning lines A to B of `F`. It holds S statements of its own, K of them with a hit count above 0. The function's own hit count is above 0 when K is. |
 | `Istanbul counts N calls of "NAME" on lines A to B of "F" with no statements` | The same, with no statements and a function hit count of N. |
 | `the coverage report is moved to "D"` | The coverage report is moved to `D/coverage-final.json`. |
