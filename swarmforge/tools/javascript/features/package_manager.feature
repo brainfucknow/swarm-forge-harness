@@ -11,18 +11,18 @@ Feature: sf-js package manager
 
   # sf-js package manager 1
   Scenario Outline: sf-js package manager 1: the packageManager field names the manager
-    Given package.json declares packageManager "<declared>"
+    Given package.json declares packageManager "<manager>@1.0.0"
     And the worktree has the lockfile "<lockfile>"
     When I run sf-js with "test"
     Then the exit status is 0
     And sf-js ran "<command>"
 
     Examples:
-      | declared   | lockfile          | command                     |
-      | npm@10.8.2 | package-lock.json | npx --no-install vitest run |
-      | pnpm@9.1.0 | pnpm-lock.yaml    | pnpm exec vitest run        |
-      | yarn@4.5.0 | yarn.lock         | yarn vitest run             |
-      | bun@1.1.30 | bun.lock          | bunx vitest run             |
+      | manager | lockfile          | command                     |
+      | npm     | package-lock.json | npx --no-install vitest run |
+      | pnpm    | pnpm-lock.yaml    | pnpm exec vitest run        |
+      | yarn    | yarn.lock         | yarn vitest run             |
+      | bun     | bun.lock          | bunx vitest run             |
 
   # sf-js package manager 2
   Scenario Outline: sf-js package manager 2: without the field the lockfile names the manager
@@ -42,53 +42,53 @@ Feature: sf-js package manager
 
   # sf-js package manager 3
   Scenario Outline: sf-js package manager 3: the declared manager's lockfile wins over other lockfiles
-    Given package.json declares packageManager "<declared>"
+    Given package.json declares packageManager "<manager>@1.0.0"
     And the worktree has the lockfile "<lockfile>"
-    And the worktree has the lockfile "<other>"
+    And the worktree has the lockfile "package-lock.json"
     When I run sf-js with "test"
     Then the exit status is 0
     And sf-js ran "<command>"
 
     Examples:
-      | declared   | lockfile       | other             | command              |
-      | pnpm@9.1.0 | pnpm-lock.yaml | yarn.lock         | pnpm exec vitest run |
-      | yarn@4.5.0 | yarn.lock      | package-lock.json | yarn vitest run      |
+      | manager | lockfile       | command              |
+      | pnpm    | pnpm-lock.yaml | pnpm exec vitest run |
+      | yarn    | yarn.lock      | yarn vitest run      |
 
   # sf-js package manager 4
   Scenario Outline: sf-js package manager 4: a missing lockfile fails
-    Given package.json declares packageManager "<declared>"
+    Given package.json declares packageManager "<manager>@1.0.0"
     When I run sf-js with "<command>"
     Then the exit status is 2
-    And the error output contains "no lockfile"
-    And sf-js did not run "<tool>"
+    And the error output contains "<message>"
+    And sf-js ran nothing
 
     Examples:
-      | declared   | command  | tool    |
-      | pnpm@9.1.0 | test     | vitest  |
-      | npm@10.8.2 | property | vitest  |
-      | bun@1.1.30 | mutate   | stryker |
+      | manager | command  | message                                              |
+      | pnpm    | test     | no lockfile (pnpm-lock.yaml)                         |
+      | npm     | property | no lockfile (npm-shrinkwrap.json, package-lock.json) |
+      | bun     | mutate   | no lockfile (bun.lock, bun.lockb)                    |
 
   # sf-js package manager 5
   Scenario: sf-js package manager 5: no field and no lockfile fails
     When I run sf-js with "test"
     Then the exit status is 2
     And the error output contains "no lockfile"
-    And sf-js did not run "vitest"
+    And sf-js ran nothing
 
   # sf-js package manager 6
   Scenario Outline: sf-js package manager 6: a lockfile of another manager fails
-    Given package.json declares packageManager "<declared>"
+    Given package.json declares packageManager "<manager>@1.0.0"
     And the worktree has the lockfile "<lockfile>"
     When I run sf-js with "test"
     Then the exit status is 2
-    And the error output contains "packageManager names <manager> but the lockfile is <lockfile>"
-    And sf-js did not run "vitest"
+    And the error output contains "<message>"
+    And sf-js ran nothing
 
     Examples:
-      | declared   | manager | lockfile          |
-      | pnpm@9.1.0 | pnpm    | yarn.lock         |
-      | npm@10.8.2 | npm     | bun.lock          |
-      | yarn@4.5.0 | yarn    | package-lock.json |
+      | manager | lockfile          | message                                                         |
+      | pnpm    | yarn.lock         | packageManager names pnpm but the lockfile is yarn.lock         |
+      | npm     | bun.lock          | packageManager names npm but the lockfile is bun.lock           |
+      | yarn    | package-lock.json | packageManager names yarn but the lockfile is package-lock.json |
 
   # sf-js package manager 7
   Scenario Outline: sf-js package manager 7: lockfiles of several managers without the field fail
@@ -97,7 +97,7 @@ Feature: sf-js package manager
     When I run sf-js with "test"
     Then the exit status is 2
     And the error output contains "lockfiles for several package managers: <first>, <second>"
-    And sf-js did not run "vitest"
+    And sf-js ran nothing
 
     Examples:
       | first             | second         |
@@ -110,10 +110,10 @@ Feature: sf-js package manager
     And the worktree has the lockfile "package-lock.json"
     When I run sf-js with "test"
     Then the exit status is 2
-    And the error output contains "unknown packageManager '<declared>'"
-    And sf-js did not run "vitest"
+    And the error output contains "<message>"
+    And sf-js ran nothing
 
     Examples:
-      | declared   |
-      | deno@2.0.0 |
-      | cnpm@9.0.0 |
+      | declared   | message                             |
+      | deno@2.0.0 | unknown packageManager 'deno@2.0.0' |
+      | cnpm@9.0.0 | unknown packageManager 'cnpm@9.0.0' |

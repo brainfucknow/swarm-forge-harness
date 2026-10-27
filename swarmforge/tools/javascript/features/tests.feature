@@ -34,16 +34,16 @@ Feature: sf-js tests
 
   # sf-js tests 3
   Scenario Outline: sf-js tests 3: no runner in package.json fails
-    Given package.json lists "<package>" in devDependencies
+    Given package.json lists "mocha" in devDependencies
     When I run sf-js with "<command>"
     Then the exit status is 2
     And the error output contains "no test runner (vitest or jest) in package.json"
 
     Examples:
-      | package | command  |
-      | mocha   | test     |
-      | ava     | property |
-      | mocha   | coverage |
+      | command  |
+      | test     |
+      | property |
+      | coverage |
 
   # sf-js tests 4
   Scenario Outline: sf-js tests 4: test leaves out property tests
@@ -62,12 +62,12 @@ Feature: sf-js tests
     Given package.json lists "<runner>" in devDependencies
     When I run sf-js with "test <extra>"
     Then the exit status is 0
-    And the command line that runs "<runner>" ends with "<extra>"
+    And the command line that runs "<runner>" ends with " <passed>"
 
     Examples:
-      | runner | extra          |
-      | vitest | --reporter=dot |
-      | jest   | --ci --silent  |
+      | runner | extra          | passed         |
+      | vitest | --reporter=dot | --reporter=dot |
+      | jest   | --ci --silent  | --ci --silent  |
 
   # sf-js tests 6
   Scenario Outline: sf-js tests 6: property runs only property tests
@@ -76,23 +76,24 @@ Feature: sf-js tests
     Then the exit status is 0
     And sf-js ran "<command>"
     And the command line that runs "<runner>" contains "<pattern>"
-    And the command line that runs "<runner>" does not contain "<flag>"
+    And the command line that runs "<runner>" does not contain "--exclude"
+    And the command line that runs "<runner>" does not contain "--testPathIgnorePatterns"
 
     Examples:
-      | runner | command                     | pattern            | flag                     |
-      | vitest | npx --no-install vitest run | .property.test.    | --exclude                |
-      | jest   | npx --no-install jest       | \.property\.test\. | --testPathIgnorePatterns |
+      | runner | command                     | pattern            |
+      | vitest | npx --no-install vitest run | .property.test.    |
+      | jest   | npx --no-install jest       | \.property\.test\. |
 
   # sf-js tests 7
   Scenario Outline: sf-js tests 7: a failing runner exits 1
     Given package.json lists "<runner>" in devDependencies
-    And the fake <runner> exits with status <runner_status>
+    And the fake <runner> exits with status 1
     When I run sf-js with "<command>"
-    Then the exit status is <status>
+    Then the exit status is 1
 
     Examples:
-      | runner | command  | runner_status | status |
-      | vitest | test     | 1             | 1      |
-      | vitest | property | 1             | 1      |
-      | jest   | test     | 1             | 1      |
-      | jest   | property | 0             | 0      |
+      | runner | command  |
+      | vitest | test     |
+      | vitest | property |
+      | jest   | test     |
+      | jest   | property |

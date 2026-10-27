@@ -1,11 +1,25 @@
 # sf-js acceptance features
 
 Gherkin for `swarmforge/bin/sf-js` (task 0306e88; oxlint as the complexity
-source in task 5680706; oxlint analysis errors in task 5f9a812). Each
+source in task 5680706; oxlint analysis errors in task 5f9a812; examples
+tightened against Gherkin mutation in task 5bbff27). Each
 feature drives the real `sf-js` command in a scratch git repository with fake `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`
 and `bunx` on PATH. The fakes record their arguments, exit with a chosen
 status, and write the reports a scenario sets up. The real tools appear only
 in the QA procedure (`../qa/sf-js.md`).
+
+## Example tables
+
+`gherkin-mutator` changes one example cell at a time, so the tables follow
+two rules.
+
+- When a Then step shows an input back (an error that names the command, a
+  passed-through argument), the expected text has its own column, even when
+  it repeats the input. A mutated input then no longer matches it.
+- A value whose every small change gives the same result (a line inside or
+  outside a range, a file that is not a source, a runner exit status above
+  0, a version after `@`) is not a parameter. Such cases are plain
+  Scenarios that share the outline's index, or a fixed value in the step.
 
 ## Step meanings
 
