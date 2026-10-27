@@ -1,8 +1,3 @@
-# mutation-stamp: sha256=8de7840fbf3396cfd333e37f9784fd3759443dc2d0d656cda5f9d3b2707694f7
-# acceptance-mutation-manifest-begin
-# {"version":1,"tested_at":"2026-10-26T19:57:10.271160186Z","feature_name":"sf-js crap selection","feature_path":"swarmforge/tools/javascript/features/crap_selection.feature","background_hash":"e3547442afeb44677f65e21ba28c73b81a1b3d4fcf227220c4b83241facad111","implementation_hash":"sha256:80cf022b1e759aaf536b6ffac4f45d1037329a87e4894a144f0d44ef56f369ab","scenarios":[]}
-# acceptance-mutation-manifest-end
-
 Feature: sf-js crap selection
 
   sf-js crap lists the functions that span a changed line, from their first

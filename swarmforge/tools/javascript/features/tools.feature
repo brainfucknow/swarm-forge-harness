@@ -1,8 +1,3 @@
-# mutation-stamp: sha256=9cfb4f414725cd4b3cbec2dcf303c9c44bc00a4dc9a800b65eeb0b04fb4ccede
-# acceptance-mutation-manifest-begin
-# {"version":1,"tested_at":"2026-10-26T19:56:59.989654893Z","feature_name":"sf-js tools","feature_path":"swarmforge/tools/javascript/features/tools.feature","background_hash":"e80ae66b77880d9562e2e1cf312f5b4c2e793f43500870531deafd3e85f2419e","implementation_hash":"sha256:e7a79043fb1b62c6ff7ff9c33f029b0ac07890a382fb25e4187a1e9fdcc99cd8","scenarios":[{"index":2,"name":"sf-js tools 1: missing tool packages are added as devDependencies","scenario_hash":"d1af68e205cc9f6d6ac1cdd3f402d3ffc7f0c0325bec26cc1a70185668292dea","mutation_count":12,"result":{"Total":12,"Killed":12,"Survived":0,"Errors":0},"tested_at":"2026-10-26T19:51:16.162769366Z"},{"index":7,"name":"sf-js tools 3: nothing is added when every tool package is listed","scenario_hash":"0c590d0bd8235cad1b819c1bb02a139e3614c973b750b19a89873f8933ceeead","mutation_count":2,"result":{"Total":2,"Killed":2,"Survived":0,"Errors":0},"tested_at":"2026-10-26T19:51:16.162769366Z"}]}
-# acceptance-mutation-manifest-end
-
 Feature: sf-js tools
 
   sf-js tools checks that node and the package manager are on PATH, adds the

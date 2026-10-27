@@ -1,7 +1,3 @@
-# acceptance-mutation-manifest-begin
-# {"version":1,"tested_at":"2026-10-26T16:34:46.596399759Z","feature_name":"sf-js mutate","feature_path":"swarmforge/tools/javascript/features/mutate.feature","background_hash":"9318ee40a2565fae6d1fa410d1e4bab0659cfbdcc1bbf09c0c82fd401e6270c4","implementation_hash":"sha256:f200c3be7cb602ed0ad36e23c5610e62fc16c2d1c32c23fad46046150f71c544","scenarios":[{"index":10,"name":"sf-js mutate 11: the score leaves out Ignored, CompileError and RuntimeError mutants","scenario_hash":"ffdf3813cf0edd66a6bea9e3106e1624f66315cac45e9e54ec5fa32e6e4050c7","mutation_count":36,"result":{"Total":36,"Killed":36,"Survived":0,"Errors":0},"tested_at":"2026-10-26T16:22:00.060803841Z"}]}
-# acceptance-mutation-manifest-end
-
 Feature: sf-js mutate
 
   sf-js mutate runs StrykerJS through the package manager on the task's
