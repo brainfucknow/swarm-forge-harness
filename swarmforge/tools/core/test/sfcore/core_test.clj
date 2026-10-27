@@ -97,6 +97,19 @@
   (is (true? (shell/available? "bb")))
   (is (false? (shell/available? "no-such-command-xyz"))))
 
+(deftest capture-shows-the-command-and-keeps-its-output
+  (let [printed (with-out-str (is (= {:exit 3 :out "report\n"}
+                                     (shell/capture "bash" ["-c" "echo report; exit 3"]))))]
+    (is (= "$ bash -c echo report; exit 3\n" printed)))
+  (is (thrown-with-msg? Exception #"no-such-command-xyz"
+                        (with-out-str (shell/capture "no-such-command-xyz" [])))))
+
+(deftest warnings-go-to-stderr
+  (let [err (java.io.StringWriter.)
+        out (with-out-str (binding [*err* err] (shell/warn "sf-x" "look here")))]
+    (is (= "" out))
+    (is (= "sf-x: warning: look here\n" (str err)))))
+
 ;; Git, in scratch repositories.
 
 (defn- sh [dir & args]

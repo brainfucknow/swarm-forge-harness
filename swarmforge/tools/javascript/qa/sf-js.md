@@ -2,7 +2,7 @@
 
 This procedure runs `swarmforge/bin/sf-js` from the command line against
 small real JavaScript and TypeScript projects. It uses the real tools:
-Vitest, Jest, tsc, ESLint, jscpd and StrykerJS. Check only what a user sees:
+Vitest, Jest, tsc, oxlint, ESLint, jscpd and StrykerJS. Check only what a user sees:
 the exit status, stdout, stderr, the printed `$ ` command lines, and files
 under the project. Do not call sf-js internals.
 
@@ -23,20 +23,22 @@ the project root with `--base main` unless the step says otherwise.
 
 ### P1: `tmp/qa/vitest-ts` (npm, Vitest, TypeScript)
 
-- `package.json` with `"type": "module"`, no `packageManager` field, and `vitest` in devDependencies. Run `npm install` so that `package-lock.json` exists.
+- `package.json` with `"type": "module"`, no `packageManager` field, and `vitest` and `typescript@<7` in devDependencies. With oxlint nothing holds `typescript` back, and `sf-js tools` would otherwise add the latest one, which StrykerJS may not run. Run `npm install` so that `package-lock.json` exists.
 - A `tsconfig.json` with `"strict": true`, `"noEmit": true` and `"include": ["src"]`.
 - `src/ledger.ts` exports `deposit(total, amount)` (one statement) and `withdraw(total, amount, overdraft)`. `withdraw` has two `if` branches and throws on an overdraft that is not allowed. One blank line follows `deposit`, then a comment line `// withdraw` directly above `withdraw`'s first line.
 - `src/ledger.test.ts` tests `deposit` and only the happy path of `withdraw`.
 - `src/ledger.property.test.ts` holds one fast-check property on `deposit`. Its test name is `PROPERTY-ONLY`.
 - `src/legacy.ts` holds a 20-line block of code.
-- `eslint.config.js` contains only `throw new Error("project ESLint config was loaded")`. This proves that sf-js uses its own ESLint config.
+- package.json lists neither `oxlint` nor `eslint`, so sf-js uses oxlint for complexity.
+- `.oxlintrc.json` at the root and `src/.oxlintrc.json` each hold `{"rules": {"eslint/complexity": "off"}}`. If sf-js read either one, it would get no complexity. This proves that sf-js uses its own oxlint config and skips nested ones.
 
 ### P2: `tmp/qa/jest-js` (pnpm, Jest, plain JavaScript)
 
-- `package.json` with `"packageManager": "pnpm@<installed pnpm version>"`, and `jest` and `typescript` in devDependencies, `typescript` pinned to the range `typescript-eslint` declares as its peer (pnpm would otherwise take a newer `typescript` than typescript-eslint accepts). Run `pnpm install` so that `pnpm-lock.yaml` exists.
+- `package.json` with `"packageManager": "pnpm@<installed pnpm version>"`, and `jest`, `eslint` and `typescript` in devDependencies, `typescript` pinned to the range `typescript-eslint` declares as its peer (pnpm would otherwise take a newer `typescript` than typescript-eslint accepts). Run `pnpm install` so that `pnpm-lock.yaml` exists.
 - No `tsconfig.json`.
 - `src/cart.js` (CommonJS) exports `total(items)` with one `if`.
 - `src/cart.test.js` and `src/cart.property.test.js`, the second one fast-check.
+- `eslint.config.js` contains only `throw new Error("project ESLint config was loaded")`. This proves that sf-js uses its own ESLint config.
 
 ## QA-1 Help and usage
 
@@ -57,9 +59,9 @@ Work on a throwaway copy of P1, `tmp/qa/pm`.
 
 ## QA-3 Tools (P1, P2)
 
-1. In P1, `$SFJS tools` exits 0. It prints `$ npm install --save-dev` followed by the missing packages in sorted order. Afterwards devDependencies in `package.json` hold all of these: `vitest`, `@vitest/coverage-v8`, `typescript`, `eslint`, `typescript-eslint`, `@stryker-mutator/core`, `@stryker-mutator/vitest-runner`, `@stryker-mutator/typescript-checker` and `fast-check`. A `$ npx --yes jscpd@4 --version` line is printed.
+1. In P1, `$SFJS tools` exits 0. It prints `$ npm install --save-dev` followed by the missing packages in sorted order. Afterwards devDependencies in `package.json` hold all of these: `vitest`, `@vitest/coverage-v8`, `typescript`, `oxlint`, `@stryker-mutator/core`, `@stryker-mutator/vitest-runner`, `@stryker-mutator/typescript-checker` and `fast-check`. They hold neither `eslint` nor `typescript-eslint`. A `$ npx --yes jscpd@4 --version` line is printed.
 2. Run `$SFJS tools` in P1 again. It exits 0, prints `all JavaScript tools present`, and prints no `npm install` line.
-3. In P2, `$SFJS tools` exits 0 and prints `$ pnpm add --save-dev`. devDependencies now hold `@stryker-mutator/jest-runner` and `typescript`. They hold neither `vitest` nor `@stryker-mutator/typescript-checker`.
+3. In P2, `$SFJS tools` exits 0 and prints `$ pnpm add --save-dev`. devDependencies now hold `@stryker-mutator/jest-runner`, `typescript` and `typescript-eslint`. They hold none of `vitest`, `@stryker-mutator/typescript-checker` and `oxlint`.
 4. Run with a PATH that has no `node` (for example `env PATH=/usr/bin:/bin $SFJS tools`, provided node is not in those directories). It exits 2, stderr has `missing on PATH: node`, and nothing is installed.
 
 ## QA-4 Tests and typecheck (P1)
@@ -78,8 +80,8 @@ Work on a throwaway copy of P1, `tmp/qa/pm`.
 ## QA-6 Coverage and CRAP (P1)
 
 1. `$SFJS coverage` exits 0 and prints `coverage written to tmp/coverage/coverage-final.json`. The file exists and is Istanbul JSON: each file's entry has `fnMap`, `statementMap`, `s` and `f`.
-2. With no change since `main`, `$SFJS crap --base main` exits 0 and ends with `0 changed function(s), 0 over CRAP 10`. It does not fail on the throwing `eslint.config.js`.
-3. On `swarm/qa`, give `withdraw` four more `if` branches that the tests do not reach, and commit. Run `$SFJS coverage`, then `$SFJS crap --base main`. It exits 1. It lists an `OVER crap` line for `src/ledger.ts:<line> withdraw` with `cc` of 7 or more and coverage below 100%. It does not list `deposit`. The last line reads `1 changed function(s), 1 over CRAP 10`.
+2. With no change since `main`, `$SFJS crap --base main` exits 0 and ends with `0 changed function(s), 0 over CRAP 10`. It runs no linter, so it prints no `$ ` line.
+3. On `swarm/qa`, give `withdraw` four more `if` branches that the tests do not reach, and commit. Run `$SFJS coverage`, then `$SFJS crap --base main`. It exits 1. It lists an `OVER crap` line for `src/ledger.ts:<line> withdraw` with `cc` of 7 or more and coverage below 100%. It does not list `deposit`. The last line reads `1 changed function(s), 1 over CRAP 10`. It prints a `$ npx --no-install oxlint` line and no `eslint` line, and prints no oxlint JSON (stdout does not contain `"diagnostics"`). The two `.oxlintrc.json` files did not hide it.
 4. Add tests that cover every branch. Rerun coverage and crap. The `withdraw` line now starts `ok`, and the run exits 0 when the CRAP is 10 or below. If it is not, split the function and check again.
 5. `$SFJS crap --all` lists `deposit` as well, worst CRAP first, and ends with `N function(s), M over CRAP 10`.
 6. Change an anonymous arrow function, for example a `.map((x) => …)` callback, so that it is covered by no test. After coverage and crap, it shows as `(anonymous)`.
@@ -88,7 +90,7 @@ Work on a throwaway copy of P1, `tmp/qa/pm`.
 ## QA-7 Coverage and CRAP (P2)
 
 1. `$SFJS coverage` exits 0, and `tmp/coverage/coverage-final.json` exists. The jest `$ ` line contains `--coverageDirectory=tmp/coverage`.
-2. Change `total` on `swarm/qa` and commit. `$SFJS crap --base main` prints `$ pnpm exec eslint` and lists `src/cart.js:<line> total`.
+2. Change `total` on `swarm/qa` and commit. `$SFJS crap --base main` prints `$ pnpm exec eslint` and lists `src/cart.js:<line> total`. It prints no `oxlint` line and does not fail on the throwing `eslint.config.js`.
 
 ## QA-8 DRY (P1)
 
@@ -141,7 +143,7 @@ Each step starts on a fresh branch from `main` and runs `$SFJS coverage` before 
 
 ## QA-10b ESLint analysis errors (P1 copy)
 
-Work on a throwaway copy of P1, `tmp/qa/lint`, after `$SFJS coverage` has written `tmp/coverage/coverage-final.json`.
+Work on a throwaway copy of P1, `tmp/qa/lint`, after `$SFJS coverage` has written `tmp/coverage/coverage-final.json`. Run `npm uninstall oxlint` and `npm install --save-dev eslint typescript-eslint`, so that sf-js takes complexity from ESLint.
 
 1. Commit a syntax error inside `withdraw`, for example a line `const = ;`. `$SFJS crap --base main` exits 2. Stderr has `eslint could not analyze src/ledger.ts:<line>: Parsing error:` with the line of the syntax error. Stdout has no `function(s)` line.
 2. `$SFJS crap --all` fails the same way.
@@ -158,7 +160,29 @@ Work on a throwaway copy of P1, `tmp/qa/lint`, after `$SFJS coverage` has writte
 2. The sf-js unit tests and the sf-js acceptance tests pass with their documented commands.
 3. Check by hand, without a script (these are documentation, not behavior), that the following exist:
    - `swarmforge/languages/javascript.md`, describing every command, its outputs and the conventions above, with Playwright and dependency-cruiser named as recommendations
+   - in it, oxlint as the complexity source (when package.json lists oxlint, or lists neither linter), ESLint when only eslint is listed, the oxlint 1.62.0 minimum, the `oxlint-disable` warning, and the tool packages `sf-js tools` adds for each case
    - the `sf-js` line in `swarmforge/tools.conf`
    - the JavaScript/TypeScript row in the engineering article's tool table and its Language Defaults bullet
    - the `swarmforge/README.md` row and the `README.md` mention
    - the CI step
+
+## QA-13 oxlint and ESLint parity (P1 copy)
+
+Work on a copy of P1 after QA-6, `tmp/qa/parity`, so that `withdraw` has its extra branches and the anonymous arrow function exists.
+
+1. `$SFJS coverage`, then `$SFJS crap --all`. Save its function rows (every stdout line starting `OVER` or `ok`) as A. None of them names `src/ledger.test.ts`, `src/ledger.property.test.ts`, or a file under `node_modules`.
+2. Run `npm uninstall oxlint` and `npm install --save-dev eslint typescript-eslint`. `$SFJS crap --all` prints a `$ npx --no-install eslint` line and no `oxlint` line. Its function rows, as a set, equal A: the same names, files, lines, `cc`, `cov` and `crap`.
+3. Run `npm install --save-dev oxlint`, so that package.json lists both linters. `$SFJS crap --all` prints a `$ npx --no-install oxlint` line and no `eslint` line, and its rows equal A again.
+4. Put `// eslint-disable-next-line complexity` on the line above `withdraw` and commit. `$SFJS crap --base main` still lists `withdraw` and stderr has no `warning`.
+5. Change that comment to `// oxlint-disable-next-line complexity` and commit. `$SFJS crap --base main` no longer lists `withdraw`. Stderr has `sf-js: warning: src/ledger.ts:<line of the comment> has an oxlint-disable directive that can hide a function from CRAP`. The exit status is the one the remaining rows give: 1 only when one of them is `OVER`.
+6. Change it to `// oxlint-disable-next-line no-debugger` and commit. `$SFJS crap --base main` lists `withdraw` again and stderr has no `warning`.
+
+## QA-14 oxlint versions and a missing oxlint (P1 copy)
+
+Work on another copy of P1 after QA-6, `tmp/qa/oxlint-version`. Each step changes `src/ledger.ts` on `swarm/qa` if it has to, so that `withdraw` is changed, and runs `$SFJS crap --base main`.
+
+1. `npm install --save-dev oxlint@1.61.0`. crap exits 2. Stderr has `sf-js needs oxlint 1.62.0 or later`.
+2. `npm install --save-dev oxlint@1.36.0`, a version without the complexity rule. crap exits 2. Stderr has `sf-js needs oxlint 1.62.0 or later`.
+3. `npm install --save-dev oxlint@1.62.0`. crap lists `withdraw` and exits 0 or 1 by its CRAP.
+4. `npm uninstall oxlint`, so that package.json lists neither linter. crap still prints a `$ npx --no-install oxlint` line, prints no `eslint` line, and exits 2. Stderr has `sf-js needs oxlint 1.62.0 or later`.
+5. `$SFJS tools` prints `$ npm install --save-dev` with `oxlint` among the packages and without `eslint` or `typescript-eslint`. crap then lists `withdraw` again.

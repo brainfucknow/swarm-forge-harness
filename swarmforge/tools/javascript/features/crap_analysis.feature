@@ -1,9 +1,9 @@
 Feature: sf-js crap analysis errors
 
-  sf-js crap fails with exit 2 when ESLint could not analyze the code. A
-  fatal message in the ESLint report (a parse error, for example) is
-  reported on stderr as "eslint could not analyze FILE:LINE: MESSAGE", once
-  per fatal message. ESLint's own exit status 2 (a configuration or internal
+  If package.json lists eslint and not oxlint, sf-js crap fails with exit 2
+  when ESLint could not analyze the code. A fatal message in the ESLint
+  report (a parse error, for example) is reported on stderr as "eslint could
+  not analyze FILE:LINE: MESSAGE", once per fatal message. ESLint's own exit status 2 (a configuration or internal
   error) fails as "eslint exited 2", even when ESLint wrote a report. Either
   way no CRAP table is printed. ESLint exit 1 is normal, because every
   complexity message is an error at maximum 0, and a message that is neither
@@ -15,6 +15,7 @@ Feature: sf-js crap analysis errors
     And fake JavaScript tools on PATH
     And the worktree has the lockfile "package-lock.json"
     And package.json lists "vitest" in devDependencies
+    And package.json lists "eslint" in devDependencies
     And ESLint reports "withdraw" at line 10 of "src/ledger.ts" with complexity 4
     And Istanbul covers 4 of 4 statements of "withdraw" on lines 10 to 17 of "src/ledger.ts"
     And line 12 of "src/ledger.ts" changed on the task branch

@@ -17,14 +17,30 @@
     (str (.resolve (fs/path *dir*) (str path)))
     (str path)))
 
+(defn- launch
+  "Prints the command line, then runs it with the process `options`."
+  [options command args]
+  (println (str "$ " (str/join " " (cons command args))))
+  (try
+    (apply p/shell (merge {:continue true :dir *dir*} options) command args)
+    (catch java.io.IOException e
+      (throw (ex-info (str command ": " (.getMessage e)) {})))))
+
 (defn run
   "Runs a tool in the foreground, streaming its output; returns its exit status."
   [command args]
-  (println (str "$ " (str/join " " (cons command args))))
-  (try
-    (:exit (apply p/shell {:continue true :dir *dir*} command args))
-    (catch java.io.IOException e
-      (throw (ex-info (str command ": " (.getMessage e)) {})))))
+  (:exit (launch {} command args)))
+
+(defn capture
+  "Runs a tool with its stdout kept rather than shown and its stderr streamed;
+  returns its exit status and stdout."
+  [command args]
+  (select-keys (launch {:out :string} command args) [:exit :out]))
+
+(defn warn
+  "Prints a warning on stderr, prefixed with the tool name."
+  [tool message]
+  (binding [*out* *err*] (println (str tool ": warning: " message))))
 
 (defn available? [command]
   (some? (fs/which command)))

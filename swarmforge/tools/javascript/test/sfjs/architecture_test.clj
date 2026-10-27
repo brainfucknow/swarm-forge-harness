@@ -66,6 +66,16 @@
                           (or (#{'sfjs.cli 'sfcs.cli} dep)
                               (and (not (in? "sfjs.acceptance." from)) (in? "sfjs.acceptance." dep))))))))
 
+(def complexity-sources
+  "The linters sf-js crap takes complexity from; each reads its own report
+  into the functions sfjs.crap scores."
+  '#{sfjs.eslint sfjs.oxlint})
+
+(deftest crap-scoring-knows-no-linter-and-the-linters-stay-apart
+  (is (= {} (violations (fn [from dep]
+                          (and (complexity-sources dep)
+                               (or (= 'sfjs.crap from) (complexity-sources from))))))))
+
 (defn- reachable [start]
   (loop [seen #{} todo (vec (graph start))]
     (if-let [[next & more] (seq todo)]

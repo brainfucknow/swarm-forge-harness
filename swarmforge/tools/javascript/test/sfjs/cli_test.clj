@@ -62,21 +62,30 @@
 (defn- tool-line [line]
   (str/join " " line))
 
+(defn- answer
+  "What `tool` answers for a command line, as an exit status and stdout; a
+  bare number is an exit status with no output."
+  [tool command args]
+  (let [line (vec (cons command args))
+        answered (tool line)]
+    (swap! *calls* conj line)
+    (if (map? answered) answered {:exit answered :out ""})))
+
 (defn- run-sf-js
   "Runs `argv` in the scratch project; `tool` answers each tool command line
-  with an exit status. Returns the exit status, the printed text and the tool
-  command lines."
+  with an exit status, or with {:exit :out} for a tool whose stdout sf-js
+  reads. Returns the exit status, the printed text, the error text and the
+  tool command lines."
   [tool & argv]
   (reset! *calls* [])
   (binding [shell/*dir* *project*]
-    (with-redefs [shell/run (fn [command args]
-                              (let [line (vec (cons command args))]
-                                (swap! *calls* conj line)
-                                (tool line)))
+    (with-redefs [shell/run (fn [command args] (:exit (answer tool command args)))
+                  shell/capture (fn [command args] (answer tool command args))
                   shell/available? (constantly true)]
       (let [out (java.io.StringWriter.)
-            status (binding [*out* out] (cli/main (vec argv)))]
-        {:status status :out (str out) :calls (mapv tool-line @*calls*)}))))
+            err (java.io.StringWriter.)
+            status (binding [*out* out *err* err] (cli/main (vec argv)))]
+        {:status status :out (str out) :err (str err) :calls (mapv tool-line @*calls*)}))))
 
 (defn- usage-failure [tool & argv]
   (try (apply run-sf-js tool argv)
@@ -138,7 +147,11 @@
 (defn- write-coverage! []
   (write! "tmp/coverage/coverage-final.json" (fixture-for-project "coverage-final.json")))
 
+(defn- use-eslint! []
+  (write-package! {"devDependencies" {"vitest" "*" "eslint" "*"}}))
+
 (deftest crap-lists-changed-functions-and-fails-over-the-limit
+  (use-eslint!)
   (change-ledger!)
   (write-coverage!)
   (let [result (run-sf-js crap-tool "crap")]
@@ -149,6 +162,7 @@
     (is (str/includes? (slurp (project-file "tmp/eslint/eslint.config.mjs")) "complexity"))))
 
 (deftest crap-all-scores-every-function
+  (use-eslint!)
   (write-coverage!)
   (let [result (run-sf-js crap-tool "crap" "--all")]
     (is (= 1 (:status result)))
@@ -156,6 +170,7 @@
            (:calls result)))))
 
 (deftest crap-with-nothing-changed-runs-no-eslint
+  (use-eslint!)
   (write-coverage!)
   (git "add" ".")
   (git "commit" "--quiet" "-m" "no source change")
@@ -164,6 +179,7 @@
     (is (= [] (:calls result)))))
 
 (deftest crap-reads-coverage-from-the-report-directory
+  (use-eslint!)
   (change-ledger!)
   (write! "elsewhere/coverage-final.json" (fixture-for-project "coverage-final.json"))
   (is (= 1 (:status (run-sf-js crap-tool "crap" "--report" "elsewhere"))))
@@ -178,6 +194,7 @@
     status))
 
 (deftest crap-fails-when-eslint-could-not-analyze-a-file
+  (use-eslint!)
   (change-ledger!)
   (write-coverage!)
   (let [tool (eslint-reporting [{"fatal" true "severity" 2 "line" 3 "message" "Parsing error: Unexpected token )"}
@@ -189,11 +206,13 @@
            message))))
 
 (deftest crap-fails-when-eslint-exits-2
+  (use-eslint!)
   (change-ledger!)
   (write-coverage!)
   (is (= "eslint exited 2" (usage-failure (eslint-reporting [] 2) "crap"))))
 
 (deftest crap-accepts-eslint-exit-1-from-complexity-messages
+  (use-eslint!)
   (change-ledger!)
   (write-coverage!)
   (let [tool (eslint-reporting [{"ruleId" "complexity" "severity" 2 "line" 10 "column" 8
@@ -202,8 +221,106 @@
     (is (= 0 (:status (run-sf-js tool "crap"))))))
 
 (deftest crap-fails-when-eslint-writes-no-report
+  (use-eslint!)
   (write-coverage!)
   (is (str/includes? (usage-failure ok "crap" "--all") "eslint exited 0 without tmp/eslint/eslint.json")))
+
+(defn- oxlint-report [& diagnostics]
+  (json/generate-string {"diagnostics" (vec diagnostics) "number_of_rules" 1}))
+
+(defn- oxlint-complexity [file line message]
+  {"code" "eslint(complexity)" "message" message "filename" file
+   "labels" [{"span" {"offset" 0 "length" 1 "line" line "column" 1}}]})
+
+(def ^:private withdraw-report
+  (oxlint-report (oxlint-complexity "src/ledger.ts" 10 "function `withdraw` has a complexity of 4. Maximum allowed is 0.")))
+
+(defn- oxlint-tool
+  "A fake oxlint that prints `stdout` and exits `status`; other tools exit 0."
+  ([stdout] (oxlint-tool 0 stdout))
+  ([status stdout]
+   (fn [line] (if (some #{"oxlint"} line) {:exit status :out stdout} 0))))
+
+(deftest crap-takes-complexity-from-oxlint-by-default
+  (change-ledger!)
+  (write-coverage!)
+  (let [result (run-sf-js (oxlint-tool withdraw-report) "crap")
+        [call] (:calls result)]
+    (is (= 1 (:status result)))
+    (is (str/includes? (:out result) "OVER crap   10.8  cc   4  cov  25%  src/ledger.ts:10 withdraw"))
+    (is (str/starts-with? call "npx --no-install oxlint --config tmp/oxlint/oxlintrc.json --disable-nested-config --format json"))
+    (is (str/ends-with? call " src/ledger.ts"))
+    (is (= 1 (count (:calls result))))
+    (is (not (str/includes? (:out result) "diagnostics")))
+    (is (str/includes? (slurp (project-file "tmp/oxlint/oxlintrc.json")) "eslint/complexity"))))
+
+(deftest crap-all-runs-oxlint-over-the-project
+  (write-coverage!)
+  (let [result (run-sf-js (oxlint-tool withdraw-report) "crap" "--all")]
+    (is (= 1 (:status result)))
+    (is (str/ends-with? (first (:calls result)) " ."))))
+
+(deftest crap-uses-oxlint-when-both-linters-are-listed
+  (write-package! {"devDependencies" {"vitest" "*" "eslint" "*" "oxlint" "*"}})
+  (change-ledger!)
+  (write-coverage!)
+  (let [result (run-sf-js (oxlint-tool withdraw-report) "crap")]
+    (is (= 1 (:status result)))
+    (is (not-any? #(str/includes? % "eslint ") (:calls result)))))
+
+(deftest crap-fails-when-oxlint-prints-no-report
+  (change-ledger!)
+  (write-coverage!)
+  (is (= "oxlint exited 1 without a report; sf-js needs oxlint 1.62.0 or later"
+         (usage-failure (oxlint-tool 1 "Failed to parse oxlint configuration file.\n") "crap")))
+  (is (= "oxlint ran no complexity rule; sf-js needs oxlint 1.62.0 or later"
+         (usage-failure (oxlint-tool (json/generate-string {"diagnostics" [] "number_of_rules" 0})) "crap"))))
+
+(deftest crap-shows-what-oxlint-printed-instead-of-a-report
+  (change-ledger!)
+  (write-coverage!)
+  (let [err (java.io.StringWriter.)]
+    (binding [*err* err]
+      (try (with-redefs [shell/available? (constantly true)]
+             (binding [shell/*dir* *project*]
+               (with-redefs [shell/capture (fn [_ _] {:exit 1 :out "unknown field `options`\n"})]
+                 (with-out-str (cli/main ["crap"])))))
+           (catch Exception _)))
+    (is (= "unknown field `options`\n" (str err)))))
+
+(defn- change-ledger-line! [n text]
+  (let [lines (str/split-lines (numbered 30))]
+    (write! "src/ledger.ts" (str (str/join "\n" (assoc lines (dec n) text)) "\n"))
+    (git "add" ".")
+    (git "commit" "--quiet" "-m" "directive")))
+
+(def ^:private directive-warning
+  "sf-js: warning: src/ledger.ts:11 has an oxlint-disable directive that can hide a function from CRAP")
+
+(deftest crap-warns-about-oxlint-directives-that-can-hide-complexity
+  (change-ledger-line! 11 "// oxlint-disable-next-line complexity")
+  (write-coverage!)
+  (let [result (run-sf-js (oxlint-tool withdraw-report) "crap")]
+    (is (= 1 (:status result)))
+    (is (= (str directive-warning "\n") (:err result))))
+  (testing "over every linted source with --all"
+    (write! "src/new.js" "/* oxlint-disable */\n")
+    (write! "src/new.test.js" "/* oxlint-disable */\n")
+    (let [result (run-sf-js (oxlint-tool withdraw-report) "crap" "--all")]
+      (is (= [directive-warning
+              "sf-js: warning: src/new.js:1 has an oxlint-disable directive that can hide a function from CRAP"]
+             (str/split-lines (:err result)))))))
+
+(deftest crap-does-not-warn-about-directives-with-eslint
+  (use-eslint!)
+  (change-ledger-line! 11 "// oxlint-disable-next-line complexity")
+  (write-coverage!)
+  (is (= "" (:err (run-sf-js crap-tool "crap")))))
+
+(deftest crap-does-not-warn-about-other-directives
+  (change-ledger-line! 11 "// oxlint-disable-next-line no-debugger")
+  (write-coverage!)
+  (is (= "" (:err (run-sf-js (oxlint-tool withdraw-report) "crap")))))
 
 (defn- jscpd-tool [line]
   (when-not (some #{"--version"} line)

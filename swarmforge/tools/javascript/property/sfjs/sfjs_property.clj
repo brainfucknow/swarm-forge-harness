@@ -1,5 +1,6 @@
 (ns sfjs.sfjs-property
-  "Properties of sf-js's package, source-file, CRAP and Stryker policy."
+  "Properties of sf-js's package, source-file, complexity-linter, CRAP and
+  Stryker policy."
   (:require [clojure.string :as str]
             [property-support :refer [defspec]]
             [clojure.test.check.generators :as gen]
@@ -7,7 +8,9 @@
             [sfcore.crap :as core-crap]
             [sfjs.commands :as commands]
             [sfjs.crap :as crap]
+            [sfjs.eslint :as eslint]
             [sfjs.mutate :as mutate]
+            [sfjs.oxlint :as oxlint]
             [sfjs.package :as pkg]))
 
 (def trials 200)
@@ -41,6 +44,96 @@
           result (outcome package present)]
       (and (= (expected declared present) result)
            (= result (outcome package (if shuffled (reverse present) (sort present))))))))
+
+;; Complexity linter and tool packages
+
+(def package-with-tools
+  (gen/fmap (fn [[deps dev]] {"dependencies" (zipmap deps (repeat "1")) "devDependencies" (zipmap dev (repeat "1"))})
+            (gen/tuple (gen/set (gen/elements ["oxlint" "eslint" "vitest" "react"]))
+                       (gen/set (gen/elements ["oxlint" "eslint" "typescript-eslint" "jest" "vitest" "typescript"])))))
+
+(defn- listed [package]
+  (into (set (keys (get package "dependencies"))) (keys (get package "devDependencies"))))
+
+(defspec the-complexity-linter-is-oxlint-unless-only-eslint-is-listed trials
+  (prop/for-all [package package-with-tools]
+    (let [names (listed package)]
+      (= (if (and (names "eslint") (not (names "oxlint"))) "eslint" "oxlint")
+         (pkg/complexity-linter package)))))
+
+(defspec tools-adds-only-the-chosen-linters-packages-and-then-nothing-more trials
+  (prop/for-all [package package-with-tools tsconfig? gen/boolean]
+    (let [linter (pkg/complexity-linter package)
+          wanted (set (pkg/tool-packages package tsconfig?))
+          missing (pkg/missing-packages package tsconfig?)
+          installed (update package "devDependencies" merge (zipmap missing (repeat "1")))]
+      (and (= (= "oxlint" linter) (contains? wanted "oxlint"))
+           (= (= "eslint" linter) (contains? wanted "eslint") (contains? wanted "typescript-eslint"))
+           (not-any? (listed package) missing)
+           (= linter (pkg/complexity-linter installed))
+           (= [] (pkg/missing-packages installed tsconfig?))))))
+
+;; Complexity messages
+
+(def identifier
+  (gen/fmap (fn [[c more]] (str c more)) (gen/tuple gen/char-alpha gen/string-alphanumeric)))
+
+(defn- message [kind complexity]
+  (str kind " has a complexity of " complexity ". Maximum allowed is 0."))
+
+(defspec oxlint-messages-give-back-the-name-and-complexity trials
+  (prop/for-all [kind (gen/elements ["function" "method" "getter" "setter" "private method" "class static block" "arrow function"])
+                 name (gen/one-of [(gen/return nil) identifier])
+                 complexity (gen/choose 1 500)]
+    (let [text (message (if name (str kind " `" name "`") kind) complexity)]
+      (and (= (cond (nil? name) "(anonymous)" (= "private method" kind) (str "#" name) :else name)
+              (oxlint/function-name text))
+           (= complexity (:complexity (crap/complexity-message text)))))))
+
+(defspec eslint-messages-give-back-the-name-and-complexity trials
+  (prop/for-all [kind (gen/elements ["Function" "Method" "Static method" "Getter" "Async function"])
+                 shape (gen/elements [:quoted :private :anonymous])
+                 name identifier
+                 complexity (gen/choose 1 500)]
+    (let [text (message (case shape
+                          :quoted (str kind " '" name "'")
+                          :private (str "Private method #" name)
+                          :anonymous "Arrow function")
+                        complexity)]
+      (and (= (case shape :quoted name :private (str "#" name) :anonymous "(anonymous)")
+              (eslint/function-name text))
+           (= complexity (:complexity (crap/complexity-message text)))))))
+
+(defspec oxlint-functions-end-on-the-line-they-start trials
+  (prop/for-all [diagnostics (gen/vector (gen/tuple (gen/elements ["eslint(complexity)" "eslint(no-debugger)"])
+                                                    (gen/choose 1 300) (gen/choose 1 80) (gen/choose 1 40))
+                                         0 8)]
+    (let [report {"diagnostics" (for [[code line column complexity] diagnostics]
+                                  {"code" code "filename" "/w/src/a.ts" "message" (message "function `f`" complexity)
+                                   "labels" [{"span" {"line" line "column" column}}]})}
+          functions (oxlint/parse-report report "/w")]
+      (= (for [[code line column complexity] diagnostics :when (= "eslint(complexity)" code)]
+           {:file "src/a.ts" :line line :column column :end-line line :name "f" :complexity complexity})
+         functions))))
+
+;; oxlint-disable directives
+
+(def hiding-directives
+  ["// oxlint-disable-next-line complexity" "// oxlint-disable-next-line eslint/complexity" "/* oxlint-disable */"
+   "return 0; // oxlint-disable-line" "/* oxlint-disable no-debugger, complexity */"
+   "// oxlint-disable-line no-debugger complexity -- legacy code" "//oxlint-disable"])
+
+(def harmless-lines
+  ["export const a = 1;" "// oxlint-disable-next-line no-debugger" "// eslint-disable-next-line complexity"
+   "// oxlint-enable complexity" "// oxlint-disable-next-line no-complexity-check"
+   "// oxlint-disable-next-line no-debugger -- complexity is fine" "const note = \"oxlint-disable\";" ""])
+
+(defspec hiding-lines-are-exactly-the-directives-that-can-hide-complexity trials
+  (prop/for-all [lines (gen/vector (gen/one-of [(gen/fmap #(vector :hides %) (gen/elements hiding-directives))
+                                                (gen/fmap #(vector :harmless %) (gen/elements harmless-lines))])
+                                   0 15)]
+    (= (vec (keep-indexed (fn [i [kind _]] (when (= :hides kind) (inc i))) lines))
+       (oxlint/hiding-lines (str/join "\n" (map second lines))))))
 
 ;; Source files
 

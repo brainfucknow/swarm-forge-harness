@@ -74,9 +74,12 @@
   (git world "add" "-A" ".")
   (git world "commit" "--quiet" "-m" message))
 
-(defn rewrite-line [world file n]
+(defn replace-line [world file n text]
   (let [lines (str/split-lines (slurp (path world file)))]
-    (write-file world file (str (str/join "\n" (assoc lines (dec n) (str "// " file " rewritten line " n))) "\n"))))
+    (write-file world file (str (str/join "\n" (assoc lines (dec n) text)) "\n"))))
+
+(defn rewrite-line [world file n]
+  (replace-line world file n (str "// " file " rewritten line " n)))
 
 (defn delete-lines [world file first-line last-line]
   (let [lines (str/split-lines (slurp (path world file)))

@@ -151,8 +151,8 @@ Node.
 For JavaScript and TypeScript, `swarmforge/bin/sf-js` offers the same commands
 with the same exit codes: `sf-js test` and `sf-js property` (Vitest or Jest,
 with `tsc --noEmit` first when there is a `tsconfig.json`, property tests named
-`*.property.test.*`), `sf-js coverage` (Istanbul JSON), `sf-js crap` (ESLint
-complexity joined with coverage), `sf-js dry` (jscpd), and `sf-js mutate`
+`*.property.test.*`), `sf-js coverage` (Istanbul JSON), `sf-js crap` (oxlint
+or ESLint complexity joined with coverage), `sf-js dry` (jscpd), and `sf-js mutate`
 (StrykerJS on changed files, incremental). It runs project tools through the
 package manager that `packageManager` or the lockfile names. See
 `swarmforge/languages/javascript.md`.

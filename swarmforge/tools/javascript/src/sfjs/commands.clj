@@ -7,13 +7,12 @@
 (def coverage-dir "tmp/coverage")
 (def jscpd-dir "tmp/jscpd")
 (def eslint-dir "tmp/eslint")
+(def oxlint-dir "tmp/oxlint")
 (def stryker-dir "tmp/stryker")
 
 (def coverage-file "coverage-final.json")
 (def coverage-report (str coverage-dir "/" coverage-file))
 (def jscpd-report (str jscpd-dir "/jscpd-report.json"))
-(def eslint-config-path (str eslint-dir "/eslint.config.mjs"))
-(def eslint-report (str eslint-dir "/eslint.json"))
 
 (def extensions ["js" "jsx" "ts" "tsx" "mjs" "cjs" "mts" "cts"])
 (def ^:private declarations ["d.ts" "d.mts" "d.cts"])
@@ -61,8 +60,10 @@
 
 (def typecheck-args ["tsc" "--noEmit"])
 
+(def ^:private ignored-dirs ["node_modules" "dist" "build" "coverage" "tmp"])
+
 (def ^:private ignored-paths
-  ["**/node_modules/**" "**/dist/**" "**/build/**" "**/coverage/**" "**/tmp/**" "**/*.d.ts" "**/*.min.js"])
+  (into (mapv #(str "**/" % "/**") ignored-dirs) ["**/*.d.ts" "**/*.min.js"]))
 
 (def ^:private jscpd ["npx" "--yes" "jscpd@4"])
 
@@ -73,24 +74,15 @@
                "--min-tokens" (str min-tokens) "--reporters" "json" "--output" jscpd-dir
                "--ignore" (str/join "," ignored-paths) "."]))
 
-(def ^:private lint-ignores
+(def lint-ignores
+  "What the complexity linters leave out, as globs."
   (into ignored-paths ["**/*.d.mts" "**/*.d.cts" "**/*.test.*" "**/*.spec.*" "**/__tests__/**"]))
 
-(defn eslint-config
-  "sf-js's own flat config: the typescript-eslint parser and only the
-  complexity rule, reporting every function. Written under tmp/ so that
-  typescript-eslint resolves from the project's node_modules."
-  []
-  (str "import tseslint from \"typescript-eslint\";\n\n"
-       "export default [\n"
-       "  { ignores: [" (str/join ", " (map pr-str lint-ignores)) "] },\n"
-       "  {\n"
-       "    files: [\"**/*.{" (str/join "," extensions) "}\"],\n"
-       "    languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },\n"
-       "    linterOptions: { reportUnusedDisableDirectives: \"off\" },\n"
-       "    rules: { complexity: [\"warn\", 0] },\n"
-       "  },\n"
-       "];\n"))
+(defn- ignored-path? [path]
+  (or (str/ends-with? path ".min.js")
+      (boolean (some (set ignored-dirs) (butlast (str/split path #"/"))))))
 
-(defn eslint-args [config output files]
-  (into ["eslint" "--config" config "--no-inline-config" "--format" "json" "--output-file" output] files))
+(defn linted-sources
+  "The production sources the complexity linters do not leave out."
+  [paths]
+  (vec (remove ignored-path? (production-sources paths))))

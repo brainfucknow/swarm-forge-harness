@@ -93,13 +93,22 @@
 (defn require-stryker-runner [package]
   (required (stryker-runner package)))
 
+(defn complexity-linter
+  "The linter sf-js crap takes complexity from: oxlint when listed, else
+  eslint when listed, else oxlint."
+  [package]
+  (or (first-listed package ["oxlint" "eslint"]) "oxlint"))
+
+(def ^:private linter-packages
+  {"oxlint" ["oxlint"] "eslint" ["eslint" "typescript-eslint"]})
+
 (defn tool-packages
   "Every package the sf-js commands run, for the project's runner (vitest
-  when none is listed)."
+  when none is listed) and complexity linter."
   [package tsconfig?]
   (let [runner (or (stryker-runner package) "vitest")]
-    (cond-> [runner "typescript" "eslint" "typescript-eslint" "fast-check"
-             "@stryker-mutator/core" (str "@stryker-mutator/" runner "-runner")]
+    (cond-> (into [runner "typescript" "fast-check" "@stryker-mutator/core" (str "@stryker-mutator/" runner "-runner")]
+                  (linter-packages (complexity-linter package)))
       (= runner "vitest") (conj "@vitest/coverage-v8")
       tsconfig? (conj "@stryker-mutator/typescript-checker"))))
 
