@@ -104,8 +104,9 @@ nothing (the record changes no file).
 
 ## 6. A squash-merged task
 
-1. Make a task D on route `specifier`. Run `sf ask D Which?`, commit as the
-   specifier with `Spec\n\nTested: x`, and run `sf handoff D --to done`.
+1. Make a task D on route `specifier`. Run `sf ask D Which?` and
+   `sf answer D yes`, commit as the specifier with `Spec\n\nTested: x`, and
+   run `sf handoff D --to done`.
 2. In `S/main`, run `git merge --squash swarm/D` and
    `git commit -m "Squash D"`. Keep D's branch and worktree.
 3. Expect `sf ls` and `sf next specifier` not to list D, and `sf start D`,
