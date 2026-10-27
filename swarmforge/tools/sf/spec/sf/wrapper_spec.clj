@@ -39,7 +39,12 @@
     (let [task (pr-str (get-in @config [:tasks 'coverage]))]
       (should (str/includes? task "crap4clj.bb-coverage"))
       (should (str/includes? task "\"/t/crap4clj/src\""))
-      (should (str/includes? task "speclj.cloverage")))))
+      (should (str/includes? task "speclj.cloverage"))))
+
+  (it "puts the project's bb.edn :paths on the classpath, read with edamame"
+    (let [task (pr-str (get-in @config [:tasks 'coverage]))]
+      (should (str/includes? task "(:paths (edamame/parse-string (slurp \"bb.edn\")"))
+      (should (str/includes? task "edamame.core")))))
 
 (defn- run-wrapper
   "Runs a crap4clj-style wrapper in dir with a fake bb (and clj when clj?) on PATH;

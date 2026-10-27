@@ -46,7 +46,9 @@
 
 (defn coverage-config
   "A bb.edn whose coverage task runs Cloverage, at the Babashka-compatible commit
-  crap4clj documents, through crap4clj.bb-coverage of the clone in source-dir."
+  crap4clj documents, through crap4clj.bb-coverage of the clone in source-dir.
+  The project's own bb.edn :paths (such as a sibling ../core/src) go on the
+  classpath too, so its namespaces load."
   [source-dir]
   (str "{:deps {cloverage/cloverage {:git/url \"https://github.com/cloverage/cloverage.git\"
                              :git/sha \"61e3cac426e9907a9dd01c37597f85c71a57ff90\"
@@ -57,11 +59,16 @@
   {:doc \"Run Cloverage on the -p and -s directories through crap4clj.bb-coverage\"
    :requires ([babashka.classpath :as classpath]
               [babashka.fs :as fs]
-              [clojure.string :as str])
+              [clojure.string :as str]
+              [edamame.core :as edamame])
    :task (let [args *command-line-args*
                given (keep (fn [[flag dir]] (when (#{\"-p\" \"-s\"} flag) dir))
                            (partition 2 1 args))
-               dirs (cons " (pr-str (str source-dir "/src")) " given)]
+               project (when (fs/exists? \"bb.edn\")
+                         (:paths (edamame/parse-string (slurp \"bb.edn\")
+                                                       {:all true :auto-resolve name :read-cond :allow
+                                                        :features #{:bb :clj} :readers (fn [_tag] identity)})))
+               dirs (concat [" (pr-str (str source-dir "/src")) "] given project)]
            (classpath/add-classpath
              (str/join fs/path-separator (map (fn [dir] (str (fs/absolutize dir))) dirs)))
            (when (some #{\"speclj\"} args) (require 'speclj.cloverage))
