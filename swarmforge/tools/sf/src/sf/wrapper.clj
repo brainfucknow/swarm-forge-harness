@@ -20,11 +20,12 @@
   (str "exec bb -cp " (sq (str source-dir "/src")) " -m " namespace " \"$@\""))
 
 (defn local-command
-  "Runs the script at source in the caller's checkout when it has one, else the
-  main checkout's."
+  "Runs the script at source in the caller's checkout when it has one and shares
+  the main checkout's git directory, else the main checkout's."
   [main-root source]
-  (str "top=\"$(git rev-parse --show-toplevel 2>/dev/null)\" && [ -x \"$top/\"" (sq source)
-       " ] && exec \"$top/\"" (sq source) " \"$@\"\n"
+  (str "top=\"$(git rev-parse --show-toplevel 2>/dev/null)\""
+       " && [ \"$(git rev-parse --path-format=absolute --git-common-dir)\" = " (sq (str main-root "/.git")) " ]"
+       " && [ -x \"$top/\"" (sq source) " ] && exec \"$top/\"" (sq source) " \"$@\"\n"
        "exec " (sq (str main-root "/" source)) " \"$@\""))
 
 (def ^:private speclj-dep "speclj/speclj {:mvn/version \"3.13.0\"}")

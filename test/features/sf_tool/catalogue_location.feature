@@ -5,8 +5,9 @@ Feature: sf tool catalogue location
   otherwise. Tool sources and wrappers stay shared under the main checkout's
   .swarmforge/. A wrapper for a tool of kind local runs the script from the
   checkout the wrapper is run in (git rev-parse --show-toplevel) when that
-  checkout has it, and the main checkout's copy otherwise, including outside
-  any git repository. sf check still reads the main checkout's
+  checkout has it and shares the main checkout's git directory (git
+  rev-parse --git-common-dir), and the main checkout's copy otherwise,
+  including in another git repository and outside any git repository. sf check still reads the main checkout's
   configuration.
 
   Background:
@@ -49,8 +50,9 @@ Feature: sf tool catalogue location
     Then the output is "<printed>"
 
     Examples:
-      | place                 | printed |
-      | task worktree         | task    |
-      | main checkout         | main    |
-      | second task worktree  | main    |
-      | directory outside git | main    |
+      | place                  | printed |
+      | task worktree          | task    |
+      | main checkout          | main    |
+      | second task worktree   | main    |
+      | directory outside git  | main    |
+      | another git repository | main    |

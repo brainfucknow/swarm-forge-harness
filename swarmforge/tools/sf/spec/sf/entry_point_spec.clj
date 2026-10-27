@@ -1,6 +1,7 @@
 (ns sf.entry-point-spec
   (:require [babashka.fs :as fs]
-            [speclj.core :refer [describe it should= should-be-nil with around]]
+            [clojure.string :as str]
+            [speclj.core :refer [describe it should should= should-be-nil with around]]
             [sf.entry-point :as entry-point]))
 
 (describe "task-names"
@@ -30,6 +31,10 @@
   (it "reports a bb source whose bb.edn lacks the task"
     (spit (str (fs/path @dir "bb.edn")) "{:tasks {crap4clj {} int {}}}")
     (should= (str @dir "/bb.edn has no task 'crap'") (entry-point/problem "bb" @dir "crap")))
+
+  (it "reports a bb source whose bb.edn cannot be read"
+    (spit (str (fs/path @dir "bb.edn")) "{:tasks {crap {}")
+    (should (str/starts-with? (entry-point/problem "bb" @dir "crap") (str @dir "/bb.edn could not be read: "))))
 
   (it "accepts a bb source whose bb.edn has the task"
     (spit (str (fs/path @dir "bb.edn")) "{:tasks {crap {}}}")

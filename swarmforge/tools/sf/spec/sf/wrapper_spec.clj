@@ -15,8 +15,10 @@
     (should= "exec bb -cp '/t/dry4clj/src' -m dry4clj.core \"$@\""
              (wrapper/bbmain-command "/t/dry4clj" "dry4clj.core")))
 
-  (it "runs a local script from the caller's checkout when it has one, else the main checkout's"
-    (should= (str "top=\"$(git rev-parse --show-toplevel 2>/dev/null)\" && [ -x \"$top/\"'bin/x' ] && exec \"$top/\"'bin/x' \"$@\"\n"
+  (it "runs a local script from the caller's checkout of the same repository when it has one, else the main checkout's"
+    (should= (str "top=\"$(git rev-parse --show-toplevel 2>/dev/null)\""
+                  " && [ \"$(git rev-parse --path-format=absolute --git-common-dir)\" = '/main/.git' ]"
+                  " && [ -x \"$top/\"'bin/x' ] && exec \"$top/\"'bin/x' \"$@\"\n"
                   "exec '/main/bin/x' \"$@\"")
              (wrapper/local-command "/main" "bin/x")))
 

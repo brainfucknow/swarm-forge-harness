@@ -74,7 +74,8 @@
     "main checkout" (:repo world)
     "task worktree" (:worktree world)
     "second task worktree" (:worktree2 world)
-    "directory outside git" (:outside world)))
+    "directory outside git" (:outside world)
+    "another git repository" (:other world)))
 
 (defn- tool-env
   "SWARMFORGE_TOOL_SRC when the world has a tool source override."
@@ -228,6 +229,14 @@
   (spit (str file) (str "#!/usr/bin/env bash\n" text "\n"))
   (fs/set-posix-file-permissions file "rwxr-xr-x"))
 
+(defn- other-repository
+  "A git repository of its own whose swarmforge/bin/sf-cs prints \"other\"."
+  []
+  (let [dir (scratch-dir "other-")]
+    (must dir "git" "init" "--quiet")
+    (write-script (fs/path dir "swarmforge" "bin" "sf-cs") "echo other")
+    dir))
+
 (defn- tool-source [world bb-edn]
   (let [dir (scratch-dir "tool-src-")]
     (when bb-edn (spit (str (fs/path dir "bb.edn")) bb-edn))
@@ -283,6 +292,9 @@
         (fs/create-dirs (fs/parent file))
         (spit (str file) (str "(ns " namespace ")\n"))
         world))]
+
+   [#"a tool source whose bb.edn is \"([^\"]*)\""
+    (fn [world text] (tool-source world text))]
 
    [#"a tool source without bb.edn"
     (fn [world] (tool-source world nil))]
@@ -394,10 +406,12 @@
     (fn [world tool args]
       (merge world (run-wrapper world tool (:repo world) (words args) {})))]
 
-   [#"I run the sf-cs wrapper in the (task worktree|main checkout|second task worktree|directory outside git)"
+   [#"I run the sf-cs wrapper in the (task worktree|main checkout|second task worktree|directory outside git|another git repository)"
     (fn [world place]
       (let [outside? (= "directory outside git" place)
-            world (cond-> world outside? (assoc :outside (scratch-dir "outside-")))]
+            world (cond-> world
+                    outside? (assoc :outside (scratch-dir "outside-"))
+                    (= "another git repository" place) (assoc :other (other-repository)))]
         (merge world (run-wrapper world "sf-cs" (place-dir world place) []
                                   (if outside? {"GIT_CEILING_DIRECTORIES" @scratch} {})))))]
 

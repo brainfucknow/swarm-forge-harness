@@ -53,3 +53,13 @@ Feature: sf tool entry point guard
     Then the exit status is 1
     And the error output contains "sf tool: dry4go: no bb.edn in MAIN/.swarmforge/tools/dry4go"
     And the error output does not mention "clone"
+
+  # sf tool entry point guard 4
+  Scenario: sf tool entry point guard 4: a bb.edn that cannot be read fails the install
+    Given a tool source whose bb.edn is "{:tasks {crap {}"
+    And an earlier install left a wrapper for "crap4clj"
+    When I run "sf tool ensure crap4clj" in the main checkout
+    Then the exit status is 1
+    And the error output contains "sf tool: crap4clj: SRC/bb.edn could not be read: "
+    And there is no wrapper for "crap4clj"
+    And "sf tool require crap4clj" in the main checkout prints "MISSING: crap4clj"

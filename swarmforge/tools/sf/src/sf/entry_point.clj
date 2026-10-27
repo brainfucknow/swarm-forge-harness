@@ -23,11 +23,19 @@
   (let [path (-> namespace (str/replace "." "/") (str/replace "-" "_"))]
     (mapv #(str path "." %) ["clj" "cljc" "bb"])))
 
+(defn- read-task-names
+  "The task names of config, or the message of why it could not be read."
+  [config]
+  (try (task-names (slurp (str config)))
+       (catch Exception e (ex-message e))))
+
 (defn- bb-problem [dir task]
-  (let [config (fs/path dir "bb.edn")]
+  (let [config (fs/path dir "bb.edn")
+        names (when (fs/exists? config) (read-task-names config))]
     (cond
       (not (fs/exists? config)) (str "no bb.edn in " dir)
-      (not ((task-names (slurp (str config))) task)) (str config " has no task '" task "'"))))
+      (string? names) (str config " could not be read: " names)
+      (not (names task)) (str config " has no task '" task "'"))))
 
 (defn- bbmain-problem [dir namespace]
   (when-not (some #(fs/exists? (fs/path dir "src" %)) (namespace-files namespace))
