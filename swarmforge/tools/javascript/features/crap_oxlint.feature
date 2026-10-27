@@ -1,8 +1,3 @@
-# mutation-stamp: sha256=6d7fb0e7f68ea4444253de082b32fe32f8d635226beae0f8921e235fc29202a1
-# acceptance-mutation-manifest-begin
-# {"version":1,"tested_at":"2026-10-27T15:11:42.769229473Z","feature_name":"sf-js crap with oxlint","feature_path":"swarmforge/tools/javascript/features/crap_oxlint.feature","background_hash":"3fe652461548e1a38813fe8fc88a0045cf5d39426c4afd1990d0ab8720d2a7ee","implementation_hash":"sha256:f5c21d02077fd0bf9e7d972e0419a880a987d07d314c2628c239a4a58f9265d1","scenarios":[{"index":0,"name":"sf-js crap with oxlint 1: a changed function is scored and gated at 10","scenario_hash":"3325ea7e5e6fcf6c4a5162a117b802fc0cb680ec585a485de8fe1a4c56abee54","mutation_count":15,"result":{"Total":15,"Killed":15,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:11:42.769229473Z"},{"index":10,"name":"sf-js crap with oxlint 5: an oxlint-disable directive that covers complexity is warned about","scenario_hash":"55eae461f4a71fc5af8b2a32528e27c0e9a5f4ec481b4187014e4422cb665a31","mutation_count":5,"result":{"Total":5,"Killed":5,"Survived":0,"Errors":0},"tested_at":"2026-10-27T15:11:42.769229473Z"}]}
-# acceptance-mutation-manifest-end
-
 Feature: sf-js crap with oxlint
 
   With oxlint as the complexity source, sf-js crap scores and prints
