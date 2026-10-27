@@ -5,6 +5,7 @@
             [sf.bug :as bug]
             [sf.config :as config]
             [sf.hook :as hook]
+            [sf.lore :as lore]
             [sf.shell :as shell]))
 
 (defn- git [dir & args]
@@ -141,8 +142,26 @@ Before running this command again:
                        (or (not needs) (seq n)))]
       (println (str/join "\t" [(bug/short-id id) (or s "?") n (bug/route id) (bug/title id)])))))
 
+(defn- lore-lines
+  "The LORE: lines of the task branch since the commit of the created record.
+  None when the record or the branch is gone."
+  [id shown]
+  (let [root (shell/repo-root)
+        base (bug/record-commit shown #{"created"})
+        branch (str "refs/heads/" (branch-of id))]
+    (when (and base (shell/ok? (shell/run {:dir root} "git" "rev-parse" "--verify" "--quiet" branch)))
+      (lore/lines (lore/read-log (shell/must {:dir root} "git" "log" "--reverse"
+                                             (str "--format=" lore/log-format) (str base ".." branch)))))))
+
+(defn- print-task
+  "The task with all comments, then its LORE: lines."
+  [id]
+  (let [shown (bug/show id)]
+    (print shown)
+    (run! println (lore-lines id shown))))
+
 (defn show [[id-arg]]
-  (print (bug/show (bug/bug-id id-arg))))
+  (print-task (bug/bug-id id-arg)))
 
 (defn next-task [[role]]
   (when (str/blank? role) (shell/die "next needs a role"))
@@ -171,7 +190,7 @@ Before running this command again:
     (println (str "BRANCH: " branch))
     (println (str "DIR: " dir))
     (println "---")
-    (print (bug/show id))))
+    (print-task id)))
 
 (defn- next-in-route [route role]
   (second (drop-while #(not= role %) (config/route-list route))))
