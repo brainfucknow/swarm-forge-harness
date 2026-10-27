@@ -110,16 +110,22 @@
       (str/replace #" +" " ")
       (str/replace #"^ | $" "")))
 
-(defn last-recorded-commit
-  "The commit in the last created, review, or handoff record. Only the header
-  lines of those records count. The request body and free text do not."
-  [id]
+(defn record-commit
+  "The commit in the last record of one of types in shown, the text of git-bug
+  show. Only the header lines of records count. The request body and free text
+  do not."
+  [shown types]
   (:commit (reduce (fn [{:keys [record?] :as state} line]
                      (cond
                        (re-find #"^ *[0-9a-f]+ #[0-9]+ " line) (assoc state :record? false)
-                       (re-find #"^ *type: (created|review|handoff)$" line) (assoc state :record? true)
+                       (some->> (re-find #"^ *type: (\S+)$" line) second types) (assoc state :record? true)
                        (and record? (re-find #"^ *commit: " line))
                        (assoc state :commit (second (str/split (str/trim line) #"\s+")))
                        :else state))
                    {:record? false :commit nil}
-                   (str/split-lines (show id)))))
+                   (str/split-lines shown))))
+
+(defn last-recorded-commit
+  "The commit in the last created, review, or handoff record."
+  [id]
+  (record-commit (show id) #{"created" "review" "handoff"}))

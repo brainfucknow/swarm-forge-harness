@@ -1,7 +1,9 @@
 (ns sf.hook
-  "The commit-msg hook that adds the `By <role>.` byline in task worktrees."
+  "The commit-msg hook that adds the `By <role>.` byline and a Lore-id in task
+  worktrees."
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
+            [sf.lore :as lore]
             [sf.shell :as shell]))
 
 (def marker "# swarmforge commit-msg hook")
@@ -31,3 +33,15 @@
       (do (fs/create-dirs hooks)
           (spit (str hook) (body))
           (fs/set-posix-file-permissions hook "rwxr-xr-x")))))
+
+(defn commit-msg
+  "Adds the byline for role and a Lore-id to the commit message in file, as
+  sf.lore/sign does. git interpret-trailers finds the trailer block."
+  [[role file]]
+  (when (or (str/blank? role) (str/blank? file))
+    (shell/die "commit-msg needs a role and a message file"))
+  (let [message (slurp file)
+        trailers (shell/lines (shell/must {:in message} "git" "interpret-trailers" "--parse"))
+        signed (lore/sign message role (keep lore/trailer-key trailers) lore/new-id)]
+    (when (not= signed message)
+      (spit file signed))))
