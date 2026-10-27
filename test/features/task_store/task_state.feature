@@ -24,40 +24,56 @@ Feature: sf task state
 
   # sf task state 1
   Scenario Outline: sf task state 1: sf ls prints the state of each task branch
-    Given I ran "<setup>"
     When I run "sf ls <options>"
     Then the exit status is 0
     And the output is "<output>"
 
     Examples:
-      | setup             | options       | output                                                                                    |
-      | sf stage $A       |               | $A\tspecifier\t\tspecifier,coder\tAdd login\n$B\tcoder\t\tcoder,qa\tFix bug               |
-      | sf ask $B Which   |               | $A\tspecifier\t\tspecifier,coder\tAdd login\n$B\tcoder\toperator\tcoder,qa\tFix bug       |
-      | sf ask $B Which   | --needs       | $B\tcoder\toperator\tcoder,qa\tFix bug                                                    |
-      | sf review $A      | --needs       | $A\tspecifier\tapproval\tspecifier,coder\tAdd login                                       |
-      | sf stage $A       | --stage coder | $B\tcoder\t\tcoder,qa\tFix bug                                                            |
+      | options       | output                                                                      |
+      |               | $A\tspecifier\t\tspecifier,coder\tAdd login\n$B\tcoder\t\tcoder,qa\tFix bug |
+      | --stage coder | $B\tcoder\t\tcoder,qa\tFix bug                                              |
 
   # sf task state 2
-  Scenario Outline: sf task state 2: sf next lists the tasks at the stage that need nothing
-    Given I ran "<setup>"
-    When I run "sf next coder"
+  Scenario Outline: sf task state 2: sf ls shows a task that needs the operator
+    Given I ran "sf ask $B Which"
+    When I run "sf ls <options>"
     Then the exit status is 0
     And the output is "<output>"
 
     Examples:
-      | setup             | output  |
-      | sf stage $B       | $B      |
-      | sf ask $B Which   | NO_TASK |
+      | options | output                                                                               |
+      |         | $A\tspecifier\t\tspecifier,coder\tAdd login\n$B\tcoder\toperator\tcoder,qa\tFix bug |
+      | --needs | $B\tcoder\toperator\tcoder,qa\tFix bug                                              |
 
   # sf task state 3
-  Scenario: sf task state 3: a finished task is not listed
+  Scenario: sf task state 3: sf ls --needs shows a task that waits for approval
+    Given I ran "sf review $A"
+    When I run "sf ls --needs"
+    Then the exit status is 0
+    And the output is "$A\tspecifier\tapproval\tspecifier,coder\tAdd login"
+
+  # sf task state 4
+  Scenario: sf task state 4: sf next lists the tasks at the stage that need nothing
+    When I run "sf next coder"
+    Then the exit status is 0
+    And the output is "$B"
+
+  # sf task state 5
+  Scenario: sf task state 5: sf next skips a task that needs the operator
+    Given I ran "sf ask $B Which"
+    When I run "sf next coder"
+    Then the exit status is 0
+    And the output is "NO_TASK"
+
+  # sf task state 6
+  Scenario: sf task state 6: a finished task is not listed
     Given task "B" was finished
     When I run "sf ls"
     Then the exit status is 0
     And the output is "$A\tspecifier\t\tspecifier,coder\tAdd login"
 
-  # sf task state 4
-  Scenario Outline: sf task state 4: a squash-merged task is finished although its branch remains
+  # sf task state 7
+  Scenario Outline: sf task state 7: a squash-merged task is finished although its branch remains
     Given task "B" was handed off to done and squash-merged into main
     When I run "<command>"
     Then the exit status is 0
@@ -68,8 +84,8 @@ Feature: sf task state
       | sf ls            | $A\tspecifier\t\tspecifier,coder\tAdd login |
       | sf next coder    | NO_TASK                                     |
 
-  # sf task state 5
-  Scenario Outline: sf task state 5: a command that writes a record refuses a finished task
+  # sf task state 8
+  Scenario Outline: sf task state 8: a command that writes a record refuses a finished task
     Given task "B" was handed off to done and squash-merged into main
     When I run "<command>"
     Then the exit status is 1
@@ -77,9 +93,23 @@ Feature: sf task state
     And the branch of task "B" did not move
 
     Examples:
-      | command                 |
-      | sf start $B             |
-      | sf ask $B Which         |
-      | sf answer $B yes        |
-      | sf route $B coder       |
-      | sf handoff $B           |
+      | command           |
+      | sf start $B       |
+      | sf route $B coder |
+      | sf handoff $B     |
+
+  # sf task state 9
+  Scenario: sf task state 9: sf ask refuses a finished task
+    Given task "B" was handed off to done and squash-merged into main
+    When I run "sf ask $B Which"
+    Then the exit status is 1
+    And the error output has the line "sf: task $B is finished"
+    And the branch of task "B" did not move
+
+  # sf task state 10
+  Scenario: sf task state 10: sf answer refuses a finished task
+    Given task "B" was handed off to done and squash-merged into main
+    When I run "sf answer $B yes"
+    Then the exit status is 1
+    And the error output has the line "sf: task $B is finished"
+    And the branch of task "B" did not move

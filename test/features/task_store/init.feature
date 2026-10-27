@@ -15,6 +15,14 @@ Feature: sf init without git-bug
     And the output has the line "roles: specifier coder cleaner architect hardener qa"
 
     Examples:
-      | identity                    | printed                                |
-      | tester <tester@example.com> | tester <tester@example.com>            |
-      | -                           | operator <operator@swarmforge.local>   |
+      | identity                    | printed                     |
+      | tester <tester@example.com> | tester <tester@example.com> |
+
+  # sf init without git-bug 2
+  Scenario: sf init without git-bug 2: sf init prints the default identity when git has none
+    Given a git repository with a copy of swarmforge and no git-bug on PATH
+    And the git identity of the project is "-"
+    When I run "sf init"
+    Then the exit status is 0
+    And the output has the line "identity: operator <operator@swarmforge.local>"
+    And the output has the line "roles: specifier coder cleaner architect hardener qa"

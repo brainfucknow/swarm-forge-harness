@@ -13,26 +13,21 @@ Feature: sf hook record trailers
 
   # sf hook record trailers 1
   Scenario Outline: sf hook record trailers 1: a task worktree commit with a SwarmForge trailer is refused
-    When I commit "<message>" in the worktree of task "A" with SWARMFORGE_ROLE "<role>"
+    When I commit "Fix\n\n<key>: done" in the worktree of task "A" with SWARMFORGE_ROLE "coder"
     Then the exit status is 1
-    And the error output has the line "sf: <key> is a SwarmForge record trailer; only sf writes those"
+    And the error output has the line "sf: <printed> is a SwarmForge record trailer; only sf writes those"
     And the branch of task "A" did not move
 
     Examples:
-      | message                                     | role  | key              |
-      | Fix\n\nSwarmForge-Stage: done               | coder | SwarmForge-Stage |
-      | Fix\n\nTested: x\nswarmforge-needs: none    | coder | swarmforge-needs |
-      | Fix\n\nSwarmForge-Task: x                   | done  | SwarmForge-Task  |
+      | key              | printed          |
+      | SwarmForge-Stage | SwarmForge-Stage |
+      | swarmforge-needs | swarmforge-needs |
+      | SWARMFORGE-TASK  | SWARMFORGE-TASK  |
 
   # sf hook record trailers 2
-  Scenario Outline: sf hook record trailers 2: SwarmForge lines outside the trailer block and main checkout commits are allowed
-    When I commit "<message>" in the <place>
+  Scenario: sf hook record trailers 2: a SwarmForge line outside the trailer block is allowed
+    When I commit "Fix\n\nSwarmForge-Stage: done\n\nClosing text" in the worktree of task "A"
     Then the exit status is 0
-
-    Examples:
-      | message                                         | place                   |
-      | Fix\n\nSwarmForge-Stage: done\n\nClosing text   | worktree of task "A"    |
-      | Fix\n\nSwarmForge-Stage: done                   | main checkout           |
 
   # sf hook record trailers 3
   Scenario: sf hook record trailers 3: sf commit-msg refuses the message file and leaves it unchanged
@@ -41,3 +36,22 @@ Feature: sf hook record trailers
     Then the exit status is 1
     And the error output has the line "sf: SwarmForge-Stage is a SwarmForge record trailer; only sf writes those"
     And the file "tmp/msg" in the worktree of task "A" still holds "Fix\n\nSwarmForge-Stage: done"
+
+  # sf hook record trailers 4
+  Scenario: sf hook record trailers 4: a SwarmForge trailer after another trailer is refused
+    When I commit "Fix\n\nTested: x\nswarmforge-needs: none" in the worktree of task "A" with SWARMFORGE_ROLE "coder"
+    Then the exit status is 1
+    And the error output has the line "sf: swarmforge-needs is a SwarmForge record trailer; only sf writes those"
+    And the branch of task "A" did not move
+
+  # sf hook record trailers 5
+  Scenario: sf hook record trailers 5: the refusal holds at stage done
+    When I commit "Fix\n\nSwarmForge-Task: x" in the worktree of task "A" with SWARMFORGE_ROLE "done"
+    Then the exit status is 1
+    And the error output has the line "sf: SwarmForge-Task is a SwarmForge record trailer; only sf writes those"
+    And the branch of task "A" did not move
+
+  # sf hook record trailers 6
+  Scenario: sf hook record trailers 6: a commit in the main checkout is not checked
+    When I commit "Fix\n\nSwarmForge-Stage: done" in the main checkout
+    Then the exit status is 0
