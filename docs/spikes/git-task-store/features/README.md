@@ -56,6 +56,7 @@ PATH, except in `migrate.feature`. The end-to-end procedure is `../qa.md`.
 | `task "A" titled "T" with the request "Q" was started on route "R"` | `sf new "T" -m "Q" --route R`, then `sf start $A`. |
 | `task "A" was finished` | `sf handoff $A --to done` with `SWARMFORGE_ROLE` unset, then `sf finish $A`, in the main checkout. |
 | `another clone of "R" created task "C" titled "T" on route "Q" and pushed its branch` | Clones `R` into a second scratch directory, runs `sf init` and `sf new "T" -m "T" --route Q` there, then `git push R swarm/$C`. |
+| `another clone of "R" pushed the record "C" on task "A"` | Clones `R` into a second scratch directory and runs `sf init` and `sf start $A` there. Then it runs `C` (placeholders filled in, split on spaces) with `SWARMFORGE_REMOTE=R`, so the record is pushed. |
 | `role "R" committed "M" in the worktree of task "A" as C1` | `SWARMFORGE_ROLE=R git commit --allow-empty -m M` in the worktree of A. The commit is `C1`. |
 | `role "R" committed the file "P" with "M" in the worktree of task "A" as C1` | Writes `P` with the line `x`, then `git add P` and commits as above. |
 | `the worktree of task "A" has the staged new file "S" and the unstaged change "U"` | Commits `U` with the line `1` (as the stage's role), appends the line `2` to `U` without staging it, then writes `S` with the line `s` and stages it with `git add S`. |
@@ -90,6 +91,7 @@ PATH, except in `migrate.feature`. The end-to-end procedure is `../qa.md`.
 | `the parent of the tip commit of task "A" has the message "M"` | The same for `swarm/$A^`. |
 | `the tip commit of task "A" has the trailer "T"` | `git log -1 --format=%(trailers:only,unfold) swarm/$A` has the line `T`. |
 | `the tip commit of task NEW has the author "X"` | `git log -1 --format='%an <%ae>'` equals `X`. |
+| `the records of task "A" are, oldest first, "X"` | The `SwarmForge-Record` values of the commits in `git log --first-parent --reverse swarm/$A` that have `SwarmForge-Task: $A`, one per line, equal the lines of `X`. |
 | `the parent of the tip commit of task "A" is C1` | `git rev-parse swarm/$A^` is the sha of `C1`. |
 | `the parent of the tip commit of task NEW is the HEAD of the main checkout` | `swarm/NEW^` and the main checkout's HEAD name the same commit. |
 | `the tip commit of task "A" changes no file` | `git diff-tree --no-commit-id -r swarm/$A` prints nothing. |

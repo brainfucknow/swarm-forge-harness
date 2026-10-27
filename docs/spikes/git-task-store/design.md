@@ -26,6 +26,7 @@ Each decision was settled with the operator, in the task's `answer` records.
 | 8 | Migration | `sf migrate` converts the open git-bug tasks. It is run on this repository when the build lands. |
 | 9, 9b | Mutation manifests | An orphan cache branch, `swarmforge/metrics`. This note fixes its shape, and ec13ecd's specifier writes its Gherkin. |
 | 10 | Order | Finish 5bbff27 under git-bug, build this design, then re-specify ec13ecd. |
+| Review | Two clones on one task | No new command. With `SWARMFORGE_REMOTE` set, sf refuses to write a record while the remote branch has records the local one lacks (pull first). A refused push is fixed with `git pull --rebase`; records change no files, so it never conflicts, and the last writer wins. |
 
 ## Model
 
@@ -260,10 +261,27 @@ one commit per task. The record commits are not squashed.
   stays local. sf warns `push of swarm/<id> to <remote> failed; the record is
   only local` on stderr, and the command keeps its output and exit status 0.
 - **Not settled.** What `sf finish` pushes. See Open questions.
-- **Two clones on one task.** They take turns: fetch, then
-  `sf start` (a fast-forward of the local branch), then work. When two
-  clones write records on the same task at the same time, the branches
-  diverge, and the push is refused. sf does not merge task branches.
+- **Two clones on one task.** sf adds no command for this. Someone merges
+  with plain git, as follows.
+  - **Take turns.** Fetch, run `sf start` (a fast-forward of the local
+    branch), then work.
+  - **sf refuses to write over unseen records.** With `SWARMFORGE_REMOTE`
+    set, sf first fetches `swarm/<id>` from the remote, before it writes a
+    record. When the fetched tip has a record commit
+    (`SwarmForge-Task: <id>`) that the local branch does not contain, sf
+    refuses: `sf: <remote>/swarm/<id> has records that swarm/<id> lacks;
+    pull first: git pull --rebase <remote> swarm/<id>`. The exit status is
+    1, and sf writes no commit. When the fetch fails, there is no check; the
+    record is written, and the push warns as above.
+  - **When the push is still refused.** The other clone pushed between the
+    check and the push. In the task worktree (or with the branch checked
+    out), run `git pull --rebase <remote> swarm/<id>`, then
+    `git push <remote> swarm/<id>`.
+  - **Why the rebase is safe.** A record changes no file, so rebasing a
+    record never conflicts. git keeps commits that start empty, which the
+    spike checked with git 2.43. History stays linear, and the newest
+    record's snapshot is the state: the last writer wins. Role commits can
+    still conflict like any other code, and the role resolves them.
 
 ## Migration
 
@@ -410,8 +428,5 @@ None of these blocks the build. They are listed for the operator.
 3. **Abandoning a task.** No command closes a task without a merge (git-bug
    had `status close`). Should `sf drop <id>` keep the branch under another
    name, such as `swarm-dropped/<id>`?
-4. **Diverged task branches.** When two clones write records on the same
-   task, sf refuses to merge them. Should `sf start` offer to rebase the
-   local records onto the remote branch?
-5. **Size of `swarmforge/metrics`.** Should sf squash it, for example in
+4. **Size of `swarmforge/metrics`.** Should sf squash it, for example in
    `sf finish`, or leave that to the operator?

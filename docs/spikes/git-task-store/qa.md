@@ -123,6 +123,18 @@ nothing (the record changes no file).
    `sf start <id>`. Expect a local branch at the remote tip and a worktree.
 5. Push a task, finish it locally, and fetch. Expect `sf ls` not to list it,
    although `origin/swarm/<id>` still exists.
+6. Two clones on one task. Push task D. In `S/other`, run `sf start D` and
+   `SWARMFORGE_REMOTE=origin sf ask D other`.
+   1. In `S/main`, run `sf ask D mine` without the variable. Expect a local
+      record.
+   2. Run `SWARMFORGE_REMOTE=origin sf answer D yes`. Expect exit 1, the
+      `pull first: git pull --rebase origin swarm/D` line, and no new
+      commit.
+   3. In D's worktree, run `git pull --rebase origin swarm/D`. Expect no
+      conflict, linear history (`git log --merges swarm/D` is empty), and
+      both question records kept, `other` before `mine`.
+   4. Run the answer again with the variable. Expect exit 0, origin at the
+      local tip, and `sf ls` showing D with no needs.
 
 ## 7. The commit-msg hook
 
