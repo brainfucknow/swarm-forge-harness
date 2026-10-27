@@ -143,27 +143,37 @@
     (should= "type: approval\nfrom: operator"
              (record/block {:record "approval" :from "operator"}))))
 
+(def ^:private task-text
+  (record/task-file {:id "t-1" :date "2026-10-27" :title "Add login" :request "Users log in.\n"}))
+
+(def ^:private archived-text
+  (record/archive task-text "coder" ["type: created\nfrom: operator" "type: handoff\nfrom: coder"]))
+
 (describe "task file"
-  (let [text (record/task-file {:id "t-1" :date "2026-10-27" :title "Add login" :request "Users log in.\n"})]
-    (it "is the front matter, the title heading and the request"
-      (should= "---\nid: t-1\ncreated: 2026-10-27\n---\n\n# Add login\n\nUsers log in.\n" text))
+  (it "is the front matter, the title heading and the request"
+    (should= "---\nid: t-1\ncreated: 2026-10-27\n---\n\n# Add login\n\nUsers log in.\n" task-text))
 
-    (it "reads back"
-      (should= {:front {"id" "t-1" "created" "2026-10-27"} :title "Add login" :request "Users log in." :blocks []}
-               (record/read-task-file text)))
+  (it "reads back"
+    (should= {:front {"id" "t-1" "created" "2026-10-27"} :title "Add login" :request "Users log in." :blocks []}
+             (record/read-task-file task-text)))
 
-    (context "archive"
-      (let [archived (record/archive text "coder" ["type: created\nfrom: operator" "type: handoff\nfrom: coder"])]
-        (it "adds the stage, the route and the fenced records"
-          (should= (str "---\nid: t-1\ncreated: 2026-10-27\nstage: done\nroute: coder\n---\n\n# Add login\n\nUsers log in.\n\n"
-                        "## Records\n\n```text\ntype: created\nfrom: operator\n```\n\n```text\ntype: handoff\nfrom: coder\n```\n")
-                   archived))
+  (it "keeps a Records heading in the request of an open task"
+    (let [request "Log the events.\n\n## Records\n\n```text\ntype: example\n```"]
+      (should= {:request request :blocks []}
+               (select-keys (record/read-task-file (record/task-file {:id "t-1" :date "2026-10-27" :title "Log" :request request}))
+                            [:request :blocks]))))
 
-        (it "reads back with the records unfenced"
-          (should= {:front {"id" "t-1" "created" "2026-10-27" "stage" "done" "route" "coder"}
-                    :title "Add login" :request "Users log in."
-                    :blocks ["type: created\nfrom: operator" "type: handoff\nfrom: coder"]}
-                   (record/read-task-file archived)))))))
+  (context "archive"
+    (it "adds the stage, the route and the fenced records"
+      (should= (str "---\nid: t-1\ncreated: 2026-10-27\nstage: done\nroute: coder\n---\n\n# Add login\n\nUsers log in.\n\n"
+                    "## Records\n\n```text\ntype: created\nfrom: operator\n```\n\n```text\ntype: handoff\nfrom: coder\n```\n")
+               archived-text))
+
+    (it "reads back with the records unfenced"
+      (should= {:front {"id" "t-1" "created" "2026-10-27" "stage" "done" "route" "coder"}
+                :title "Add login" :request "Users log in."
+                :blocks ["type: created\nfrom: operator" "type: handoff\nfrom: coder"]}
+               (record/read-task-file archived-text)))))
 
 (describe "record-trailer"
   (it "is the first trailer key that starts with SwarmForge- in any case"

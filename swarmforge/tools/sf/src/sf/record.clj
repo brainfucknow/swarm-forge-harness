@@ -158,15 +158,18 @@
        "\n"))
 
 (defn read-task-file
-  "The front matter, title, request and archived record blocks of a task file."
+  "The front matter, title, request and archived record blocks of a task file.
+  Only an archived file (one with a stage) has a Records section; in an open
+  task the heading is part of the request."
   [text]
   (let [[_ front rest] (re-matches #"(?s)---\n(.*?)\n---\n(.*)" text)
         [_ title body] (re-matches #"(?s)\s*# ([^\n]*)\n?(.*)" (or rest ""))
-        cut (str/last-index-of body records-heading)]
-    {:front (into {} (for [line (str/split-lines (or front ""))
-                           :let [[_ k v] (re-matches #"([^:]+): ?(.*)" line)]
-                           :when k]
-                       [k v]))
+        front (into {} (for [line (str/split-lines (or front ""))
+                             :let [[_ k v] (re-matches #"([^:]+): ?(.*)" line)]
+                             :when k]
+                         [k v]))
+        cut (when (contains? front "stage") (str/last-index-of body records-heading))]
+    {:front front
      :title title
      :request (str/trim (if cut (subs body 0 cut) (or body "")))
      :blocks (if cut
