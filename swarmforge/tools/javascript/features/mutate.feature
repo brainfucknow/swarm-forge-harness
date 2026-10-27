@@ -24,33 +24,29 @@ Feature: sf-js mutate
     Given "<file>" is added on the task branch
     When I run sf-js with "mutate --base main"
     Then sf-js ran "npx --no-install stryker run"
-    And the command line that runs "stryker" contains "--mutate <file>"
+    And the command line that runs "stryker" ends with "--mutate <pattern>"
 
     Examples:
-      | file          |
-      | src/ledger.ts |
-      | src/ledger.js |
-      | src/view.tsx  |
-      | src/view.jsx  |
-      | src/tool.mjs  |
-      | src/tool.cts  |
+      | file          | pattern       |
+      | src/ledger.ts | src/ledger.ts |
+      | src/ledger.js | src/ledger.js |
+      | src/view.tsx  | src/view.tsx  |
+      | src/view.jsx  | src/view.jsx  |
+      | src/tool.mjs  | src/tool.mjs  |
+      | src/tool.cts  | src/tool.cts  |
 
   # sf-js mutate 2
-  Scenario Outline: sf-js mutate 2: tests and declarations are not mutated
-    Given "<file>" is added on the task branch
+  Scenario: sf-js mutate 2: tests and declarations are not mutated
+    Given "src/ledger.test.ts" is added on the task branch
+    And "src/ledger.spec.js" is added on the task branch
+    And "src/ledger.property.test.ts" is added on the task branch
+    And "src/__tests__/ledger.ts" is added on the task branch
+    And "src/types.d.ts" is added on the task branch
+    And "README.md" is added on the task branch
     When I run sf-js with "mutate --base main"
     Then the exit status is 0
     And the output has the line "no changed source files to mutate"
     And sf-js did not run "stryker"
-
-    Examples:
-      | file                        |
-      | src/ledger.test.ts          |
-      | src/ledger.spec.js          |
-      | src/ledger.property.test.ts |
-      | src/__tests__/ledger.ts     |
-      | src/types.d.ts              |
-      | README.md                   |
 
   # sf-js mutate 3
   Scenario: sf-js mutate 3: several changed files go to one --mutate, sorted
@@ -62,19 +58,23 @@ Feature: sf-js mutate
 
   # sf-js mutate 4
   Scenario Outline: sf-js mutate 4: Stryker runs incrementally with the project's runner
-    Given package.json lists "<runner>" in devDependencies
-    And "src/ledger.ts" is added on the task branch
+    Given "src/ledger.ts" is added on the task branch
     When I run sf-js with "mutate --base main"
     Then the command line that runs "stryker" contains "<argument>"
 
     Examples:
-      | runner | argument                                       |
-      | vitest | --testRunner vitest                            |
-      | jest   | --testRunner jest                              |
-      | vitest | --incremental                                  |
-      | vitest | --incrementalFile tmp/stryker/incremental.json |
-      | vitest | --reporters json,progress                      |
-      | vitest | --concurrency 4                                |
+      | argument                                                     |
+      | --testRunner vitest                                          |
+      | --incremental --incrementalFile tmp/stryker/incremental.json |
+      | --reporters json,progress                                    |
+      | --concurrency 4                                              |
+
+  # sf-js mutate 4
+  Scenario: sf-js mutate 4: Stryker runs with jest when package.json lists it
+    Given package.json lists "jest" in devDependencies
+    And "src/ledger.ts" is added on the task branch
+    When I run sf-js with "mutate --base main"
+    Then the command line that runs "stryker" contains "--testRunner jest"
 
   # sf-js mutate 5
   Scenario: sf-js mutate 5: the TypeScript checker runs with a tsconfig.json
@@ -101,25 +101,25 @@ Feature: sf-js mutate
   Scenario Outline: sf-js mutate 8: arguments after -- go to Stryker
     Given "src/ledger.ts" is added on the task branch
     When I run sf-js with "mutate --base main -- <extra>"
-    Then the command line that runs "stryker" ends with "<extra>"
+    Then the command line that runs "stryker" ends with " <passed>"
     And the command line that runs "stryker" contains "--concurrency 4"
 
     Examples:
-      | extra            |
-      | --timeoutMS 9000 |
-      | --logLevel debug |
+      | extra            | passed           |
+      | --timeoutMS 9000 | --timeoutMS 9000 |
+      | --logLevel debug | --logLevel debug |
 
   # sf-js mutate 9
   Scenario Outline: sf-js mutate 9: a caller's --concurrency replaces the default
     Given "src/ledger.ts" is added on the task branch
     When I run sf-js with "mutate --base main -- --concurrency <workers>"
-    Then the command line that runs "stryker" ends with "--concurrency <workers>"
+    Then the command line that runs "stryker" ends with "--concurrency <passed>"
     And the command line that runs "stryker" does not contain "--concurrency 4"
 
     Examples:
-      | workers |
-      | 2       |
-      | 1       |
+      | workers | passed |
+      | 2       | 2      |
+      | 1       | 1      |
 
   # sf-js mutate 10
   Scenario Outline: sf-js mutate 10: survivors are listed and fail the run
@@ -133,7 +133,15 @@ Feature: sf-js mutate
       | status     | mutator          | line | replacement     | exit | row                                                            |
       | Survived   | EqualityOperator | 14   | amount >= total | 1    | Survived   src/ledger.ts:14  EqualityOperator  amount >= total |
       | NoCoverage | BooleanLiteral   | 21   | true            | 1    | NoCoverage src/ledger.ts:21  BooleanLiteral  true              |
-      | Killed     | EqualityOperator | 14   | amount >= total | 0    | mutation score 100.0% (Killed 1)                               |
+
+  # sf-js mutate 10
+  Scenario: sf-js mutate 10: a killed mutant is not listed and passes the run
+    Given "src/ledger.ts" is added on the task branch
+    And the Stryker report has a Killed "EqualityOperator" mutant in "src/ledger.ts" at line 14 replacing it with "amount >= total"
+    When I run sf-js with "mutate --report-only"
+    Then the exit status is 0
+    And the output does not mention "EqualityOperator"
+    And the output ends with the line "mutation score 100.0% (Killed 1)"
 
   # sf-js mutate 11
   Scenario Outline: sf-js mutate 11: the score leaves out Ignored, CompileError and RuntimeError mutants
@@ -169,28 +177,42 @@ Feature: sf-js mutate
     And the fake stryker exits with status <stryker_status> without a report
     When I run sf-js with "mutate --base main"
     Then the exit status is 2
-    And the error output contains "stryker exited <stryker_status> without tmp/stryker/mutation.json"
+    And the error output contains "<message>"
 
     Examples:
-      | stryker_status |
-      | 1              |
-      | 3              |
+      | stryker_status | message                                            |
+      | 1              | stryker exited 1 without tmp/stryker/mutation.json |
+      | 3              | stryker exited 3 without tmp/stryker/mutation.json |
 
   # sf-js mutate 14
-  Scenario Outline: sf-js mutate 14: without --all only mutants in changed source files are judged
+  Scenario: sf-js mutate 14: a run without --all leaves out a Survived mutant in an unchanged file
     Given "src/ledger.ts" is added on the task branch
     And the Stryker report has a Killed "EqualityOperator" mutant in "src/ledger.ts" at line 3 replacing it with "a >= b"
-    And the Stryker report has a <status> "BooleanLiteral" mutant in "src/old.ts" at line 5 replacing it with "true"
-    When I run sf-js with "<command>"
+    And the Stryker report has a Survived "BooleanLiteral" mutant in "src/old.ts" at line 5 replacing it with "true"
+    When I run sf-js with "mutate --base main"
     Then the exit status is 0
     And the output does not mention "src/old.ts"
     And the output ends with the line "mutation score 100.0% (Killed 1)"
 
-    Examples:
-      | status     | command                          |
-      | Survived   | mutate --base main               |
-      | NoCoverage | mutate --base main               |
-      | Survived   | mutate --report-only --base main |
+  # sf-js mutate 14
+  Scenario: sf-js mutate 14: a run without --all leaves out a NoCoverage mutant in an unchanged file
+    Given "src/ledger.ts" is added on the task branch
+    And the Stryker report has a Killed "EqualityOperator" mutant in "src/ledger.ts" at line 3 replacing it with "a >= b"
+    And the Stryker report has a NoCoverage "BooleanLiteral" mutant in "src/old.ts" at line 5 replacing it with "true"
+    When I run sf-js with "mutate --base main"
+    Then the exit status is 0
+    And the output does not mention "src/old.ts"
+    And the output ends with the line "mutation score 100.0% (Killed 1)"
+
+  # sf-js mutate 14
+  Scenario: sf-js mutate 14: --report-only without --all leaves out a Survived mutant in an unchanged file
+    Given "src/ledger.ts" is added on the task branch
+    And the Stryker report has a Killed "EqualityOperator" mutant in "src/ledger.ts" at line 3 replacing it with "a >= b"
+    And the Stryker report has a Survived "BooleanLiteral" mutant in "src/old.ts" at line 5 replacing it with "true"
+    When I run sf-js with "mutate --report-only --base main"
+    Then the exit status is 0
+    And the output does not mention "src/old.ts"
+    And the output ends with the line "mutation score 100.0% (Killed 1)"
 
   # sf-js mutate 15
   Scenario Outline: sf-js mutate 15: --all judges every mutant in the report

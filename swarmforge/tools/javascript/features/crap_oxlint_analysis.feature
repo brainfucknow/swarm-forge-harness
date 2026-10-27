@@ -25,15 +25,23 @@ Feature: sf-js crap oxlint analysis errors
   # sf-js crap oxlint analysis errors 1
   Scenario Outline: sf-js crap oxlint analysis errors 1: an oxlint diagnostic with no code fails the run
     Given oxlint reports an error "<message>" at line <line> of "src/ledger.ts"
-    When I run sf-js with "<command>"
+    When I run sf-js with "crap --base main"
     Then the exit status is 2
-    And the error output contains "oxlint could not analyze src/ledger.ts:<line>: <message>"
+    And the error output contains "<error>"
     And the output does not mention "function(s)"
 
     Examples:
-      | line | message                                    | command          |
-      | 3    | Expected `:` but found `decimal`           | crap --base main |
-      | 21   | Identifier `a` has already been declared   | crap --all       |
+      | line | message                                  | error                                                                               |
+      | 3    | Expected `:` but found `decimal`         | oxlint could not analyze src/ledger.ts:3: Expected `:` but found `decimal`          |
+      | 21   | Identifier `a` has already been declared | oxlint could not analyze src/ledger.ts:21: Identifier `a` has already been declared |
+
+  # sf-js crap oxlint analysis errors 1
+  Scenario: sf-js crap oxlint analysis errors 1: crap --all fails the same way
+    Given oxlint reports an error "Identifier `a` has already been declared" at line 21 of "src/ledger.ts"
+    When I run sf-js with "crap --all"
+    Then the exit status is 2
+    And the error output contains "oxlint could not analyze src/ledger.ts:21: Identifier `a` has already been declared"
+    And the output does not mention "function(s)"
 
   # sf-js crap oxlint analysis errors 2
   Scenario: sf-js crap oxlint analysis errors 2: each oxlint diagnostic with no code is reported

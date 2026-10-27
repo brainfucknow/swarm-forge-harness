@@ -197,3 +197,22 @@ Work on another copy of P1 after QA-6, `tmp/qa/oxlint-version`. Each step change
 3. `npm install --save-dev oxlint@1.62.0`. crap lists `withdraw` and exits 0 or 1 by its CRAP.
 4. `npm uninstall oxlint`, so that package.json lists neither linter. crap still prints a `$ npx --no-install oxlint` line, prints no `eslint` line, and exits 2. Stderr has `sf-js needs oxlint 1.62.0 or later`.
 5. `$SFJS tools` prints `$ npm install --save-dev` with `oxlint` among the packages and without `eslint` or `typescript-eslint`. crap then lists `withdraw` again.
+
+## QA-15 Messages and defaults the tightened Gherkin pins (task 5bbff27)
+
+The sf-js features now spell out each message that echoes an input, and the
+cases where a value does not matter. Check those with the real sf-js. Work in
+a scratch git repository, `tmp/qa/pins`, whose `main` has one commit and which
+is checked out on `swarm/qa`. Unless a step says otherwise, it has a
+`package.json` that lists `vitest` in devDependencies and an empty
+`package-lock.json`. No `npm install` is needed: every step stops before a
+tool runs, or only shows the `$ ` line.
+
+1. `$SFJS lint` exits 2. Stderr has `sf-js: unknown command 'lint'`.
+2. `$SFJS crap --all --report false` exits 2. Stderr has `no coverage-final.json under false`. Then `$SFJS crap --all --report 42` exits 2 and stderr has `no coverage-final.json under 42`.
+3. Write `tmp/jscpd/jscpd-report.json` holding `{"duplicates": []}`. `$SFJS dry --report-only --base 123` exits 2. Stderr has `sf-js: git merge-base 123 HEAD`.
+4. Set `"packageManager": "npm@1.0.0"`. `$SFJS test` prints a `$ npx --no-install vitest run` line, as it does with a real npm version.
+5. Remove `package-lock.json`. With `"packageManager": "pnpm@1.0.0"`, `$SFJS test` exits 2, stderr has `no lockfile (pnpm-lock.yaml)`, and no `$ ` line is printed. With `npm@1.0.0`, `$SFJS property` gives `no lockfile (npm-shrinkwrap.json, package-lock.json)`. With `bun@1.0.0`, `$SFJS mutate --base main` gives `no lockfile (bun.lock, bun.lockb)`. Each exits 2 and prints no `$ ` line.
+6. Restore an empty `package-lock.json`. With `"packageManager": "cnpm@9.0.0"`, `$SFJS test` exits 2, stderr has `unknown packageManager 'cnpm@9.0.0'`, and no `$ ` line is printed. With `"packageManager": "yarn@1.0.0"`, stderr has `packageManager names yarn but the lockfile is package-lock.json` and no `$ ` line is printed.
+7. Remove the `packageManager` field. Add and commit `src/a.ts` (any 20 lines) on `swarm/qa`, and set the jscpd report to one 64-token clone of `src/a.ts` lines 1 to 3 and `lib/old.js` lines 10 to 12. `SWARMFORGE_BASE=trunk $SFJS dry --report-only` exits 1, as plain `$SFJS dry --report-only` does: a `SWARMFORGE_BASE` that names no branch falls back to `main`.
+8. Add and commit `src/a.d.ts`, `src/a.json` and `src/a.cs` on a fresh branch from `main`, with one clone of lines 1 to 3 of each in the jscpd report. `$SFJS dry --report-only --base main` exits 0 and ends with `0 of 3 clone(s) touch changed lines`.

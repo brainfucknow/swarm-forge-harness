@@ -23,15 +23,23 @@ Feature: sf-js crap analysis errors
   # sf-js crap analysis errors 1
   Scenario Outline: sf-js crap analysis errors 1: a fatal ESLint message fails the run
     Given ESLint reports a fatal "<message>" at line <line> of "src/ledger.ts"
-    When I run sf-js with "<command>"
+    When I run sf-js with "crap --base main"
     Then the exit status is 2
-    And the error output contains "eslint could not analyze src/ledger.ts:<line>: <message>"
+    And the error output contains "<error>"
     And the output does not mention "function(s)"
 
     Examples:
-      | line | message                                           | command          |
-      | 3    | Parsing error: Unexpected token )                 | crap --base main |
-      | 21   | Parsing error: Declaration or statement expected. | crap --all       |
+      | line | message                                           | error                                                                                        |
+      | 3    | Parsing error: Unexpected token )                 | eslint could not analyze src/ledger.ts:3: Parsing error: Unexpected token )                  |
+      | 21   | Parsing error: Declaration or statement expected. | eslint could not analyze src/ledger.ts:21: Parsing error: Declaration or statement expected. |
+
+  # sf-js crap analysis errors 1
+  Scenario: sf-js crap analysis errors 1: crap --all fails the same way
+    Given ESLint reports a fatal "Parsing error: Declaration or statement expected." at line 21 of "src/ledger.ts"
+    When I run sf-js with "crap --all"
+    Then the exit status is 2
+    And the error output contains "eslint could not analyze src/ledger.ts:21: Parsing error: Declaration or statement expected."
+    And the output does not mention "function(s)"
 
   # sf-js crap analysis errors 2
   Scenario: sf-js crap analysis errors 2: ESLint exit status 2 fails the run
@@ -42,14 +50,17 @@ Feature: sf-js crap analysis errors
     And the output does not mention "function(s)"
 
   # sf-js crap analysis errors 3
-  Scenario Outline: sf-js crap analysis errors 3: ESLint exit 0 or 1 and non-fatal messages are normal
-    Given the fake eslint exits with status <eslint_status>
+  Scenario: sf-js crap analysis errors 3: ESLint exit 0 with a non-fatal message is normal
+    Given the fake eslint exits with status 0
     And ESLint reports a non-fatal "File ignored because of a matching ignore pattern." at line 1 of "src/ledger.ts"
     When I run sf-js with "crap --base main"
     Then the exit status is 0
     And the output ends with the line "1 changed function(s), 0 over CRAP 10"
 
-    Examples:
-      | eslint_status |
-      | 0             |
-      | 1             |
+  # sf-js crap analysis errors 3
+  Scenario: sf-js crap analysis errors 3: ESLint exit 1 with a non-fatal message is normal
+    Given the fake eslint exits with status 1
+    And ESLint reports a non-fatal "File ignored because of a matching ignore pattern." at line 1 of "src/ledger.ts"
+    When I run sf-js with "crap --base main"
+    Then the exit status is 0
+    And the output ends with the line "1 changed function(s), 0 over CRAP 10"
