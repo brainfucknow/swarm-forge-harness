@@ -248,7 +248,8 @@
         [call] (:calls result)]
     (is (= 1 (:status result)))
     (is (str/includes? (:out result) "OVER crap   10.8  cc   4  cov  25%  src/ledger.ts:10 withdraw"))
-    (is (str/starts-with? call "npx --no-install oxlint --config tmp/oxlint/oxlintrc.json --disable-nested-config --format json"))
+    (is (str/starts-with? call "npx --no-install oxlint --config tmp/oxlint/oxlintrc.json --disable-nested-config --ignore-path tmp/oxlint/oxlintignore --format json"))
+    (is (= "" (slurp (project-file "tmp/oxlint/oxlintignore"))))
     (is (str/ends-with? call " src/ledger.ts"))
     (is (= 1 (count (:calls result))))
     (is (not (str/includes? (:out result) "diagnostics")))

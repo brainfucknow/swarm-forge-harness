@@ -61,7 +61,9 @@ the same either way.
 - oxlint runs with sf-js's own config, written to `tmp/oxlint/oxlintrc.json`
   (only `eslint/complexity`, `eslint-disable` comments ignored), with
   `--disable-nested-config` and `--format json`. The project's `.oxlintrc.json`
-  files, nested ones included, are not read. The files ESLint leaves out are
+  files, nested ones included, are not read. `--ignore-path` points at an
+  empty `tmp/oxlint/oxlintignore`, so the project's `.eslintignore` does not
+  hide files from CRAP. The files ESLint leaves out are
   passed as `--ignore-pattern` options, because oxlint resolves a config's
   `ignorePatterns` against the config's own directory. sf-js reads the JSON
   report from stdout and does not echo it.

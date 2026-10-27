@@ -11,6 +11,11 @@
 
 (def config-path (str commands/oxlint-dir "/oxlintrc.json"))
 
+(def ignore-path
+  "An empty ignore file of sf-js's own. Without it oxlint reads the project's
+  .eslintignore and leaves out the files it names."
+  (str commands/oxlint-dir "/oxlintignore"))
+
 (defn config
   "sf-js's own oxlint config: only the complexity rule, reporting every
   function, with eslint-disable comments ignored. oxlint resolves a config's
@@ -22,7 +27,7 @@
                          "rules" {"eslint/complexity" ["warn" 0]}}))
 
 (defn args [config files]
-  (-> ["oxlint" "--config" config "--disable-nested-config" "--format" "json"]
+  (-> ["oxlint" "--config" config "--disable-nested-config" "--ignore-path" ignore-path "--format" "json"]
       (into (mapcat #(vector "--ignore-pattern" %) commands/lint-ignores))
       (into files)))
 

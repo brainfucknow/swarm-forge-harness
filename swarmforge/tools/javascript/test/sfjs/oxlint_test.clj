@@ -97,8 +97,9 @@
 (deftest oxlint-command-line
   (let [args (oxlint/args "tmp/oxlint/oxlintrc.json" ["src/a.ts" "src/b.js"])
         line (str/join " " args)]
-    (is (= ["oxlint" "--config" "tmp/oxlint/oxlintrc.json" "--disable-nested-config" "--format" "json"]
-           (take 6 args)))
+    (is (= ["oxlint" "--config" "tmp/oxlint/oxlintrc.json" "--disable-nested-config"
+            "--ignore-path" "tmp/oxlint/oxlintignore" "--format" "json"]
+           (take 8 args)))
     (doseq [ignored ["**/node_modules/**" "**/dist/**" "**/tmp/**" "**/*.min.js" "**/*.test.*" "**/__tests__/**"]]
       (is (str/includes? line (str "--ignore-pattern " ignored)) ignored))
     (is (= ["src/a.ts" "src/b.js"] (take-last 2 args)))))

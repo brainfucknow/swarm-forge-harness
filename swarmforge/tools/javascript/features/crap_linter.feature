@@ -109,6 +109,7 @@ Feature: sf-js crap complexity source
       | option                             |
       | --config tmp/oxlint/oxlintrc.json  |
       | --disable-nested-config            |
+      | --ignore-path tmp/oxlint/oxlintignore |
       | --format json                      |
 
   # sf-js crap complexity source 5

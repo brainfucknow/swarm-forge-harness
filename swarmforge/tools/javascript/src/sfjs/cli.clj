@@ -158,6 +158,7 @@ manager comes from packageManager in package.json, else from the lockfile.
   oxlint's stdout goes to stderr when it is not a report."
   [proj files]
   (write-file oxlint/config-path (oxlint/config))
+  (write-file oxlint/ignore-path "")
   (let [{:keys [exit out]} (capture-tool proj (oxlint/args oxlint/config-path files))]
     (when-not (oxlint/report out)
       (binding [*out* *err*] (print out) (flush)))
