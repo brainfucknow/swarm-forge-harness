@@ -73,5 +73,5 @@ these, and QA reads them by hand (see the QA procedure):
 | `LID is 8 lowercase hexadecimal digits` | `LID` matches `^[0-9a-f]{8}$`. |
 | `git reads the trailers of the commit as "T"` | `git log -1 --format=%(trailers:only,unfold)`, trailing blank lines removed, equals `T`. |
 | `the two commits have different Lore-ids` | The `Lore-id` values of the last two commits differ. |
-| `the output ends with the lines` | The last stdout lines equal the table rows, in order, with placeholders filled in. No other `LORE:` line is in stdout. |
+| `the output ends with the lines "X"` | `X` split at each `\n` gives lines; the last stdout lines equal them, in order, with placeholders filled in. No other `LORE:` line is in stdout. |
 | `the output has no line containing "X"` / `starting with "X"` | No stdout line contains / starts with `X`. |
