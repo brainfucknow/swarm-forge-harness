@@ -6,7 +6,7 @@
 - Do not rely on stale cached, vendored, or preinstalled copies when a fresh GitHub install/build is possible in the current environment.
 - Language tool table:
   - Go: install with `go install`; mutation `github.com/unclebob/mutate4go`, CRAP `github.com/unclebob/crap4go`, DRY `github.com/unclebob/dry4go`.
-  - Clojure: install with Clojure CLI/deps.edn; mutation `github.com/unclebob/clj-mutate`, CRAP `github.com/unclebob/crap4clj`, DRY `github.com/unclebob/dry4clj`.
+  - Clojure: install with Clojure CLI/deps.edn; mutation `github.com/unclebob/clj-mutate`, CRAP `github.com/unclebob/crap4clj`, DRY `github.com/unclebob/dry4clj`. `swarmforge/languages/clojure.md` explains how to run them on Babashka code.
   - Java: install with Maven (`mvn`); mutation `github.com/unclebob/mutate4java`, CRAP `github.com/unclebob/crap4java`, DRY `github.com/unclebob/dry4java`.
   - C#: install with `sf-cs tools`; mutation `sf-cs mutate` (Stryker.NET), CRAP `sf-cs crap` (coverlet Cobertura), DRY `sf-cs dry` (jscpd). `swarmforge/languages/csharp.md` maps every constitution tool to its `sf-cs` command and explains the output.
   - JavaScript/TypeScript: install with `sf-js tools`; tests `sf-js test` (Vitest, else Jest, after `tsc --noEmit`), mutation `sf-js mutate` (StrykerJS), CRAP `sf-js crap` (oxlint or ESLint complexity with Istanbul coverage), DRY `sf-js dry` (jscpd). `swarmforge/languages/javascript.md` maps every constitution tool to its `sf-js` command and explains the output.
