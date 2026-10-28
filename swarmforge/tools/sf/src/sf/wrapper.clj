@@ -51,12 +51,16 @@
          " -M -m " main " \"$@\"")))
 
 (defn coverage-rewrite
-  "Moves into the directory of the first source root, with the source roots
-  made relative to it, then appends --coverage-command for the Babashka
-  coverage config unless the caller settled coverage or the Clojure CLI and
-  deps.edn are there."
-  [config-path]
-  (str "cfg=" (sq config-path) "\n" (shell/template "rewrite-coverage.sh")))
+  "Has sf.coverage-rewrite of sf-src, run by the Babashka executable bb, move
+  into the directory of the first source root, with the source roots made
+  relative to it, and append --coverage-command for the Babashka coverage
+  config unless the caller settled coverage or the Clojure CLI and deps.edn
+  are there."
+  [bb sf-src config-path]
+  (-> (shell/template "rewrite-coverage.sh")
+      (str/replace "{{bb}}" (sq bb))
+      (str/replace "{{src}}" (sq sf-src))
+      (str/replace "{{config}}" (sq config-path))))
 
 (defn coverage-config
   "A bb.edn whose coverage task runs Cloverage, at the Babashka-compatible commit
