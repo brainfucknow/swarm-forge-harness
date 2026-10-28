@@ -59,12 +59,15 @@ Feature: sf record commits
   # sf record commits 5
   Scenario: sf record commits 5: sf handoff adds a handoff record on the role's commit
     Given role "specifier" committed "Spec" in the worktree of task "A" as C1
-    When I run "sf handoff $A -m spec done"
+    And I ran "sf review $A"
+    And I ran "sf approve $A"
+    And role "coder" committed "Code" in the worktree of task "A" as C2
+    When I run "sf handoff $A -m code done"
     Then the exit status is 0
-    And the output is "HANDOFF: $A specifier -> coder at C1"
-    And the parent of the tip commit of task "A" is C1
+    And the output is "HANDOFF: $A coder -> qa at C2"
+    And the parent of the tip commit of task "A" is C2
     And the tip commit of task "A" changes no file
-    And the tip commit of task "A" has the message "sf handoff: $A\n\nspec done\n\nSwarmForge-Task: $A\nSwarmForge-Record: handoff\nSwarmForge-From: specifier\nSwarmForge-Stage: coder\nSwarmForge-Route: specifier,coder,qa\nSwarmForge-Needs: none"
+    And the tip commit of task "A" has the message "sf handoff: $A\n\ncode done\n\nSwarmForge-Task: $A\nSwarmForge-Record: handoff\nSwarmForge-From: coder\nSwarmForge-Stage: qa\nSwarmForge-Route: specifier,coder,qa\nSwarmForge-Needs: none"
 
   # sf record commits 6
   Scenario: sf record commits 6: sf approve adds an approval record and then a handoff record

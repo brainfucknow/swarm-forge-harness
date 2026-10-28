@@ -56,6 +56,8 @@ Feature: sf task history
     Given task "B" titled "Fix bug" was started on route "coder"
     And task "A" titled "Add login" was started on route "specifier"
     And role "specifier" committed "Spec\n\nTested: from A" in the worktree of task "A" as C2
+    And I ran "sf review $A"
+    And I ran "sf approve $A"
     And task "A" was finished
     And role "coder" committed "Work\n\nTested: from B" in the worktree of task "B" as C1
     And I ran "git merge --no-edit main" in the worktree of task "B"
@@ -69,6 +71,8 @@ Feature: sf task history
   Scenario Outline: sf task history 4: sf show prints a finished task with its LORE lines
     Given task "A" titled "Add login" was started on route "specifier"
     And role "specifier" committed "Spec\n\nTested: x" in the worktree of task "A" as C1
+    And I ran "sf review $A"
+    And I ran "sf approve $A"
     And task "A" was finished
     When I run "sf show <argument>"
     Then the exit status is 0
@@ -84,6 +88,8 @@ Feature: sf task history
   # sf task history 5
   Scenario: sf task history 5: sf start refuses a finished task
     Given task "A" titled "Add login" was started on route "specifier"
+    And I ran "sf review $A"
+    And I ran "sf approve $A"
     And task "A" was finished
     When I run "sf start $A"
     Then the exit status is 1
@@ -95,6 +101,8 @@ Feature: sf task history
     And I ran "sf ask $A Which?"
     And I ran "sf answer $A yes"
     And role "specifier" committed "Spec\n\nTested: x" in the worktree of task "A" as C1
+    And I ran "sf review $A"
+    And I ran "sf approve $A"
     And task "A" was handed off to done and squash-merged into main
     When I run "sf show $A"
     Then the exit status is 0
@@ -108,6 +116,8 @@ Feature: sf task history
   Scenario: sf task history 7: once the branch of a squash-merged task is gone, sf show prints no LORE lines
     Given task "A" titled "Add login" was started on route "specifier"
     And role "specifier" committed "Spec\n\nTested: x" in the worktree of task "A" as C1
+    And I ran "sf review $A"
+    And I ran "sf approve $A"
     And task "A" was handed off to done and squash-merged into main
     And the worktree and the branch of task "A" were removed
     When I run "sf show $A"
