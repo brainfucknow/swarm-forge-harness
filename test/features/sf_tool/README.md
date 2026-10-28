@@ -1,7 +1,9 @@
 # sf tool acceptance features
 
-Gherkin for `sf tool` (task aca0457, a port of the approved spec of task
-8414dd5 to the Babashka `sf`). These features are the specification.
+Gherkin for `sf tool` (the task "Port the tool-wrapper fix to the Babashka
+sf tool", a port of the approved spec of the task "Fix the dry4clj and
+clj-mutate tool wrappers" to the Babashka `sf`). These features are the
+specification.
 `test/acceptance.sh` runs them through the APS acceptance runtime, one
 execution per scenario and example row, with step handlers in
 `test/acceptance/src/acceptance/steps.clj`. Each execution runs the real `sf`

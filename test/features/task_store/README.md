@@ -1,54 +1,32 @@
 # Task store acceptance features
 
-Gherkin for task e6b686e, the first of three tasks that build the design of
-spike 01d767f (`docs/spikes/git-task-store/design.md`). This task takes `sf`
-off git-bug and keeps every task on its local branch: task files under
-`tasks/`, record commits with `SwarmForge-*` trailers, the `tasks/done/`
-archive, slug plus hash ids, and the hook's refusal of `SwarmForge-*`
-trailers on role commits. The test script here runs one check per scenario
-and example row, labelled with the scenario name (for example
-`sf task ids 3: ...`). Each check runs the real `sf` and real git in a
-scratch repository that holds a copy of `swarmforge/`. git-bug is never on
-PATH. The end-to-end procedure is `../../qa/task_store.md`.
+Gherkin for the task "Build the git-native task store", which built the
+local part of the design from the task "Spike: replace git-bug with
+Markdown task files and commit trailers". It takes `sf` off git-bug and
+keeps every task on its local branch: task files under `tasks/`, record
+commits with `SwarmForge-*` trailers, the `tasks/done/` archive, slug plus
+hash ids, and the hook's refusal of `SwarmForge-*` trailers on role
+commits. The test script here runs one check per scenario and example row,
+labelled with the scenario name (for example `sf task ids 3: ...`). Each
+check runs the real `sf` and real git in a scratch repository that holds a
+copy of `swarmforge/`. git-bug is never on PATH. The end-to-end procedure is
+`../../qa/task_store.md`.
 
 ## Settled with the operator
 
-- The spike's design and Gherkin are adopted as approved in 01d767f.
-- No `sf migrate`. The template has no users yet. The tasks still in git-bug
-  in this repository are re-created by hand in the new store, and the
-  `git-bug/*` mirror branches on GitHub are removed. That is the second
-  task, the rollout.
-- Sharing is the third task: the push to `SWARMFORGE_REMOTE`, the check for
+- The spike's design and Gherkin were adopted as approved.
+- No `sf migrate`: the template had no users yet.
+- Sharing is not built: the push to `SWARMFORGE_REMOTE`, the check for
   unseen remote records, remote-tracking task branches, the one considered
-  remote, and hex uniqueness against remote branches. Its draft Gherkin
-  stays in `docs/spikes/git-task-store/features/` until that task moves it.
-  Here, a task is a local `swarm/<id>` branch only.
-- git-bug leaves CI and the tests entirely: `test/acceptance.sh`,
-  `test/sf_test.sh` and `.github/workflows/test.yml` no longer install or
-  require it, and `test/probe_gitbug.clj` is deleted.
-
-## Changes to existing specifications
-
-- `../lore_trailers/lore_lines.feature` scenario 4 changed: `sf show` of a
-  finished task ends with its `LORE:` lines. `task_history.feature`
-  scenario 4 states the same for the store. Its description now says that
-  the commits are the first-parent history after the created record.
-- The Lore features' step meaning for "a project with swarmforge
-  initialized" no longer puts git-bug on PATH (`../lore_trailers/README.md`).
-  The Lore QA procedure no longer needs git-bug, and its section 5 now
-  expects `LORE:` lines after finish.
-- `test/sf_test.sh` checks the git-bug labels and comments. The coder
-  rewrites it against the branches. Outputs and refusals that these features
-  do not restate (`ASKED:`, `ANSWERED:`, `REVIEW:`, `REJECTED:`, `ROUTE:`,
-  `AUDIT_REQUIRED`, `NO_TASK`, the `--to` and route checks) stay as they
-  are.
+  remote, and hex uniqueness against remote branches. Its draft Gherkin is
+  in `docs/spikes/git-task-store/features/`. Here, a task is a local
+  `swarm/<id>` branch only.
 
 ## Not covered by these features
 
-Per `AGENTS.md`, prompt and document text is not pinned by tests. "What else
-changes in the build task" in the design lists them; QA reads them by hand
-(section 9 of the QA procedure). `sf --help` drops `SWARMFORGE_GIT_BUG` and
-does not list `migrate` or `SWARMFORGE_REMOTE`.
+Per `AGENTS.md`, prompt and document text is not pinned by tests. QA reads
+it by hand (section 9 of `../../qa/task_store.md`). `sf --help` does not
+list `SWARMFORGE_GIT_BUG`, `migrate` or `SWARMFORGE_REMOTE`.
 
 ## Placeholders
 

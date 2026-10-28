@@ -198,7 +198,9 @@ Work on another copy of P1 after QA-6, `tmp/qa/oxlint-version`. Each step change
 4. `npm uninstall oxlint`, so that package.json lists neither linter. crap still prints a `$ npx --no-install oxlint` line, prints no `eslint` line, and exits 2. Stderr has `sf-js needs oxlint 1.62.0 or later`.
 5. `$SFJS tools` prints `$ npm install --save-dev` with `oxlint` among the packages and without `eslint` or `typescript-eslint`. crap then lists `withdraw` again.
 
-## QA-15 Messages and defaults the tightened Gherkin pins (task 5bbff27)
+## QA-15 Messages and defaults the tightened Gherkin pins
+
+From the task "Tighten sf-js Gherkin examples to kill mutation survivors".
 
 The sf-js features now spell out each message that echoes an input, and the
 cases where a value does not matter. Check those with the real sf-js. Work in
