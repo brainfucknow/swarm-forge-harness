@@ -7,6 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: No mutation manifests in the tree
+        run: bash test/no_manifests.sh
+      - name: Test the manifest guard
+        run: bash test/no_manifests_test.sh
       - name: Install Babashka
         run: |
           mkdir -p "$HOME/bin"
