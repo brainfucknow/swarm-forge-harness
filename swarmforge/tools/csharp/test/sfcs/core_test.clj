@@ -175,6 +175,7 @@
     (spit (str (fs/path bin "dotnet"))
           (str "#!/usr/bin/env bash\n"
                "[ -n \"$FAKE_DOTNET_LOG\" ] && printf '%s\\n' \"$@\" > \"$FAKE_DOTNET_LOG\"\n"
+               "if [ \"$1 $2\" = \"$FAKE_FAIL_STEP\" ]; then exit 7; fi\n"
                "if [ \"$1\" = test ] && [ -n \"$FAKE_COVERAGE\" ]; then mkdir -p tmp/coverage/run && cp \"$FAKE_COVERAGE\" tmp/coverage/run/coverage.cobertura.xml; fi\n"
                "if [ \"$1\" = stryker ] && [ -n \"$FAKE_REPORT\" ]; then mkdir -p tmp/stryker/reports && cp \"$FAKE_REPORT\" tmp/stryker/reports/mutation-report.json; fi\n"
                "if [ \"$1\" = new ]; then mkdir -p .config && echo '{\"tools\":{}}' > .config/dotnet-tools.json; fi\n"
@@ -376,3 +377,30 @@
   (let [{:keys [status lines]} (sfcs {} "test" "--help")]
     (is (= 0 status))
     (is (str/starts-with? (first lines) "usage: sf-cs"))))
+
+(deftest tools-stop-at-the-first-failed-step
+  (doseq [[step manifest calls] [["new tool-manifest" nil 1]
+                               ["tool install" "{\"tools\":{}}" 1]
+                               ["tool restore" "{\"tools\":{\"dotnet-stryker\":{}}}" 1]]]
+    (fs/delete-tree (fs/path *repo* ".config"))
+    (when manifest
+      (fs/create-dirs (fs/path *repo* ".config"))
+      (spit (str (fs/path *repo* ".config" "dotnet-tools.json")) manifest))
+    (let [{:keys [status lines err]} (sfcs {"FAKE_FAIL_STEP" step} "tools")]
+      (is (= 2 status) step)
+      (is (= calls (count lines)) step)
+      (is (str/includes? err "exited 7") err)))
+  (fs/delete-tree (fs/path *repo* ".config")))
+
+(deftest fresh-report-required-after-running-a-tool
+  (doseq [[command report] [["dry" "tmp/jscpd/jscpd-report.json"]
+                            ["mutate" "tmp/stryker/reports/mutation-report.json"]]
+          exit ["0" "5"]]
+    (let [path (fs/path *repo* report)]
+      (fs/create-dirs (fs/parent path))
+      (spit (str path) (if (= command "dry") "{\"duplicates\":[]}" "{\"files\":{}}"))
+      (let [{:keys [status lines err]} (sfcs {"FAKE_EXIT" exit} command "--all")]
+        (is (= (if (= "0" exit) 2 5) status) (str command " exit " exit))
+        (is (not (fs/exists? path)))
+        (is (= 1 (count lines)))
+        (when (= "0" exit) (is (str/includes? err "not found")))))))

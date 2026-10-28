@@ -57,7 +57,7 @@ is a defect to fix, not a trailer.
 
 ### Setup
 
-1. `git clone -q --branch swarm/run-every-speclj-example-and-3509a9e "$WT" "$WT/tmp/qa/project"`.
+1. `git clone -q --branch "$(git -C "$WT" branch --show-current)" "$WT" "$WT/tmp/qa/project"`.
    `P` is `$WT/tmp/qa/project`. Run every command below from `$P`.
 2. `SPEC` is `bb --config swarmforge/tools/sf/bb.edn spec`.
 3. `DOC <dir>` is

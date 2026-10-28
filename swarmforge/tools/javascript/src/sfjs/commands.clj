@@ -3,7 +3,6 @@
   TypeScript sources."
   (:require [clojure.string :as str]))
 
-(def tmp "tmp")
 (def coverage-dir "tmp/coverage")
 (def jscpd-dir "tmp/jscpd")
 (def eslint-dir "tmp/eslint")
