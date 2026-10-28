@@ -50,19 +50,28 @@
       (should (str/includes? task "(:paths (edamame/parse-string (slurp \"bb.edn\")"))
       (should (str/includes? task "edamame.core")))))
 
-(defn- run-wrapper
-  "Runs a crap4clj-style wrapper in dir with a fake bb (and clj when clj?) on PATH;
-  returns the fake bb's arguments."
+(defn- run-wrapper-in
+  "Runs a crap4clj-style wrapper from dir with a fake bb (and clj when clj?) on
+  PATH; returns the exit, the error output, the fake bb's arguments, and the
+  directory it ran in (nil when it did not run)."
   [dir clj? args]
   (let [bin (fs/create-dirs (fs/path dir "fakebin"))
-        script (str (fs/path dir "wrapper"))]
-    (spit (str (fs/path bin "bb")) "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n")
+        script (str (fs/path dir "wrapper"))
+        ran (fs/path dir "ran")]
+    (fs/delete-if-exists ran)
+    (spit (str (fs/path bin "bb")) (str "#!/usr/bin/env bash\npwd -P > " (wrapper/sq ran) "\nprintf '%s\\n' \"$@\"\n"))
     (when clj? (spit (str (fs/path bin "clj")) "#!/usr/bin/env bash\n"))
     (run! #(fs/set-posix-file-permissions % "rwxr-xr-x") (fs/list-dir bin))
     (spit script (wrapper/script (wrapper/coverage-rewrite "/cfg/bb.edn") (wrapper/bb-command "/src" "crap")))
-    (-> (p/shell {:cmd (into ["bash" script] args) :dir (str dir) :out :string
-                  :extra-env {"PATH" (str bin ":/usr/bin:/bin")}})
-        :out str/split-lines)))
+    (let [{:keys [exit out err]} (p/shell {:cmd (into ["bash" script] args) :dir (str dir) :out :string :err :string
+                                            :continue true :extra-env {"PATH" (str bin ":/usr/bin:/bin")}})]
+      {:exit exit :err err :args (str/split-lines out)
+       :ran (when (fs/exists? ran) (str/trim (slurp (str ran))))})))
+
+(defn- run-wrapper
+  "The fake bb's arguments from run-wrapper-in."
+  [dir clj? args]
+  (:args (run-wrapper-in dir clj? args)))
 
 (describe "coverage-rewrite"
   (with dir (str (fs/create-temp-dir {:prefix "wrapper-"})))
@@ -92,6 +101,43 @@
     (it "adds nothing when there is a deps.edn"
       (spit (str (fs/path @dir "deps.edn")) "{}")
       (should= ["--config" "/src/bb.edn" "crap"] (run-wrapper @dir true [])))))
+
+(describe "coverage-rewrite directory"
+  (with dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "wrapper-"}))))
+  (around [it] (try (it) (finally (fs/delete-tree @dir))))
+
+  (it "runs in the directory of the first source root, with the source roots relative to it"
+    (fs/create-dirs (fs/path @dir "tools" "x" "spec"))
+    (fs/create-dirs (fs/path @dir "tools" "core" "src"))
+    (fs/create-dirs (fs/path @dir "test"))
+    (should= {:exit 0 :err "" :ran (str (fs/path @dir "tools" "x"))
+              :args ["--config" "/src/bb.edn" "crap" "--source-root" "src" "-s" "../core/src" "orders" "--lcov" "x/y"
+                     "--coverage-command" "bb --config /cfg/bb.edn coverage -r speclj -p src -p ../core/src -s spec --lcov"]}
+             (run-wrapper-in @dir false ["--source-root" "tools/x/src" "-s" "tools/core/src" "orders" "--lcov" "x/y"])))
+
+  (it "makes an absolute first source root relative to its directory"
+    (fs/create-dirs (fs/path @dir "tools" "x"))
+    (let [{:keys [ran args]} (run-wrapper-in @dir false ["-s" (str @dir "/tools/./x/../x/src/")])]
+      (should= (str (fs/path @dir "tools" "x")) ran)
+      (should= ["--config" "/src/bb.edn" "crap" "-s" "src"] (take 5 args))))
+
+  (it "looks for deps.edn in that directory"
+    (fs/create-dirs (fs/path @dir "tools" "x"))
+    (spit (str (fs/path @dir "tools" "x" "deps.edn")) "{}")
+    (should= ["--config" "/src/bb.edn" "crap" "--source-root" "src"]
+             (run-wrapper @dir true ["--source-root" "tools/x/src"])))
+
+  (it "stays in the current directory without a source root or when the first one is there"
+    (should= @dir (:ran (run-wrapper-in @dir true [])))
+    (let [{:keys [ran args]} (run-wrapper-in @dir true ["--source-root" "lib" "-s" "tools/x/src"])]
+      (should= @dir ran)
+      (should= ["--config" "/src/bb.edn" "crap" "--source-root" "lib" "-s" "tools/x/src"] (take 7 args))))
+
+  (it "exits 1 without running when that directory is missing"
+    (let [{:keys [exit err ran]} (run-wrapper-in @dir false ["--source-root" "missing/src"])]
+      (should= 1 exit)
+      (should= nil ran)
+      (should (str/includes? err "missing")))))
 
 (def ^:private sf-src
   (str (fs/parent (fs/parent (fs/path (.getPath (io/resource "sf/shell.clj")))))))
