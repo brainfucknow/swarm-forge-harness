@@ -99,6 +99,29 @@
     (should= "project-owned file" (slurp (str (fs/path *dir* ".codex/agents"))))
     (should-not (fs/exists? (fs/path *dir* ".claude/agents"))))
 
+  (it "preserves a directory occupying an adapter target"
+    (fs/create-dirs (fs/path *dir* ".claude/agents/coder.md"))
+    (write-agent ".claude/agents/coder.md/project.txt" "project files")
+    (let [{:keys [status err]} (captured #(adapters/adapters []))]
+      (should= 1 status)
+      (should-contain ".claude/agents/coder.md" err)
+      (should= "project files" (slurp (str (fs/path *dir* ".claude/agents/coder.md/project.txt"))))
+      (should-not (fs/exists? (fs/path *dir* ".github/agents")))))
+
+  (it "refuses a conflicting parent directory path before generating adapters"
+    (write-agent ".claude" "project-owned file")
+    (should= 1 (:status (captured #(adapters/adapters []))))
+    (should= "project-owned file" (slurp (str (fs/path *dir* ".claude"))))
+    (should-not (fs/exists? (fs/path *dir* ".codex/agents"))))
+
+  (it "does not generate through a symbolic link at the harness root"
+    (fs/create-dirs (fs/path *dir* "project-claude"))
+    (fs/create-sym-link (fs/path *dir* ".claude") (fs/path *dir* "project-claude"))
+    (should= 1 (:status (captured #(adapters/adapters []))))
+    (should (fs/sym-link? (fs/path *dir* ".claude")))
+    (should= [] (vec (fs/list-dir (fs/path *dir* "project-claude"))))
+    (should-not (fs/exists? (fs/path *dir* ".codex/agents"))))
+
   (it "refuses modified obsolete adapters rather than removing project edits"
     (adapters/adapters [])
     (write-agent ".codex/agents/coder.toml" "edited")
