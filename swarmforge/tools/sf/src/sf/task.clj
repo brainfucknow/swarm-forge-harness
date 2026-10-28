@@ -5,6 +5,7 @@
             [sf.audit :as audit]
             [sf.config :as config]
             [sf.flow :as flow]
+            [sf.git :as plumbing]
             [sf.history :as history]
             [sf.hook :as hook]
             [sf.metrics :as metrics]
@@ -59,7 +60,7 @@
 
 (defn init [_]
   (shell/quietly config/check)
-  (let [[name email] (store/author)]
+  (let [[name email] (plumbing/author)]
     (println (str "identity: " name " <" email ">")))
   (let [root (shell/repo-root)]
     (fs/create-dirs (str root "/" (hook/worktree-dir)))

@@ -7,20 +7,16 @@
   copy costs a re-run, never a wrong result."
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
-            [sf.shell :as shell]
-            [sf.store :as store]))
+            [sf.git :as git]
+            [sf.shell :as shell]))
 
 (def ^:private branch "refs/heads/swarmforge/metrics")
 (def ^:private kinds ["mutate" "gherkin"])
 
-(defn- tip []
-  (let [result (shell/run {:dir (shell/repo-root)} "git" "rev-parse" "--verify" "--quiet" branch)]
-    (when (shell/ok? result) (shell/chomp (:out result)))))
-
 (defn- cached
   "The blob of each manifest at rev, by path."
   [rev]
-  (into {} (for [line (shell/lines (apply store/git "ls-tree" "-r" rev "--" kinds))
+  (into {} (for [line (shell/lines (apply git/git "ls-tree" "-r" rev "--" kinds))
                  :let [[_ blob path] (re-matches #"\S+ blob (\S+)\t(.+)" line)]
                  :when blob]
              [path blob])))
@@ -37,19 +33,19 @@
 (defn load!
   "Copies each cached manifest that the .metrics/ of checkout lacks."
   [checkout]
-  (when-let [rev (tip)]
+  (when-let [rev (git/rev branch)]
     (doseq [[path blob] (cached rev)
             :let [file (fs/path checkout ".metrics" path)]
             :when (not (fs/exists? file))]
       (fs/create-dirs (fs/parent file))
-      (spit (str file) (shell/must {:dir (shell/repo-root)} "git" "cat-file" "blob" blob)))))
+      (spit (str file) (git/out {} "cat-file" "blob" blob)))))
 
 (defn- stale
   "The manifests of checkout whose blob is not the one at rev, by path."
   [rev checkout]
   (let [paths (local-paths checkout)
         files (map #(str (fs/path checkout ".metrics" %)) paths)
-        blobs (when (seq paths) (shell/lines (apply store/git "hash-object" "--" files)))
+        blobs (when (seq paths) (shell/lines (apply git/git "hash-object" "--" files)))
         known (if rev (cached rev) {})]
     (into {} (for [[path file blob] (map vector paths files blobs)
                    :when (not= blob (known path))]
@@ -60,13 +56,11 @@
   the first commit of the branch. When another save moves the branch first,
   sf reads it again and retries once; then it warns and saves nothing."
   [id checkout]
-  (loop [attempt 1]
-    (let [rev (tip)
-          files (stale rev checkout)]
-      (when (seq files)
-        (let [commit (store/commit-tree (store/tree-with rev [] files) (if rev [rev] [])
-                                        (str "sf metrics: " id "\n\nSwarmForge-Task: " id "\n"))
-              result (shell/run {:dir (shell/repo-root)} "git" "update-ref" branch commit (or rev ""))]
-          (cond (shell/ok? result) nil
-                (= 1 attempt) (recur 2)
-                :else (shell/warn "manifests not saved: " (str/trim (:err result)))))))))
+  (let [{:keys [error]}
+        (git/advance! branch
+                      (fn [rev]
+                        (let [files (stale rev checkout)]
+                          (when (seq files)
+                            {:commit (git/commit-tree (git/tree-with rev [] files) (if rev [rev] [])
+                                                      (str "sf metrics: " id "\n\nSwarmForge-Task: " id "\n"))}))))]
+    (when error (shell/warn "manifests not saved: " (str/trim error)))))
