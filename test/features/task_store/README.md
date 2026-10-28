@@ -9,8 +9,7 @@ hash ids, and the hook's refusal of `SwarmForge-*` trailers on role
 commits. The test script here runs one check per scenario and example row,
 labelled with the scenario name (for example `sf task ids 3: ...`). Each
 check runs the real `sf` and real git in a scratch repository that holds a
-copy of `swarmforge/`. git-bug is never on PATH. The end-to-end procedure is
-`../../qa/task_store.md`.
+copy of `swarmforge/`. git-bug is never on PATH.
 
 ## Settled with the operator
 
@@ -25,7 +24,7 @@ copy of `swarmforge/`. git-bug is never on PATH. The end-to-end procedure is
 ## Settled with the operator: sf finish resume
 
 For the task "Let sf finish resume after a merge conflict"
-(`finish_resume.feature`, QA procedure `../../qa/finish_resume.md`):
+(`finish_resume.feature`):
 
 - After a conflict the operator resolves and commits the merge, with any
   message, then runs `sf finish <id>` again. sf finish then removes the
@@ -41,9 +40,7 @@ For the task "Let sf finish resume after a merge conflict"
 
 ## Not covered by these features
 
-Per `AGENTS.md`, prompt and document text is not pinned by tests. QA reads
-it by hand (section 9 of `../../qa/task_store.md`). `sf --help` does not
-list `SWARMFORGE_GIT_BUG`, `migrate` or `SWARMFORGE_REMOTE`.
+Per `AGENTS.md`, prompt and document text is not pinned by tests.
 
 ## Placeholders
 

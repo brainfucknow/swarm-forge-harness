@@ -178,7 +178,7 @@ swarmforge/
 swarmforge/tools/sf/spec/        Speclj unit specs for sf
 swarmforge/tools/sf/property/    test.check property tests for sf (run on their own)
 test/sf_test.sh                  behavioral tests for sf
-test/features/  test/qa/         Gherkin acceptance features and QA procedures
+test/features/                   Gherkin acceptance features
 test/acceptance.sh  test/acceptance/   acceptance pipeline: generator, runtime, step handlers
 tasks/                           task files of open tasks; tasks/done/ for finished ones
 ```

@@ -12,7 +12,8 @@ Feature: sf metrics cache save
   is the tip. The first save makes the branch with a commit that has no
   parent, so the branch shares no history with main. A file deleted from
   .metrics/ stays on the branch. With nothing to save, sf makes no commit.
-  sf moves the branch without checking it out, so no worktree changes.
+  sf moves the branch without checking it out, so no worktree changes, the
+  main checkout stays on its branch, and no worktree is added.
 
   A handoff that sf refuses saves nothing. sf approve saves, since it hands
   off. The output of sf handoff and its record commit do not change.
@@ -34,6 +35,8 @@ Feature: sf metrics cache save
     And the tip commit of task "A" changes no file
     And the worktree of task "A" has no uncommitted change
     And the main checkout has no file ".metrics/mutate/sf/task.edn" and no uncommitted change
+    And the main checkout is on the branch "main"
+    And the only worktrees are the main checkout and the worktree of task "A"
 
   # sf metrics cache save 2
   Scenario Outline: sf metrics cache save 2: only new and changed manifests are saved, on top of the tip

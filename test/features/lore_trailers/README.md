@@ -8,8 +8,7 @@ trailers, and QA stops committing its scripts. These features are the specificat
 `sf show`. A test script under `test/` runs them, one check per scenario and
 example row, labelled with the scenario name (for example
 `sf commit Lore-id 1: Tested`). Each check runs the real `sf` and real git in
-a scratch git repository with `swarmforge/` copied in. The end-to-end
-procedure is `../../qa/lore_trailers.md`.
+a scratch git repository with `swarmforge/` copied in.
 
 ## Settled with the operator
 
@@ -26,7 +25,7 @@ procedure is `../../qa/lore_trailers.md`.
 ## Not covered by these features (prompt changes)
 
 Per `AGENTS.md`, prompt text is not pinned by tests. The task also changes
-these, and QA reads them by hand (see the QA procedure):
+these:
 
 - `swarmforge/roles/qa.md`: QA turns the specifier's QA procedure into
   throwaway scripts under `./tmp/` (git-ignored), runs them, and commits only

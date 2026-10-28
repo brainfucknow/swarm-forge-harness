@@ -15,8 +15,7 @@ instead of the feature file.
 
 `test/acceptance.sh` runs them, one check per scenario and example row, with
 the real `sf`, real git and a real `bb` in a scratch repository that holds a
-copy of `swarmforge/`. The end-to-end procedure is
-`../../qa/metrics_cache.md`. It replaces paused task ec13ecd (git notes,
+copy of `swarmforge/`. It replaces paused task ec13ecd (git notes,
 branch `old/ec13ecd-git-notes`).
 
 ## Settled with the operator
@@ -47,8 +46,9 @@ branch `old/ec13ecd-git-notes`).
 
 ## Not covered by these features
 
-Per `AGENTS.md`, prompt and document text is not pinned by tests. QA reads
-these by hand (section 6 of the QA procedure).
+Per `AGENTS.md`, prompt and document text is not pinned by tests. The real
+clj-mutate and gherkin-mutator are not tested either; the gherkin-mutator
+wrapper runs a fake.
 
 - `swarmforge/constitution/articles/engineering.md`: mutation manifests live
   on `swarmforge/metrics`, not in tracked files. Do not commit `.metrics/` or
@@ -102,6 +102,8 @@ Steps not listed here mean what `../task_store/README.md` says.
 | `the tip commit of the metrics branch changes the files "X"` | `git diff-tree --root --no-commit-id -r --name-status --no-renames swarmforge/metrics` prints exactly the lines of `X`, with the tab between status and path written as a space in `X`. |
 | `the parent of the tip commit of the metrics branch is M1` | `git rev-parse swarmforge/metrics^` is the sha of `M1`. |
 | `the metrics branch did not move` | `swarmforge/metrics` names the same commit as before the step under test. |
+| `the main checkout is on the branch "B"` | `git branch --show-current` in the main checkout prints `B`. |
+| `the only worktrees are the main checkout and the worktree of task "A"` | `git worktree list --porcelain` names exactly two worktrees: the main checkout and `.worktrees/$A`. |
 | `a git repository with one commit and no swarmforge` | A scratch git repository on `main` with one commit, no `swarmforge/` and no `.gitignore`. |
 | `I run install.sh into it N times` | Runs this repository's `install.sh <scratch repository>` N times. The exit status is the status of the last run. |
 | `the .gitignore of the repository has the line ".metrics/" exactly once` | `grep -cxF .metrics/ .gitignore` in the scratch repository prints `1`. |

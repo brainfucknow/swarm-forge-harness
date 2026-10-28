@@ -174,10 +174,6 @@ gherkin-mutator --feature swarmforge/tools/javascript/features/crap.feature \
   --runner-worker "bb --config swarmforge/tools/javascript/bb.edn acceptance-worker"
 ```
 
-The end-to-end QA procedure for sf-js is `qa/sf-js.md`. It runs against real
-npm, pnpm, yarn and bun projects with the real Vitest, Jest, tsc, oxlint,
-ESLint, jscpd and StrykerJS, and needs the npm registry.
-
 The shared core in `swarmforge/tools/core/` serves `sf-cs` as well. Its
 policy namespaces are pure: `sfcore.changes` (diff parsing, path matching),
 `sfcore.crap`, `sfcore.jscpd`, `sfcore.stryker` (each with the `review` both
