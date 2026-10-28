@@ -144,6 +144,12 @@
       (should= @dir ran)
       (should= ["--config" "/src/bb.edn" "crap" "--source-root" "lib" "-s" "tools/x/src"] (take 7 args))))
 
+  (it "does not read a bb.edn in the current directory"
+    (spit (str (fs/path @dir "bb.edn")) "{:paths [\"src\"")
+    (should= {:exit 0 :err "" :ran @dir
+              :args ["--config" "/src/bb.edn" "crap" "--use-existing-coverage"]}
+             (run-wrapper-in @dir false ["--use-existing-coverage"])))
+
   (it "exits 1 without running when that directory is missing"
     (let [{:keys [exit err ran]} (run-wrapper-in @dir false ["--source-root" "missing/src"])]
       (should= 1 exit)
