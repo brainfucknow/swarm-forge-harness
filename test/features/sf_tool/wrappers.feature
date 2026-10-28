@@ -8,6 +8,7 @@ Feature: sf tool wrappers
   upstream defines: clj-mutate runs the task mutate, crap4clj runs the task
   crap, and dry4clj (kind bbmain) runs the namespace dry4clj.core. The
   wrapper's own arguments follow, after any argument rewriting the tool has.
+  An ensure that succeeds replaces a wrapper left by an earlier install.
   sf check accepts the kinds bb, bbmain, clj and local.
 
   Background:
@@ -40,3 +41,10 @@ Feature: sf tool wrappers
     When I run "sf check" in the main checkout
     Then the exit status is 0
     And the output does not mention "tools.conf"
+
+  # sf tool wrappers 4
+  Scenario: sf tool wrappers 4: a successful ensure replaces an earlier wrapper
+    Given an earlier install left a wrapper for "gherkin-parser"
+    And "sf tool ensure gherkin-parser" ran in the main checkout
+    When I run the gherkin-parser wrapper with "a.feature"
+    Then bb received "--config SRC/bb.edn gherkin-parser a.feature"
