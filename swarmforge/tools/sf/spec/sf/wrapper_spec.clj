@@ -100,14 +100,15 @@
 
 (defn- run-gherkin-wrapper
   "Runs a gherkin-mutator wrapper whose tool is a fake that saves the feature it
-  sees to seen, puts a new block on it, and exits with status; returns the exit."
-  [dir status args]
+  sees to seen, puts a new block on it, runs last (shell text, such as a kill
+  of the wrapper), and exits with status; returns the exit."
+  [dir status args & [last]]
   (let [fake (str (fs/path dir "fake"))
         script (str (fs/path dir "wrapper"))]
     (spit fake (str "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" > " (fs/path dir "args") "\n"
                     "cp features/x.feature " (fs/path dir "seen") "\n"
                     "{ printf '" (str/replace block "\n" "\\n") "\\n'; grep -v '^#' features/x.feature | sed '/./,$!d'; } > " (fs/path dir "new") "\n"
-                    "mv " (fs/path dir "new") " features/x.feature\nexit " status "\n"))
+                    "mv " (fs/path dir "new") " features/x.feature\n" last "\nexit " status "\n"))
     (fs/set-posix-file-permissions fake "rwxr-xr-x")
     (spit script (wrapper/script (shell/template "rewrite-gherkin.sh")
                                  (wrapper/keeping-feature-block sf-src (str "exec " (wrapper/sq fake) " \"$@\""))))
@@ -130,6 +131,15 @@
              (str/split-lines (slurp (str (fs/path @dir "args")))))
     (should= "Feature: x\n" (slurp (str (fs/path @dir "features" "x.feature"))))
     (should= block (slurp (str (fs/path @dir ".metrics" "gherkin" "features" "x.feature")))))
+
+  (it "moves the block out when the wrapper is interrupted during the run"
+    (p/shell {:dir @dir :out :string} "git init -q")
+    (fs/create-dirs (fs/path @dir "features"))
+    (spit (str (fs/path @dir "features" "x.feature")) "Feature: x\n")
+    (doseq [[signal status] [["INT" 130] ["TERM" 143]]]
+      (should= status (run-gherkin-wrapper @dir 0 ["--feature" "features/x.feature"] (str "kill -" signal " $PPID; kill -" signal " $$")))
+      (should= "Feature: x\n" (slurp (str (fs/path @dir "features" "x.feature"))))
+      (should= block (slurp (str (fs/path @dir ".metrics" "gherkin" "features" "x.feature"))))))
 
   (it "only runs the tool without --feature"
     (should= 0 (run-gherkin-wrapper @dir 0 ["--level" "hard"]))

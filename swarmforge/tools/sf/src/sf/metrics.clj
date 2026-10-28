@@ -16,8 +16,8 @@
 (defn- cached
   "The blob of each manifest at rev, by path."
   [rev]
-  (into {} (for [line (shell/lines (apply git/git "ls-tree" "-r" rev "--" kinds))
-                 :let [[_ blob path] (re-matches #"\S+ blob (\S+)\t(.+)" line)]
+  (into {} (for [entry (str/split (apply git/git "ls-tree" "-r" "-z" rev "--" kinds) #"\x00")
+                 :let [[_ blob path] (re-matches #"(?s)\S+ blob (\S+)\t(.+)" entry)]
                  :when blob]
              [path blob])))
 

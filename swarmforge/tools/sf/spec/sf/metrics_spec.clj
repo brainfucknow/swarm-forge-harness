@@ -110,6 +110,15 @@
     (should= "cached b\n" (read-file (dir "b") "mutate/b.edn"))
     (should= "g1\n" (read-file (dir "b") "gherkin/f/x.feature")))
 
+  (it "copies a manifest whose path git would quote, and does not save it again"
+    (write (dir "a") "mutate/é \"x\".edn" "cached\n")
+    (metrics/save! "t-1" (dir "a"))
+    (let [tip (git *dir* "rev-parse" "refs/heads/swarmforge/metrics")]
+      (metrics/save! "t-2" (dir "a"))
+      (should= tip (git *dir* "rev-parse" "refs/heads/swarmforge/metrics")))
+    (metrics/load! (dir "b"))
+    (should= "cached\n" (read-file (dir "b") "mutate/é \"x\".edn")))
+
   (it "copies only files under mutate/ and gherkin/"
     (cache! "crap.edn" "c1\n")
     (cache! "mutate/a.edn" "v1\n")
