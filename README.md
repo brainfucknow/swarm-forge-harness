@@ -6,17 +6,6 @@ There is no tmux, no daemon, and no web dashboard. Roles talk to each other
 through task branches in the project repository, and they talk to you in
 chat.
 
-## What changed from SwarmForge
-
-| SwarmForge | This harness |
-|---|---|
-| One tmux session per role, each a long-running CLI. | Roles are harness subagents. The session only orchestrates. |
-| Handoff daemon, inbox and outbox files, `roles.tsv`. | A branch per task, `swarm/<id>`: a task file, and record commits whose trailers hold the stage. |
-| Dashboard approval gate (Attention). | The specifier commits, runs `sf review`, and stops. You approve or reject in chat. |
-| Dashboard clarifications. | A role runs `sf ask`, stops, and the question reaches you in chat. `sf answer` resumes it. |
-| Per-role worktrees with back-propagation merges. | One worktree per task; roles work in sequence on the same branch, so nothing propagates backwards. |
-| `grok`, `codex`, `claude`, `copilot` backends chosen per role. | Model tiers per role: `frontier` (the session's model) for the specifier, `strong` (Opus) and `fast` (Sonnet) for the rest. |
-
 ## Prerequisites
 
 - `git`, and `bash` for `install.sh`, the commit-msg hook, and the tool wrappers
@@ -46,7 +35,7 @@ Open the project in your harness and ask:
 /swarm Users can log in with email and password; lock the account after five failures.
 ```
 
-The session becomes the orchestrator:
+For the default `feature` route, the session becomes the orchestrator:
 
 1. The orchestrator picks a route for the request from `swarmforge/routes.conf`
    (`feature`, `bugfix`, `refactor`, `harden`, `spike`, or any subset of the
@@ -129,59 +118,13 @@ makes its first `sf handoff` at any commit come back with a self-review
 checklist instead of a record; the second attempt at the same commit records
 it. It is off by default.
 
-## Languages
+## Reference
 
-The constitution's tool table covers Go, Clojure, Java, C#, and
-JavaScript/TypeScript. For C#,
-`swarmforge/bin/sf-cs` wraps the tools so each role runs one command:
-
-| Command | Tool |
-|---|---|
-| `sf-cs test`, `sf-cs property` | `dotnet test`, split by the `Property` trait |
-| `sf-cs coverage` | coverlet Cobertura under `tmp/coverage/` |
-| `sf-cs crap` | CRAP per changed method from coverlet's complexity and coverage |
-| `sf-cs dry` | jscpd clones touching changed lines |
-| `sf-cs mutate` | Stryker.NET on changed files, survivors listed |
-
-Each exits 0 when clean, 1 on a finding, 2 on a usage error. See
-`swarmforge/languages/csharp.md` for the output formats. The report readers are
-Babashka, like the rest of the SwarmForge family; jscpd itself still runs on
-Node.
-
-For JavaScript and TypeScript, `swarmforge/bin/sf-js` offers the same commands
-with the same exit codes: `sf-js test` and `sf-js property` (Vitest or Jest,
-with `tsc --noEmit` first when there is a `tsconfig.json`, property tests named
-`*.property.test.*`), `sf-js coverage` (Istanbul JSON), `sf-js crap` (oxlint
-or ESLint complexity joined with coverage), `sf-js dry` (jscpd), and `sf-js mutate`
-(StrykerJS on changed files, incremental). It runs project tools through the
-package manager that `packageManager` or the lockfile names. See
-`swarmforge/languages/javascript.md`.
-
-## Layout
-
-```text
-install.sh                       copy SwarmForge into a project
-swarmforge/
-  bin/sf  tools/sf/              task helper over git branches (Babashka)
-  bin/sf-tool  tools.conf        constitution tool installer and catalogue (sf tool ...)
-  bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers (Babashka)
-  languages/csharp.md            what each sf-cs command runs and prints
-  bin/sf-js  tools/javascript/   JavaScript/TypeScript tool wrapper, its features and acceptance runtime
-  languages/javascript.md        what each sf-js command runs and prints
-  tools/core/                    changed-line, CRAP, jscpd and Stryker readers shared by the tool wrappers
-  roles.conf  routes.conf  tiers.conf   catalogue, routes, models
-  constitution.md  constitution/articles/
-  roles/                         specifier, coder, cleaner, architect, hardener, qa, orchestrator
-  handoff-protocol.md            task branch, records, lifecycle
-.claude/agents  .codex/agents  .github/agents     generated role agents
-.claude/skills/swarm  .agents/skills/swarm        the /swarm entry point
-swarmforge/tools/sf/spec/        Speclj unit specs for sf
-swarmforge/tools/sf/property/    test.check property tests for sf (run on their own)
-test/sf_test.sh                  behavioral tests for sf
-test/features/  test/qa/         Gherkin acceptance features and QA procedures
-test/acceptance.sh  test/acceptance/   acceptance pipeline: generator, runtime, step handlers
-tasks/                           task files of open tasks; tasks/done/ for finished ones
-```
+- [Installed guide](swarmforge/README.md): commands and configuration.
+- [Handoff protocol](swarmforge/handoff-protocol.md): task branches and records.
+- Language tools: [Clojure](swarmforge/languages/clojure.md),
+  [C#](swarmforge/languages/csharp.md),
+  [JavaScript/TypeScript](swarmforge/languages/javascript.md).
 
 ## Tests
 
@@ -198,14 +141,5 @@ bb --config swarmforge/tools/javascript/bb.edn property
 bb --config swarmforge/tools/javascript/bb.edn acceptance
 ```
 
-The first drives `sf` and real git in a scratch repository, the
-second drives `sf tool` against a local tool source and a fake `bb`, the third
-runs the Speclj unit specs of `sf`, the fourth runs its test.check property
-tests (kept out of the unit specs), the fifth installs `gherkin-parser`,
-the sixth runs the Gherkin features in `test/features/` through
-`gherkin-parser` and the generated acceptance tests, the seventh drives `sf-cs`
-against fixture reports and a fake `dotnet`, together with the shared
-`tools/core/` readers, and the last three test `sf-js`: unit tests against
-fixture reports (with dependency rules for `tools/`), test.check properties of
-`sf-js` and the shared core, then its Gherkin features through the Acceptance
-Pipeline with fake Node tools on PATH. None pins prompt wording.
+These suites exercise the CLI with scratch Git repositories and test the
+language wrappers against fixture reports and fake external tools.
