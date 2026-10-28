@@ -55,6 +55,13 @@
       (should-contain "HANDOFF" (out task/approve [id]))
       (should= "coder" (out task/stage [id]))))
 
+  (it "does not audit the commit a second time when the approval hands it on"
+    (write-conf! *dir* "roles.conf" "specifier frontier subagent audit\ncoder strong subagent audit\ncleaner fast subagent\n")
+    (let [id (new-id "Add login")]
+      (should-contain "AUDIT_REQUIRED" (out (fn [] (try (task/review [id]) (catch Exception _ nil)))))
+      (should-contain "REVIEW" (out task/review [id]))
+      (should-contain (str "HANDOFF: " id " specifier -> coder") (out task/approve [id]))))
+
   (it "keeps the task with the specifier on a rejection"
     (let [id (new-id "Add login")]
       (fails-with "not waiting for approval" #(task/reject [id "no"]))
@@ -107,6 +114,7 @@
       (commit-in-worktree id "a")
       (task/handoff [id] {:audit-passed? true})
       (should= "done" (out task/stage [id]))
+      (should= "" (git dir "status" "--porcelain"))
       (should-contain "FINISHED" (out task/finish [id]))
       (should (store/finished? id))
       (should (not (fs/exists? dir)))

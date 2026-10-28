@@ -1,7 +1,8 @@
 (ns sf.git-spec
   (:require [speclj.core :refer [around describe it should= should-be-nil should-contain]]
             [sf.git :as git]
-            [sf.repo-support :as repo :refer [*dir* with-repo]]))
+            [sf.repo-support :as repo :refer [*dir* with-repo]]
+            [sf.shell :as shell]))
 
 (def ^:private spec-ref "refs/heads/spec")
 
@@ -19,6 +20,22 @@
       (when (<= call n)
         (repo/git *dir* "update-ref" spec-ref (commit (str "other " call) tip)))
       {:commit (commit (str "mine " call) tip) :call call})))
+
+(describe "the commit identity"
+  (it "is git's user.name and user.email when both are set"
+    (with-redefs [git/run (fn [_ & args] {:exit 0 :out (str (last args) "-value\n")})]
+      (should= ["user.name-value" "user.email-value"] (git/author))))
+
+  (it "falls back to SWARMFORGE_USER and SWARMFORGE_EMAIL when git has no email"
+    (with-redefs [git/run (fn [_ & args] (if (= "user.email" (last args)) {:exit 1 :out ""} {:exit 0 :out "name\n"}))
+                  shell/env (fn [name default] (str name "|" default))]
+      (should= ["SWARMFORGE_USER|operator" "SWARMFORGE_EMAIL|SWARMFORGE_USER|operator@swarmforge.local"]
+               (git/author))))
+
+  (it "falls back when git has no name"
+    (with-redefs [git/run (fn [_ & args] (if (= "user.name" (last args)) {:exit 1 :out ""} {:exit 0 :out "mail\n"}))
+                  shell/env (fn [name _] name)]
+      (should= ["SWARMFORGE_USER" "SWARMFORGE_EMAIL"] (git/author)))))
 
 (describe "moving a ref"
   (around [it] (with-repo it))

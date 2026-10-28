@@ -41,16 +41,16 @@ Feature: sf metrics cache save
     And the metrics branch holds the file "mutate/b.edn" with "w1"
     And task "A" titled "Add login" was started on route "coder,qa"
     And the tip of the metrics branch is named M1
-    And the file "<file>" in the worktree of task "A" is written with "<content>"
+    And the file "<file>" in the worktree of task "A" is written with "w2"
     When I run "sf handoff $A"
     Then the exit status is 0
     And the parent of the tip commit of the metrics branch is M1
     And the tip commit of the metrics branch changes the files "<changes>"
 
     Examples:
-      | file                            | content | changes                    |
-      | .metrics/mutate/b.edn           | w2      | M mutate/b.edn             |
-      | .metrics/gherkin/f/x.feature    | g1      | A gherkin/f/x.feature      |
+      | file                            | changes                    |
+      | .metrics/mutate/b.edn           | M mutate/b.edn             |
+      | .metrics/gherkin/f/x.feature    | A gherkin/f/x.feature      |
 
   # sf metrics cache save 3
   Scenario: sf metrics cache save 3: manifests the same as the cached copy do not move the branch

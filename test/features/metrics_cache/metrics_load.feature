@@ -16,18 +16,18 @@ Feature: sf metrics cache load
 
   # sf metrics cache load 1
   Scenario Outline: sf metrics cache load 1: sf start copies the cached manifests into the task worktree
-    Given the metrics branch holds the file "<path>" with "v1"
+    Given the metrics branch holds the file "<dir>/x.edn" with "v1"
     And task "A" titled "Add login" was created on route "coder"
     When I run "sf start $A"
     Then the exit status is 0
     And the output has no line containing "metrics"
-    And the file ".metrics/<path>" in the worktree of task "A" holds "v1"
+    And the file ".metrics/<dir>/x.edn" in the worktree of task "A" holds "v1"
     And the worktree of task "A" has no uncommitted change
 
     Examples:
-      | path                             |
-      | mutate/sf/task.edn               |
-      | gherkin/test/features/x.feature |
+      | dir     |
+      | mutate  |
+      | gherkin |
 
   # sf metrics cache load 2
   Scenario: sf metrics cache load 2: a file the worktree has stays and a deleted file comes back
@@ -42,17 +42,14 @@ Feature: sf metrics cache load
     And the file ".metrics/mutate/b.edn" in the worktree of task "A" holds "cached b"
 
   # sf metrics cache load 3
-  Scenario Outline: sf metrics cache load 3: files outside mutate/ and gherkin/ are not copied
-    Given the metrics branch holds the file "<path>" with "v1"
+  Scenario: sf metrics cache load 3: files outside mutate/ and gherkin/ are not copied
+    Given the metrics branch holds the file "crap.edn" with "v1"
+    And the metrics branch holds the file "other/x.edn" with "v1"
     And task "A" titled "Add login" was created on route "coder"
     When I run "sf start $A"
     Then the exit status is 0
-    And the worktree of task "A" has no file ".metrics/<path>"
-
-    Examples:
-      | path         |
-      | crap.edn     |
-      | other/x.edn  |
+    And the worktree of task "A" has no file ".metrics/crap.edn"
+    And the worktree of task "A" has no file ".metrics/other/x.edn"
 
   # sf metrics cache load 4
   Scenario: sf metrics cache load 4: without the metrics branch sf start copies nothing
