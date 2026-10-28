@@ -12,13 +12,13 @@ says nothing about crap4clj in the hardener prompt.
 
 ## End state
 
-1. **`swarmforge/roles/hardener.md`**, section "Mutation Work", has a short
-   note about running clj-mutate on Babashka code. In plain words it says:
+1. **`swarmforge/languages/clojure.md`** (new) holds a short note about
+   running clj-mutate on Babashka code, so no general role prompt carries
+   language-specific advice. In plain words it says:
    - Run clj-mutate from the worktree root. clj-mutate keeps its manifest
      under `.metrics/mutate/` of the directory it runs from, and `sf start`
      and `sf handoff` load and save only the worktree root's.
-   - Do not use the default test command `bb --config swarmforge/tools/sf/bb.edn spec`
-     (or any `bb --config <path>/bb.edn` test command) with clj-mutate.
+   - Do not use a `bb --config <path>/bb.edn` test command with clj-mutate.
      It lets every mutant survive, because bb resolves the worker's
      symlinked `bb.edn` back to the real checkout and so tests the
      unmutated sources.
@@ -28,12 +28,16 @@ says nothing about crap4clj in the hardener prompt.
      `../core/src`), together with `--no-coverage`, which clj-mutate
      requires for a custom test command.
 
-   The note gives no example command. Nothing else in the file changes.
+   The note gives no example command. The Clojure line of the language tool
+   table in `swarmforge/constitution/articles/engineering.md` and the
+   layout table of `swarmforge/README.md` point to the file, as they do for
+   `csharp.md` and `javascript.md`. `swarmforge/roles/hardener.md` does not
+   change.
 2. **`test/qa/sf_tool.md`**, check QA-4, expects a CRAP report whose rows
    include the function `parse-cobertura` in `sfcs.cobertura`, instead of
    `crap-score`. Nothing else in the file changes.
 
-No file outside these two changes, except this procedure and `tasks/`,
+No other file changes, except this procedure and `tasks/`,
 which `sf` writes.
 
 ## Scripted checks
@@ -42,8 +46,10 @@ Run these from the task worktree. `BASE` is the merge base with `main`
 (`git merge-base HEAD main`).
 
 1. Changed files: `git diff --name-only BASE HEAD` lists only
-   `swarmforge/roles/hardener.md`, `test/qa/sf_tool.md`,
-   `test/qa/clj_mutate_note.md` and files under `tasks/`.
+   `swarmforge/languages/clojure.md`,
+   `swarmforge/constitution/articles/engineering.md`, `swarmforge/README.md`,
+   `test/qa/sf_tool.md`, `test/qa/clj_mutate_note.md` and files under
+   `tasks/`.
 2. `grep -n 'crap-score' test/qa/sf_tool.md` prints nothing.
    `git diff BASE HEAD -- test/qa/sf_tool.md` changes only lines inside
    QA-4, and QA-4 names `parse-cobertura` and `sfcs.cobertura`.
@@ -57,12 +63,12 @@ Run these from the task worktree. `BASE` is the merge base with `main`
 ## Reading check (manual, not scripted)
 
 The prompt text is not checked by script: AGENTS.md keeps prompt wording out
-of tests. Read the diff of `swarmforge/roles/hardener.md` and its section
-"Mutation Work" once and confirm by judgement:
+of tests. Read `swarmforge/languages/clojure.md` and the diffs of
+`engineering.md` and `swarmforge/README.md` once and confirm by judgement:
 
-- The change is the note in "Mutation Work" and nothing else in the file.
-- A hardener who has not seen the earlier task can tell from the note where
+- The two pointers are one line each, in the style of the C# and JavaScript
+  ones.
+- A hardener who has not seen the earlier task can tell from the file where
   to run clj-mutate, which test command to avoid and why, and what to pass
   instead.
-- The note is a few sentences of plain wording, fits the bullet style of
-  the section, and adds nothing beyond the three points in "End state".
+- The note is a few sentences of plain wording and adds nothing beyond the three points in "End state".
