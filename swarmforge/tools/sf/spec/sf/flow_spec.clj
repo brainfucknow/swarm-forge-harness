@@ -70,21 +70,23 @@
               :merged-into "main"}
              (flow/finished {:route "coder"} "main"))))
 
+(def ^:private records
+  [{:record "created" :sha "c1" :commit "c1"}
+   {:record "handoff" :sha "h1" :commit "r1"}
+   {:record "question" :sha "q1" :commit "r1"}
+   {:record "finished" :sha "f1" :commit "m1"}])
+
 (describe "commits"
-  (let [records [{:record "created" :sha "c1" :commit "c1"}
-                 {:record "handoff" :sha "h1" :commit "r1"}
-                 {:record "question" :sha "q1" :commit "r1"}
-                 {:record "finished" :sha "f1" :commit "m1"}]]
-    (it "is the tip, or the role's commit under the newest record at the tip"
-      (should= "r2" (flow/role-commit "r2" (records 2)))
-      (should= "r1" (flow/role-commit "q1" (records 2))))
+  (it "is the tip, or the role's commit under the newest record at the tip"
+    (should= "r2" (flow/role-commit "r2" (records 2)))
+    (should= "r1" (flow/role-commit "q1" (records 2))))
 
-    (it "finds the commit the branch started from"
-      (should= "c1" (flow/created-commit records))
-      (should-be-nil (flow/created-commit (rest records))))
+  (it "finds the commit the branch started from"
+    (should= "c1" (flow/created-commit records))
+    (should-be-nil (flow/created-commit (rest records))))
 
-    (it "finds the commit of the newest created, review or handoff record"
-      (should= "r1" (flow/last-milestone-commit records)))
+  (it "finds the commit of the newest created, review or handoff record"
+    (should= "r1" (flow/last-milestone-commit records)))
 
-    (it "finds the finished record"
-      (should= "f1" (:sha (flow/finished-record records))))))
+  (it "finds the finished record"
+    (should= "f1" (:sha (flow/finished-record records)))))
