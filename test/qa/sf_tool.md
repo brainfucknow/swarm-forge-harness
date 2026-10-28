@@ -1,4 +1,4 @@
-# sf tool end-to-end QA procedure (task aca0457)
+# sf tool end-to-end QA procedure (tasks aca0457, keep-sf-tool-ensure-from-ff06da1)
 
 This procedure runs `sf tool` and the wrappers it writes from the command
 line. It uses real Babashka, real GitHub clones, and this repository's own
@@ -23,7 +23,8 @@ that could not run. A failing check is a defect to fix, not a trailer.
 
 ## Setup
 
-1. `git clone -q --branch swarm/aca0457 "$WT" "$WT/tmp/qa/project"`.
+1. `git clone -q --branch "$(git -C "$WT" branch --show-current)" "$WT" "$WT/tmp/qa/project"`,
+   which clones the task branch under test.
    `P` is `$WT/tmp/qa/project`. It has no `.swarmforge/` yet, so every tool
    is cloned fresh from GitHub.
 2. Run every command below with `PATH="$P/swarmforge/bin:$PATH"`, and with
@@ -108,18 +109,22 @@ From `$P`, run `sf tool ensure crap4go`.
 - Run `sf tool ensure crap4go` again. It prints the same error. Stderr does
   not mention `clone`.
 
-### QA-8: a missing task fails clearly
+### QA-8: a missing task fails clearly and keeps the earlier wrapper
 
 Make `$WT/tmp/qa/fake-src/bb.edn` with the content `{:tasks {spec (println "spec")}}`.
 From `$P`, with `SWARMFORGE_TOOL_SRC=$WT/tmp/qa/fake-src`, write an
-executable `$P/.swarmforge/bin/clj-mutate` that prints `stale`, then run
-`sf tool ensure clj-mutate`.
+executable `$P/.swarmforge/bin/clj-mutate` that prints `stale`, copy it to
+`$WT/tmp/qa/clj-mutate.before`, then run `sf tool ensure clj-mutate`.
 
 - Exit 1.
 - Stderr contains `sf tool: clj-mutate: $WT/tmp/qa/fake-src/bb.edn has no task 'mutate'`.
-- `$P/.swarmforge/bin/clj-mutate` no longer exists.
+- `cmp $WT/tmp/qa/clj-mutate.before $P/.swarmforge/bin/clj-mutate` exits 0,
+  the wrapper is still executable, and running it prints `stale`.
+- `sf tool require clj-mutate` prints `OK: clj-mutate $P/.swarmforge/bin/clj-mutate`.
 - Afterwards, unset `SWARMFORGE_TOOL_SRC` and run `sf tool ensure clj-mutate`
-  again so the later checks have it. It exits 0.
+  again so the later checks have it. It exits 0, and the wrapper no longer
+  prints `stale`: `$P/.swarmforge/bin/clj-mutate --help` prints the
+  clj-mutate usage.
 
 ### QA-9: the catalogue comes from the checkout
 
@@ -159,6 +164,47 @@ Make `$WT/tmp/qa/outside`.
   `.swarmforge/bin/gherkin-parser test/features/sf_tool/wrappers.feature ./tmp/wrappers.json`.
   It exits 0 and `./tmp/wrappers.json` names the feature `sf tool wrappers`.
 - `sf check` in `$P` exits 0 and prints no line that mentions `tools.conf`.
+
+### QA-12: an older branch's catalogue cannot break the shared wrappers
+
+This replays the incident behind task keep-sf-tool-ensure-from-ff06da1: a
+task worktree whose `tools.conf` is older than the wrappers already
+installed. Run it after QA-1 to QA-11, so every Clojure tool is installed.
+
+1. From `$P`, run `git worktree add -q .worktrees/q3 -b swarm/q3`. `Q` is
+   `$P/.worktrees/q3`.
+2. In `Q/swarmforge/tools.conf`, replace the `dry4clj` line with
+   `dry4clj bb github.com/unclebob/dry4clj dry4clj - -` and the `crap4clj`
+   line with `crap4clj bb github.com/unclebob/crap4clj crap4clj - cloverage`
+   (the lines from before kind `bbmain` and rewrite `coverage`). Append
+   `zz-probe magic github.com/unclebob/zz-probe - - cloverage` and
+   `zz-outer bb github.com/unclebob/zz-outer crap coverage zz-probe`.
+   Commit in `Q`.
+3. Record the state of the shared directory:
+   `(cd "$P/.swarmforge" && find . -print0 | sort -z | xargs -0 ls -ld --time-style=+ ; find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$WT/tmp/qa/before.txt"`.
+   Repeat that command into `after.txt` for each "unchanged" check below.
+
+Checks, each command run from `Q`:
+
+- `sf tool ensure dry4clj` exits 1. Stderr contains
+  `sf tool: dry4clj: $P/.swarmforge/tools/dry4clj/bb.edn has no task 'dry4clj'`
+  or `sf tool: dry4clj: no bb.edn in $P/.swarmforge/tools/dry4clj`, whichever
+  matches the clone. `.swarmforge/` is unchanged (`diff before.txt after.txt`
+  is empty).
+- `sf tool ensure crap4clj` exits 1. Stderr contains
+  `sf tool: crap4clj: $P/.swarmforge/tools/crap4clj/bb.edn has no task 'crap4clj'`.
+  `.swarmforge/` is unchanged. The `cloverage` wrapper ensure installs
+  first has the same content as before, so it does not show in the diff.
+- `sf tool ensure zz-outer` exits 1. Stderr contains
+  `sf tool: unknown kind 'magic' for zz-probe` and does not mention `clone`.
+  `.swarmforge/` is unchanged; in particular there is no
+  `$P/.swarmforge/tools/zz-outer` or `$P/.swarmforge/tools/zz-probe`.
+- `sf tool require dry4clj` and `sf tool require crap4clj`, run from `$P`,
+  print `OK: …` for each.
+- Repeat the QA-2 checks: `$P/.swarmforge/bin/dry4clj` still runs.
+- `$P/.swarmforge/bin/crap4clj --use-existing-coverage --lcov does-not-exist.info`,
+  run from `$P/swarmforge/tools/csharp`, does not print `unknown kind`,
+  `unknown rewrite`, or a `bb` usage error about a missing task.
 
 ## Cleanup
 

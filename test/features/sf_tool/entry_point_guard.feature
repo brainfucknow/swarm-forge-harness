@@ -6,8 +6,9 @@ Feature: sf tool entry point guard
   must hold a file for the namespace: dots become slashes, dashes become
   underscores, and the extension is .clj, .cljc or .bb. When the entry point
   is missing, ensure prints an error naming the tool on stderr, exits 1, and
-  leaves no wrapper for that tool; a wrapper left by an earlier install is
-  removed, so require reports the tool missing. Tools the tool needs that were
+  writes no wrapper for that tool. A wrapper left by an earlier install stays
+  byte-for-byte as it was, so require still reports the tool; a failing ensure
+  never replaces or removes a wrapper. Tools the tool needs that were
   installed first stay installed. ensure does not try another way to install
   the tool. A source directory that already exists under .swarmforge/tools is
   used as it is and is not cloned again.
@@ -17,14 +18,14 @@ Feature: sf tool entry point guard
     And a fake bb on PATH
 
   # sf tool entry point guard 1
-  Scenario Outline: sf tool entry point guard 1: a missing entry point fails the install
+  Scenario Outline: sf tool entry point guard 1: a missing entry point fails the install and keeps the earlier wrapper
     Given a tool source whose bb.edn defines the tasks "<tasks>"
     And an earlier install left a wrapper for "<tool>"
     When I run "sf tool ensure <tool>" in the main checkout
     Then the exit status is 1
     And the error output contains "<error>"
-    And there is no wrapper for "<tool>"
-    And "sf tool require <tool>" in the main checkout prints "MISSING: <tool>"
+    And the wrapper for "<tool>" is unchanged
+    And "sf tool require <tool>" in the main checkout prints "OK: <tool> MAIN/.swarmforge/bin/<tool>"
 
     Examples:
       | tool       | tasks           | error                                                   |
@@ -55,11 +56,11 @@ Feature: sf tool entry point guard
     And the error output does not mention "clone"
 
   # sf tool entry point guard 4
-  Scenario: sf tool entry point guard 4: a bb.edn that cannot be read fails the install
+  Scenario: sf tool entry point guard 4: a bb.edn that cannot be read fails the install and keeps the earlier wrapper
     Given a tool source whose bb.edn is "{:tasks {crap {}"
     And an earlier install left a wrapper for "crap4clj"
     When I run "sf tool ensure crap4clj" in the main checkout
     Then the exit status is 1
     And the error output contains "sf tool: crap4clj: SRC/bb.edn could not be read: "
-    And there is no wrapper for "crap4clj"
-    And "sf tool require crap4clj" in the main checkout prints "MISSING: crap4clj"
+    And the wrapper for "crap4clj" is unchanged
+    And "sf tool require crap4clj" in the main checkout prints "OK: crap4clj MAIN/.swarmforge/bin/crap4clj"
