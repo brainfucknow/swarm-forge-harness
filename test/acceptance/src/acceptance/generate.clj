@@ -12,11 +12,13 @@
 
 (defn steps-namespace
   "The step handlers for the feature at feature-path: acceptance.store-steps
-  for test/features/task_store, acceptance.metrics-steps for
+  for test/features/task_store, acceptance.guard-steps for
+  test/features/manifest_guard, acceptance.metrics-steps for
   test/features/metrics_cache, else acceptance.steps."
   [feature-path]
   (condp #(str/includes? %2 %1) (str feature-path)
     "task_store/" 'acceptance.store-steps
+    "manifest_guard/" 'acceptance.guard-steps
     "metrics_cache/" 'acceptance.metrics-steps
     'acceptance.steps))
 
