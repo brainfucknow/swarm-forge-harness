@@ -11,6 +11,7 @@
 
 (def ^:private catalogue
   "gherkin-parser bb     github.com/x/aps     gherkin-parser -        -
+gherkin-mutator bb    github.com/x/aps     gherkin-mutator gherkin -
 crap4clj       bb     github.com/x/crap4clj crap           coverage cloverage
 dry4clj        bbmain github.com/x/dry4clj  dry4clj.core   -        -
 cloverage      clj    cloverage/cloverage   cloverage.coverage -    -
@@ -72,6 +73,13 @@ odd            local  bin/odd               -              rot13    -
       (let [dir (source "aps" :tasks ["gherkin-parser"])]
         (should= [0 (str "INSTALLED: gherkin-parser " (wrapper "gherkin-parser") "\n") ""] (sf-tool "ensure" "gherkin-parser"))
         (should (str/includes? (slurp (wrapper "gherkin-parser")) (str "exec bb --config '" dir "/bb.edn' gherkin-parser")))))
+
+    (it "keeps the gherkin-mutator block in .metrics/gherkin/ with the main checkout's sf"
+      (let [dir (source "aps" :tasks ["gherkin-mutator"])
+            text (do (sf-tool "ensure" "gherkin-mutator") (slurp (wrapper "gherkin-mutator")))]
+        (should (str/includes? text "--level hard"))
+        (should (str/includes? text (str "bb -cp '" *dir* "/swarmforge/tools/sf/src' -m sf.gherkin-cache")))
+        (should (str/includes? text (str "\nbb --config '" dir "/bb.edn' gherkin-mutator \"$@\"\n")))))
 
     (it "uses SWARMFORGE_TOOL_SRC for every GitHub source"
       (let [dir (str (fs/create-dirs (fs/path *dir* "override")))]

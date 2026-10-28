@@ -1,7 +1,8 @@
 (ns sf.wrapper
   "The text of the wrapper scripts sf tool writes, and of the Babashka coverage
   config it writes for crap4clj."
-  (:require [sf.shell :as shell]))
+  (:require [clojure.string :as str]
+            [sf.shell :as shell]))
 
 (defn sq
   "Single-quotes a word for bash."
@@ -27,6 +28,16 @@
        " && [ \"$(git rev-parse --path-format=absolute --git-common-dir)\" = " (sq (str main-root "/.git")) " ]"
        " && [ -x \"$top/\"" (sq source) " ] && exec \"$top/\"" (sq source) " \"$@\"\n"
        "exec " (sq (str main-root "/" source)) " \"$@\""))
+
+(defn keeping-feature-block
+  "Runs command (an exec line) so that the block of the --feature file stays
+  in .metrics/gherkin/ between runs, through sf.gherkin-cache of sf-src. Exits
+  with the command's status."
+  [sf-src command]
+  (-> (shell/template "keep-feature-block.sh")
+      (str/replace "{{src}}" (sq sf-src))
+      (str/replace "{{command}}" (str/replace-first command #"^exec " ""))
+      str/trim-newline))
 
 (def ^:private speclj-dep "speclj/speclj {:mvn/version \"3.13.0\"}")
 

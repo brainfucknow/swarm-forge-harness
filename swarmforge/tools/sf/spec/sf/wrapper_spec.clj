@@ -1,9 +1,11 @@
 (ns sf.wrapper-spec
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [edamame.core :as edamame]
             [speclj.core :refer [describe context it should should= with around]]
+            [sf.shell :as shell]
             [sf.wrapper :as wrapper]))
 
 (describe "commands"
@@ -90,3 +92,55 @@
     (it "adds nothing when there is a deps.edn"
       (spit (str (fs/path @dir "deps.edn")) "{}")
       (should= ["--config" "/src/bb.edn" "crap"] (run-wrapper @dir true [])))))
+
+(def ^:private sf-src
+  (str (fs/parent (fs/parent (fs/path (.getPath (io/resource "sf/shell.clj")))))))
+
+(def ^:private block "# acceptance-mutation-manifest-begin\n# {}\n# acceptance-mutation-manifest-end\n")
+
+(defn- run-gherkin-wrapper
+  "Runs a gherkin-mutator wrapper whose tool is a fake that saves the feature it
+  sees to seen, puts a new block on it, runs last (shell text, such as a kill
+  of the wrapper), and exits with status; returns the exit."
+  [dir status args & [last]]
+  (let [fake (str (fs/path dir "fake"))
+        script (str (fs/path dir "wrapper"))]
+    (spit fake (str "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" > " (fs/path dir "args") "\n"
+                    "cp features/x.feature " (fs/path dir "seen") "\n"
+                    "{ printf '" (str/replace block "\n" "\\n") "\\n'; grep -v '^#' features/x.feature | sed '/./,$!d'; } > " (fs/path dir "new") "\n"
+                    "mv " (fs/path dir "new") " features/x.feature\n" last "\nexit " status "\n"))
+    (fs/set-posix-file-permissions fake "rwxr-xr-x")
+    (spit script (wrapper/script (shell/template "rewrite-gherkin.sh")
+                                 (wrapper/keeping-feature-block sf-src (str "exec " (wrapper/sq fake) " \"$@\""))))
+    (:exit (p/shell {:cmd (into ["bash" script] args) :dir (str dir) :continue true :out :string :err :string}))))
+
+(describe "keeping-feature-block"
+  (with dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "wrapper-"}))))
+  (around [it] (try (it) (finally (fs/delete-tree @dir))))
+
+  (it "keeps the block in .metrics/gherkin/ between runs and exits with the run's status"
+    (p/shell {:dir @dir :out :string} "git init -q")
+    (fs/create-dirs (fs/path @dir "features"))
+    (spit (str (fs/path @dir "features" "x.feature")) "Feature: x\n")
+    (fs/create-dirs (fs/path @dir ".metrics" "gherkin" "features"))
+    (spit (str (fs/path @dir ".metrics" "gherkin" "features" "x.feature")) "# acceptance-mutation-manifest-begin\n# {old}\n# acceptance-mutation-manifest-end\n")
+    (should= 3 (run-gherkin-wrapper @dir 3 ["--feature" "features/x.feature" "--level" "full"]))
+    (should= "# acceptance-mutation-manifest-begin\n# {old}\n# acceptance-mutation-manifest-end\n\nFeature: x\n"
+             (slurp (str (fs/path @dir "seen"))))
+    (should= ["--feature" "features/x.feature" "--level" "hard" "--workers" "4"]
+             (str/split-lines (slurp (str (fs/path @dir "args")))))
+    (should= "Feature: x\n" (slurp (str (fs/path @dir "features" "x.feature"))))
+    (should= block (slurp (str (fs/path @dir ".metrics" "gherkin" "features" "x.feature")))))
+
+  (it "moves the block out when the wrapper is interrupted during the run"
+    (p/shell {:dir @dir :out :string} "git init -q")
+    (fs/create-dirs (fs/path @dir "features"))
+    (spit (str (fs/path @dir "features" "x.feature")) "Feature: x\n")
+    (doseq [[signal status] [["INT" 130] ["TERM" 143]]]
+      (should= status (run-gherkin-wrapper @dir 0 ["--feature" "features/x.feature"] (str "kill -" signal " $PPID; kill -" signal " $$")))
+      (should= "Feature: x\n" (slurp (str (fs/path @dir "features" "x.feature"))))
+      (should= block (slurp (str (fs/path @dir ".metrics" "gherkin" "features" "x.feature"))))))
+
+  (it "only runs the tool without --feature"
+    (should= 0 (run-gherkin-wrapper @dir 0 ["--level" "hard"]))
+    (should (not (fs/exists? (fs/path @dir ".metrics"))))))

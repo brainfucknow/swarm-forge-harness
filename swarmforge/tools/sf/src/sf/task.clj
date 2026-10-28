@@ -5,8 +5,10 @@
             [sf.audit :as audit]
             [sf.config :as config]
             [sf.flow :as flow]
+            [sf.git :as plumbing]
             [sf.history :as history]
             [sf.hook :as hook]
+            [sf.metrics :as metrics]
             [sf.options :as options]
             [sf.record :as record]
             [sf.shell :as shell]
@@ -58,7 +60,7 @@
 
 (defn init [_]
   (shell/quietly config/check)
-  (let [[name email] (store/author)]
+  (let [[name email] (plumbing/author)]
     (println (str "identity: " name " <" email ">")))
   (let [root (shell/repo-root)]
     (fs/create-dirs (str root "/" (hook/worktree-dir)))
@@ -130,6 +132,7 @@
     (when-not (fs/directory? dir)
       (git root "worktree" "add" "--quiet" dir (record/branch id)))
     (hook/install root)
+    (metrics/load! dir)
     (let [{:keys [file state] :as view} (history/view id)]
       (println (str "TASK: " id))
       (println (str "TITLE: " (:title file)))
@@ -164,6 +167,7 @@
                              rec (flow/handoff state from to head summary)]
                          (refuse (flow/handoff-refusal state))
                          (cond-> rec (= "done" to) (assoc :archive (archive id records rec))))))
+    (metrics/save! id (worktree-of id))
     (when (and (= "done" to) (fs/directory? (worktree-of id)))
       (git (worktree-of id) "reset" "--quiet" "--hard"))
     (println (str "HANDOFF: " id " " from " -> " to " at " head))))
