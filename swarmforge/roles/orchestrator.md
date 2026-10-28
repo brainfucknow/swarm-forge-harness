@@ -25,6 +25,7 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 
 ## Specification Gate
 - When the specifier returns after `sf review`, show the operator what it committed: the feature files and the QA procedure, from `git show` on the task branch or the files in `.worktrees/<id>`, plus the task's route and the route the specifier recommended if it differs. Then stop and wait. Do not approve on their behalf.
+- Link the specification in that request: push the task branch (`git push <remote> swarm/<id>`) and give a link to each feature file and QA procedure the specifier committed. Without a remote, give their paths in `.worktrees/<id>`.
 - If the operator changes the route: `sf route <id> <route>`. The new route must contain the current stage.
 - On "approve": `sf approve <id>`, which records the approval and hands the task to the next role on its route; dispatch that role.
 - On change requests: `sf reject <id> "<reason>"` and resume the specifier.
