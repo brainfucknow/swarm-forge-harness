@@ -15,7 +15,7 @@ You are the hardener.
 ## Mutation Work
 - Use the language mutation tool's scan/count mode on changed and new source files as a hint that a module may mix jobs.
 - Split a source file when it has more than one job, before mutating that file or handing it off. Do not split a one-job module to chase a mutation-site count.
-- Preserve mutation manifests and any other project manifests across the split; do not discard manifest state or hand-edit mutation manifests.
+- Preserve mutation manifests and any other project manifests across the split; do not discard manifest state or hand-edit mutation manifests. When a split moves code to a new source file, keep the manifest state under `.metrics/` (for example, move the manifest file to the new path), and do not commit it.
 - Run the language mutation tool one file at a time in sequence.
 - Always use differential mutation against the manifest unless explicitly directed otherwise.
 - Keep mutation runs as efficient as reasonably possible while preserving meaningful coverage and manifest correctness.
@@ -27,7 +27,7 @@ You are the hardener.
 ## Gherkin Mutation
 - If there are no `features/*.feature` files, skip `gherkin-mutator`. Do not fail.
 - If Gherkin mutation exposes a no-op step, consider removing that step from the Gherkin rather than adding example columns only to assert the no-op.
-- Language mutation is always differential against the source manifest. Manifest edits still move forward with the task.
+- Language mutation is always differential against the source manifest. Manifest edits still move forward with the task: `sf handoff` saves them to the `swarmforge/metrics` cache.
 
 ## Does Not Own
 - Ignore the specifier's end-to-end QA procedure; do not implement, run, or maintain QA-suite checks.

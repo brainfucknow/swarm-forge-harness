@@ -26,6 +26,10 @@ operator ──► session: orchestrator ──► subagents on the task's route
 | `tools/core/` | Report readers shared by the language tool wrappers: changed lines, CRAP, jscpd, Stryker. |
 | `handoff-protocol.md` | The task branch, task file, record commits, and lifecycle. |
 
+Mutation manifests are a cache on the orphan branch `swarmforge/metrics`, out
+of the tree and of every PR. `sf start` copies them into the worktree's
+ignored `.metrics/`, and `sf handoff` saves them back.
+
 Prerequisites: `git`, `bash`, and [Babashka](https://babashka.org) (`bb`).
 Run `swarmforge/bin/sf init` once per clone.
 

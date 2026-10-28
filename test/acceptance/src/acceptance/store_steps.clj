@@ -1,26 +1,26 @@
 (ns acceptance.store-steps
   "Step handlers for test/features/task_store (see its README for the step
   meanings and placeholders). The scratch repositories come from
-  acceptance.support."
+  acceptance.support. acceptance.metrics-steps builds on them."
   (:require [acceptance.support :as support :refer [run unescape check require-ok]]
             [babashka.fs :as fs]
             [clojure.string :as str]))
 
 (defn new-world [] {:ids {} :created {} :names {} :env {}})
 
-(defn- id-of
+(defn id-of
   "The id of task name, or of the task that sf new printed when name is nil."
   [world name]
   (or (if name (get-in world [:ids name]) (:new world))
       (throw (ex-info (str "no task " (or name "NEW")) {}))))
 
-(defn- worktree [world name]
+(defn worktree [world name]
   (str (fs/path (:repo world) ".worktrees" (id-of world name))))
 
 (defn- branch-ref [world name]
   (str "refs/heads/swarm/" (id-of world name)))
 
-(defn- fill
+(defn fill
   "text with $A, $A:hex, $A:created, NEW, ROOT and named commits filled in."
   [world text]
   (-> text
@@ -36,34 +36,36 @@
                                                    (throw (ex-info (str "no value for " name) {})))))
       (str/replace "ROOT" (:repo world))))
 
-(defn- expected [world text]
+(defn expected [world text]
   (fill world (unescape text)))
 
-(defn- run-in
+(defn run-in
   "Runs program and args in dir with the world's environment and env."
   ([world dir cmd] (run-in world dir cmd {}))
   ([world dir [program & args] env]
    (run dir (cons (if (= "sf" program) (support/sf-path (:repo world)) program) args)
         (merge (:env world) env))))
 
-(defn- must-in [world dir & cmd]
+(defn must-in [world dir & cmd]
   (let [result (run-in world dir cmd)]
     (require-ok result (str/join " " cmd))
     (str/trim-newline (:out result))))
 
-(defn- git [world & args]
+(defn git [world & args]
   (apply must-in world (:repo world) "git" args))
 
-(defn- tips [world]
-  (into {} (for [name (keys (:ids world))]
-             [name (:out (run-in world (:repo world) ["git" "rev-parse" "--verify" "--quiet" (branch-ref world name)]))])))
+(defn tips
+  "The tip of each branch, by ref."
+  [world]
+  (into {} (for [line (str/split-lines (git world "for-each-ref" "--format=%(refname) %(objectname)" "refs/heads/"))]
+             (str/split line #" "))))
 
 (defn- under-test
-  "The world after the step under test: its result, and the task tips before it."
+  "The world after the step under test: its result, and the branch tips before it."
   [world result]
   (assoc world :before (:tips world) :exit (:exit result) :out (:out result) :err (:err result)))
 
-(defn- when-step
+(defn when-step
   "Runs (f world) as the step under test."
   [world f]
   (let [world (assoc world :tips (tips world))]
@@ -87,7 +89,7 @@
     (cond-> (assoc-in world [:names name] sha)
       (seq lore) (assoc-in [:names (str/replace name #"^C" "L")] lore))))
 
-(defn- write-file [dir path text]
+(defn write-file [dir path text]
   (let [file (fs/path dir path)]
     (fs/create-dirs (fs/parent file))
     (spit (str file) text)))
@@ -285,7 +287,8 @@
 
    [#"the branch of task \"(\w)\" did not move"
     (fn [world name]
-      (check (= (get-in world [:before name]) (get (tips world) name)) "the branch moved")
+      (let [ref (branch-ref world name)]
+        (check (= (get-in world [:before ref]) (get (tips world) ref)) "the branch moved"))
       world)]
 
    [(step "the (parent of the )?tip commit of {task} has the message \"(.*)\"")

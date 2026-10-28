@@ -7,7 +7,7 @@
             [babashka.process :as p]
             [clojure.string :as str]))
 
-(def ^:private checkout
+(def checkout
   (str (fs/canonicalize (fs/path (fs/parent *file*) ".." ".." ".." ".."))))
 
 (def scratch
