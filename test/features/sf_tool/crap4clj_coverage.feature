@@ -12,10 +12,11 @@ Feature: sf tool crap4clj coverage
 
   The crap4clj wrapper appends --coverage-command and one argument,
   "bb --config CFG coverage [-r speclj] -p R ... -s T ... --lcov", when the
-  Clojure CLI clj is not on PATH or the current directory has no deps.edn.
-  R is each --source-root or -s value the caller passed, in order, else src.
-  T is spec and then test, each only when that directory exists in the
-  current directory. "-r speclj" is there only when spec exists. The wrapper
+  Clojure CLI clj is not on PATH or the directory crap4clj runs in (see
+  crap4clj_directory.feature) has no deps.edn. R is each --source-root or -s
+  value crap4clj gets, in order, else src. T is spec and then test, each only
+  when that directory exists in the directory crap4clj runs in. "-r speclj"
+  is there only when spec exists. The wrapper
   adds nothing when the caller passes --coverage-command or
   --use-existing-coverage, or when clj is on PATH and deps.edn exists.
 

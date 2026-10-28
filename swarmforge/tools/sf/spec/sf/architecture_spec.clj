@@ -24,7 +24,7 @@
 
 (def ^:private pure
   "The high-level namespaces: plain values in and out, no IO."
-  '#{sf.lore sf.record sf.flow sf.feature-block})
+  '#{sf.lore sf.record sf.flow sf.feature-block sf.coverage-args})
 
 (def ^:private allowed
   "The sf namespaces each sf namespace may require. Dependencies point from the
@@ -43,6 +43,8 @@
     sf.metrics #{sf.git sf.shell}
     sf.feature-block #{}
     sf.gherkin-cache #{sf.feature-block sf.shell}
+    sf.coverage-args #{}
+    sf.coverage-rewrite #{sf.coverage-args sf.shell sf.wrapper}
     sf.hook #{sf.lore sf.record sf.shell}
     sf.options #{sf.record sf.shell}
     sf.audit #{sf.config sf.flow sf.shell sf.store}

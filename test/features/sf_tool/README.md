@@ -2,8 +2,9 @@
 
 Gherkin for `sf tool` (the task "Port the tool-wrapper fix to the Babashka
 sf tool", a port of the approved spec of the task "Fix the dry4clj and
-clj-mutate tool wrappers" to the Babashka `sf`). These features are the
-specification.
+clj-mutate tool wrappers" to the Babashka `sf`, and the task "Run crap4clj
+from the repository root" for `crap4clj_directory.feature`). These features
+are the specification.
 `test/acceptance.sh` runs them through the APS acceptance runtime, one
 execution per scenario and example row, with step handlers in
 `test/acceptance/src/acceptance/steps.clj`. Each execution runs the real `sf`
@@ -32,6 +33,12 @@ GitHub clones are used only in the QA procedure (`../../qa/sf_tool.md`).
 - `list`, `require` and `ensure` read `tools.conf` of the checkout they run
   in. Clones and wrappers stay shared. A `local` wrapper prefers the caller's
   checkout copy of its script.
+- The crap4clj wrapper runs crap4clj in the directory that holds the first
+  source root, with the source roots made relative to it, so the result,
+  `target/` and `.metrics/` are exactly as when run from that directory.
+  Every other argument (`--lcov`, `--coverage-command`, module filters) is
+  passed unchanged, as when run from that directory. When that directory
+  does not exist the wrapper exits 1 without running crap4clj.
 - Updating existing clones is out of scope.
 - These features run through the APS runtime. `test/sf_tool_test.sh` keeps
   its existing checks, with its clj-mutate expectations changed from the task
@@ -52,7 +59,7 @@ GitHub clones are used only in the QA procedure (`../../qa/sf_tool.md`).
 | Step | Meaning |
 |---|---|
 | `a project with swarmforge initialized` | The existing step: a scratch git repository on `main` whose first commit holds a copy of `swarmforge/`, with `sf init` run in it. |
-| `a fake bb on PATH` | Every wrapper run finds first on PATH a `bb` that prints each argument on its own line and exits 0. `sf` itself runs with the real `bb`. |
+| `a fake bb on PATH` | Every wrapper run finds first on PATH a `bb` that prints each argument on its own line and exits 0. It also records its working directory and that it ran, outside stdout. `sf` itself runs with the real `bb`. |
 | `a tool source whose bb.edn defines the tasks "A B"` | `SWARMFORGE_TOOL_SRC` names a scratch directory whose `bb.edn` has a `:tasks` map with exactly those task keys. |
 | `the tool source has the namespace "N"` | The tool source has `src/<N as a path>.clj`. |
 | `a tool source without bb.edn` | `SWARMFORGE_TOOL_SRC` names a scratch directory with no `bb.edn`. |
@@ -64,12 +71,15 @@ GitHub clones are used only in the QA procedure (`../../qa/sf_tool.md`).
 | `"D" matches the snapshot` | The files and directories under `D`, their content and their permissions are exactly those the snapshot recorded: nothing added, removed, or changed. |
 | `"C" ran in the main checkout` | Command `C` ran from `MAIN` and exited 0. Its output is not checked. |
 | `I run "C" in the <checkout>` | Runs command `C` (split on spaces) from the main checkout or the task worktree. `sf` is the scratch project's `swarmforge/bin/sf`. |
-| `I run the T wrapper with "ARGS"` | Runs `MAIN/.swarmforge/bin/T` from `MAIN` with `ARGS`, split on spaces. An empty value passes no arguments. |
+| `I run the T wrapper with "ARGS"` | Runs `MAIN/.swarmforge/bin/T` from `MAIN` with `ARGS` (placeholders filled in), split on spaces. An empty value passes no arguments. |
 | `I run the sf-cs wrapper in the <place>` | Runs `MAIN/.swarmforge/bin/sf-cs` with no arguments from that directory. `directory outside git` is a scratch directory that git does not see as inside any repository (run with `GIT_CEILING_DIRECTORIES` set to its parent). |
 | `bb received "ARGS"` | The fake bb's arguments, joined with single spaces, equal `ARGS` with the placeholders filled in and trailing spaces removed. |
+| `bb ran in "D"` | The fake bb ran, and its working directory is the directory `D` (placeholders filled in), compared after resolving symbolic links. |
+| `bb did not run` | The fake bb did not run during the step under test. |
 | `bb received "ARGS" and the coverage command "CMD"` | The fake bb's arguments are the words of `ARGS`, then `--coverage-command`, then one argument equal to `CMD` with the placeholders filled in. |
 | `clj is present/absent on PATH` | A fake `clj` that exits 0 is, or is not, on PATH for the wrapper run. No real `clj` can be found. |
 | `deps.edn is present/absent` | Whether `MAIN/deps.edn` exists (it holds `{}`). |
+| `the directory "D" has deps.edn` / `has no deps.edn` | `MAIN/D/deps.edn` exists (it holds `{}`) / does not exist. |
 | `the directories "A B" exist` | Those directories exist under `MAIN`. `spec` and `test` exist only when listed. |
 | `the file "F" exists` / `mentions "X"` | `F` is a file; `X` is a substring of it. |
 | `there is no wrapper for "T"` | `MAIN/.swarmforge/bin/T` does not exist. |

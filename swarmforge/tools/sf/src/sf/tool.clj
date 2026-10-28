@@ -70,11 +70,14 @@ GitHub source at one local checkout instead of cloning.")
 (defn- coverage-config-path [tool]
   (str (fs/path (shell/repo-root) ".swarmforge" "tools" (str tool "-coverage") "bb.edn")))
 
+(defn- sf-src []
+  (str (fs/path (shell/repo-root) "swarmforge" "tools" "sf" "src")))
+
 (defn- rewrite-for [rewrite tool]
   (case rewrite
     "mutate" (shell/template "rewrite-mutate.sh")
     "gherkin" (shell/template "rewrite-gherkin.sh")
-    "coverage" (wrapper/coverage-rewrite (coverage-config-path tool))
+    "coverage" (wrapper/coverage-rewrite (str (fs/which "bb")) (sf-src) (coverage-config-path tool))
     "-" ""))
 
 (defn- write-coverage-config [tool dir]
@@ -95,7 +98,7 @@ GitHub source at one local checkout instead of cloning.")
   (let [spec (spec-of tool)
         command (cond->> (command-for tool spec)
                   (= "gherkin" (:rewrite spec))
-                  (wrapper/keeping-feature-block (str (fs/path (shell/repo-root) "swarmforge" "tools" "sf" "src"))))
+                  (wrapper/keeping-feature-block (sf-src)))
         path (wrapper-path tool)]
     (fs/create-dirs (bin-dir))
     (spit path (wrapper/script (rewrite-for (:rewrite spec) tool) command))

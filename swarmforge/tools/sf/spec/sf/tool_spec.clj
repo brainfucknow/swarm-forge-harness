@@ -102,7 +102,9 @@ outer          bb     github.com/x/outer    crap           coverage weird
         (should= [(str "INSTALLED: cloverage " (wrapper "cloverage")) (str "INSTALLED: crap4clj " (wrapper "crap4clj"))]
                  (str/split-lines out)))
       (should (fs/exists? (fs/path *dir* ".swarmforge" "tools" "crap4clj-coverage" "bb.edn")))
-      (should (str/includes? (slurp (wrapper "crap4clj")) "--coverage-command"))
+      (should (str/includes? (slurp (wrapper "crap4clj"))
+                             (str "-cp '" *dir* "/swarmforge/tools/sf/src' -m sf.coverage-rewrite '"
+                                  *dir* "/.swarmforge/tools/crap4clj-coverage/bb.edn' \"$@\"")))
       (should (str/includes? (slurp (wrapper "cloverage")) "exec clojure -Sdeps")))
 
     (it "wraps a bbmain namespace, a clj main and a local script"

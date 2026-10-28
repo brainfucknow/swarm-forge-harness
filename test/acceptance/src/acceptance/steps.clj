@@ -196,6 +196,7 @@
     {"PATH" (str/join ":" (concat [(:fakebin world)] (when (:clj world) [(:cljbin world)]) system))}))
 
 (defn- run-wrapper [world tool dir args extra-env]
+  (when-let [ran (:bb-ran world)] (fs/delete-if-exists ran))
   (select-keys (run dir (cons (str (wrapper-path world tool)) args) (merge (wrapper-env world) extra-env))
                [:exit :out :err]))
 
@@ -226,10 +227,11 @@
   [[#"a fake bb on PATH"
     (fn [world]
       (let [fakebin (scratch-dir "fakebin-")
-            cljbin (scratch-dir "cljbin-")]
-        (write-script (fs/path fakebin "bb") "printf '%s\\n' \"$@\"")
+            cljbin (scratch-dir "cljbin-")
+            ran (str (fs/path (scratch-dir "bb-ran-") "dir"))]
+        (write-script (fs/path fakebin "bb") (str "pwd -P > '" ran "'\nprintf '%s\\n' \"$@\""))
         (write-script (fs/path cljbin "clj") "exit 0")
-        (assoc world :fakebin fakebin :cljbin cljbin)))]
+        (assoc world :fakebin fakebin :cljbin cljbin :bb-ran ran)))]
 
    [#"a tool source whose bb.edn defines the tasks \"([^\"]*)\""
     (fn [world tasks]
@@ -362,6 +364,12 @@
       (when (= "present" how) (spit (str (fs/path (:repo world) "deps.edn")) "{}"))
       world)]
 
+   [#"the directory \"([^\"]+)\" has (deps.edn|no deps.edn)"
+    (fn [world dir deps]
+      (let [file (fs/path (:repo world) dir "deps.edn")]
+        (if (= "deps.edn" deps) (spit (str file) "{}") (fs/delete-if-exists file))
+        world))]
+
    [#"the directories \"([^\"]*)\" exist"
     (fn [world dirs]
       (doseq [dir (words dirs)] (fs/create-dirs (fs/path (:repo world) dir)))
@@ -369,7 +377,7 @@
 
    [#"I run the (\S+) wrapper with \"(.*)\""
     (fn [world tool args]
-      (merge world (run-wrapper world tool (:repo world) (words args) {})))]
+      (merge world (run-wrapper world tool (:repo world) (words (fill-paths world args)) {})))]
 
    [#"I run the sf-cs wrapper in the (task worktree|main checkout|second task worktree|directory outside git|another git repository)"
     (fn [world place]
@@ -385,6 +393,18 @@
       (let [actual (str/join " " (fake-bb-args world))]
         (check (= (str/trimr (fill-paths world expected)) actual) (str "bb received " (pr-str actual)))
         world))]
+
+   [#"bb ran in \"([^\"]+)\""
+    (fn [world dir]
+      (check (fs/exists? (:bb-ran world)) "bb did not run")
+      (let [actual (str/trim (slurp (:bb-ran world)))]
+        (check (= (str (fs/canonicalize (fill-paths world dir))) actual) (str "bb ran in " actual))
+        world))]
+
+   [#"bb did not run"
+    (fn [world]
+      (check (not (fs/exists? (:bb-ran world))) "bb ran")
+      world)]
 
    [#"bb received \"([^\"]*)\" and the coverage command \"([^\"]*)\""
     (fn [world expected command]
