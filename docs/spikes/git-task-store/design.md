@@ -13,7 +13,8 @@ branch". git history keeps the rest of the spike's design.
 Sharing is not built. It covers the push to `SWARMFORGE_REMOTE`, the check
 for unseen remote records, remote-tracking task branches, the one
 considered remote, and hex uniqueness of new ids against the remote's
-`swarm/*` branches. `sf --help` gains `SWARMFORGE_REMOTE` with it.
+`swarm/*` branches. `sf --help` gains `SWARMFORGE_REMOTE` with it. A plain
+`git push` and fetch of `swarm/<id>` already work with the local store.
 
 - **The pushes.** Everything lives under `refs/heads/`, so a branch-only
   host (this environment's proxy) takes it all:
