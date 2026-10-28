@@ -1,7 +1,8 @@
 # sf tool end-to-end QA procedure
 
-For the tasks "Port the tool-wrapper fix to the Babashka sf tool" and "Keep
-sf tool ensure from writing a broken wrapper".
+For the tasks "Port the tool-wrapper fix to the Babashka sf tool", "Keep
+sf tool ensure from writing a broken wrapper", and "Run crap4clj from the
+repository root" (QA-13).
 
 This procedure runs `sf tool` and the wrappers it writes from the command
 line. It uses real Babashka, real GitHub clones, and this repository's own
@@ -208,6 +209,52 @@ Checks, each command run from `Q`:
 - `$P/.swarmforge/bin/crap4clj --use-existing-coverage --lcov does-not-exist.info`,
   run from `$P/swarmforge/tools/csharp`, does not print `unknown kind`,
   `unknown rewrite`, or a `bb` usage error about a missing task.
+
+### QA-13: crap4clj from the repository root
+
+Each part runs crap4clj twice on the same project: first from the project
+directory, then from `$P` with the project's `src` as the source root. `$P`
+has a `test/` of its own (with `test/acceptance`) that the second run must
+not pick up. Before each part, remove `target/` and `.metrics/` from the
+project directory and from `$P`.
+
+Part A, `D` is `$P/swarmforge/tools/csharp` (clojure.test, no `spec`):
+
+1. From `D`, run `$P/.swarmforge/bin/crap4clj`. Record its exit status and
+   its `Ran N tests` line, and copy `D/.metrics/crap.edn` to
+   `$WT/tmp/qa/csharp-crap.edn`. Remove `D/target/` and `D/.metrics/`.
+2. From `$P`, run
+   `$P/.swarmforge/bin/crap4clj --source-root swarmforge/tools/csharp/src`.
+
+- Exit 0, as in step 1. The output has the same `Ran N tests` line, with
+  `0 failures, 0 errors`, and a CRAP report with the function `crap-score`
+  in `sfcs.cobertura`. Stdout and stderr do not mention `test/acceptance`
+  or `acceptance.`.
+- `D/target/coverage/lcov.info` and `D/.metrics/crap.edn` exist.
+  `D/.metrics/crap.edn` is byte-for-byte `$WT/tmp/qa/csharp-crap.edn`.
+- `$P/target` and `$P/.metrics` do not exist.
+
+Part B, `D` is `$P/swarmforge/tools/sf` (speclj, specs in `spec`):
+
+1. From `D`, run `$P/.swarmforge/bin/crap4clj`. Record its exit status and
+   speclj's `N examples, M failures` line, and copy `D/.metrics/crap.edn`
+   (when it exists) to `$WT/tmp/qa/sf-crap.edn`. Remove `D/target/` and
+   `D/.metrics/`.
+2. From `$P`, run
+   `$P/.swarmforge/bin/crap4clj --source-root swarmforge/tools/sf/src`.
+
+- The exit status and the `N examples, M failures` line are those of
+  step 1, and N is above 0.
+- `D/.metrics/crap.edn` exists exactly when it did in step 1, and then is
+  byte-for-byte `$WT/tmp/qa/sf-crap.edn`. `D/target/coverage/` exists.
+- `$P/target` and `$P/.metrics` do not exist.
+
+Finally, from `$P`, run
+`$P/.swarmforge/bin/crap4clj --source-root does-not-exist/src`: it exits 1,
+stderr mentions `does-not-exist`, and the output shows no Cloverage run and
+no CRAP report.
+
+Remove `target/` and `.metrics/` from both project directories afterwards.
 
 ## Cleanup
 
