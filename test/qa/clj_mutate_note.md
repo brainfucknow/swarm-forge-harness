@@ -6,8 +6,8 @@ checks the end state: run the checks in "Scripted checks" from the task
 worktree, then do the reading check. Record each result as a `Tested:` or
 `Not-tested:` trailer on the QA handoff commit. Do not commit a script.
 
-The task "Let sf finish resume after a merge conflict, and run crap4clj from
-the repo root" owns running crap4clj from the repository root. This task
+The task "Run crap4clj from the repository root" owns running crap4clj from
+the repository root. This task
 says nothing about crap4clj in the hardener prompt.
 
 ## End state
@@ -22,9 +22,11 @@ says nothing about crap4clj in the hardener prompt.
      It lets every mutant survive, because bb resolves the worker's
      symlinked `bb.edn` back to the real checkout and so tests the
      unmutated sources.
-   - Instead, pass a `--test-command` that puts the worker's own source and
-     spec directories on the classpath, together with `--no-coverage`,
-     which clj-mutate requires for a custom test command.
+   - Instead, pass a `--test-command` that puts the worker's own copy of
+     each `:paths` entry of the module's `bb.edn` on the classpath (source
+     and `spec` or `test` directories, and any shared ones such as
+     `../core/src`), together with `--no-coverage`, which clj-mutate
+     requires for a custom test command.
 
    The note gives no example command. Nothing else in the file changes.
 2. **`test/qa/sf_tool.md`**, check QA-4, expects a CRAP report whose rows
@@ -42,28 +44,23 @@ Run these from the task worktree. `BASE` is the merge base with `main`
 1. Changed files: `git diff --name-only BASE HEAD` lists only
    `swarmforge/roles/hardener.md`, `test/qa/sf_tool.md`,
    `test/qa/clj_mutate_note.md` and files under `tasks/`.
-2. `git diff BASE HEAD -- swarmforge/roles/hardener.md` adds lines only
-   inside the section "Mutation Work" (between its heading and the next
-   `## ` heading) and removes none.
-3. In `swarmforge/roles/hardener.md`, the section "Mutation Work" mentions
-   `clj-mutate`, the worktree root, `.metrics/mutate/`, `--test-command`,
-   `--no-coverage` and the word `classpath`. The file does not mention
-   `crap4clj`.
-4. `grep -n 'crap-score' test/qa/sf_tool.md` prints nothing.
+2. `grep -n 'crap-score' test/qa/sf_tool.md` prints nothing.
    `git diff BASE HEAD -- test/qa/sf_tool.md` changes only lines inside
    QA-4, and QA-4 names `parse-cobertura` and `sfcs.cobertura`.
-5. QA-4 still matches the tool. Follow the setup of `test/qa/sf_tool.md`
+3. QA-4 still matches the tool. Follow the setup of `test/qa/sf_tool.md`
    (clone into `$WT/tmp/qa/project`, `sf tool ensure crap4clj`), then run
    QA-4 as written. It exits 0 and the CRAP report has a row with
    `parse-cobertura` and `sfcs.cobertura`. Delete `$WT/tmp/qa/` afterwards.
-6. The suites still pass: `bash test/sf_test.sh` and
+4. The suites still pass: `bash test/sf_test.sh` and
    `bash test/acceptance.sh` (after `swarmforge/bin/sf tool ensure gherkin-parser`).
 
 ## Reading check (manual, not scripted)
 
-Read the "Mutation Work" section of `swarmforge/roles/hardener.md` once and
-confirm by judgement:
+The prompt text is not checked by script: AGENTS.md keeps prompt wording out
+of tests. Read the diff of `swarmforge/roles/hardener.md` and its section
+"Mutation Work" once and confirm by judgement:
 
+- The change is the note in "Mutation Work" and nothing else in the file.
 - A hardener who has not seen the earlier task can tell from the note where
   to run clj-mutate, which test command to avoid and why, and what to pass
   instead.
