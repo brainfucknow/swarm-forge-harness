@@ -51,8 +51,10 @@
          " -M -m " main " \"$@\"")))
 
 (defn coverage-rewrite
-  "Appends --coverage-command for the Babashka coverage config unless the caller
-  settled coverage or the Clojure CLI and deps.edn are there."
+  "Moves into the directory of the first source root, with the source roots
+  made relative to it, then appends --coverage-command for the Babashka
+  coverage config unless the caller settled coverage or the Clojure CLI and
+  deps.edn are there."
   [config-path]
   (str "cfg=" (sq config-path) "\n" (shell/template "rewrite-coverage.sh")))
 

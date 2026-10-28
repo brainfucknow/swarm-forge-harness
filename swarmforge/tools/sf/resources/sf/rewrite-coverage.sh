@@ -1,6 +1,46 @@
+absolute() {
+  local path parts part out=
+  case "$1" in /*) path="$1" ;; *) path="$here/$1" ;; esac
+  IFS=/ read -ra parts <<< "$path"
+  for part in "${parts[@]}"; do
+    case "$part" in
+      ''|.) ;;
+      ..) out="${out%/*}" ;;
+      *) out="$out/$part" ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+relative() {
+  local base="$2" up= rest
+  while [ "$1" != "$base" ] && [ "${1#"$base"/}" = "$1" ]; do base="${base%/*}"; up="../$up"; done
+  rest="${1#"$base"}"; rest="$up${rest#/}"; rest="${rest%/}"
+  printf '%s' "${rest:-.}"
+}
+here="$PWD"
+args=("$@")
+dir=
+k=0
+while [ "$k" -lt "${#args[@]}" ]; do
+  case "${args[$k]}" in
+    --source-root|-s)
+      root="${args[$((k + 1))]:-}"
+      if [ -n "$root" ]; then
+        root="$(absolute "$root")"
+        if [ -z "$dir" ]; then
+          dir="${root%/*}"
+          cd "${dir:-/}" 2>/dev/null || { echo "${0##*/}: no such directory: ${dir:-/}" >&2; exit 1; }
+        fi
+        args[$((k + 1))]="$(relative "$root" "$dir")"
+      fi
+      k=$((k + 2)) ;;
+    --lcov) k=$((k + 2)) ;;
+    *) k=$((k + 1)) ;;
+  esac
+done
+set -- "${args[@]}"
 settled=
 if command -v clj >/dev/null 2>&1 && [ -f deps.edn ]; then settled=1; fi
-args=("$@")
 roots=()
 k=0
 while [ "$k" -lt "${#args[@]}" ]; do
