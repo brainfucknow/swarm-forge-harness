@@ -78,7 +78,7 @@ dependencies and can take several minutes.
 - Exit 0.
 - The output shows `Ran N tests` with `0 failures, 0 errors`, a Cloverage
   table with `sfcs.cobertura`, and a CRAP report whose rows include the
-  function `crap-score` in `sfcs.cobertura`.
+  function `parse-cobertura` in `sfcs.cobertura`.
 - `target/coverage/lcov.info` and `.metrics/crap.edn` exist in that
   directory. Delete `target/` and `.metrics/` afterwards.
 
