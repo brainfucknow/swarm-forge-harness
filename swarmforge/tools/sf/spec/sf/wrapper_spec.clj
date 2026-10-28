@@ -50,6 +50,9 @@
       (should (str/includes? task "(:paths (edamame/parse-string (slurp \"bb.edn\")"))
       (should (str/includes? task "edamame.core")))))
 
+(def ^:private sf-src
+  (str (fs/parent (fs/parent (fs/path (.getPath (io/resource "sf/shell.clj")))))))
+
 (defn- run-wrapper-in
   "Runs a crap4clj-style wrapper from dir with a fake bb (and clj when clj?) on
   PATH; returns the exit, the error output, the fake bb's arguments, and the
@@ -62,7 +65,7 @@
     (spit (str (fs/path bin "bb")) (str "#!/usr/bin/env bash\npwd -P > " (wrapper/sq ran) "\nprintf '%s\\n' \"$@\"\n"))
     (when clj? (spit (str (fs/path bin "clj")) "#!/usr/bin/env bash\n"))
     (run! #(fs/set-posix-file-permissions % "rwxr-xr-x") (fs/list-dir bin))
-    (spit script (wrapper/script (wrapper/coverage-rewrite "/cfg/bb.edn") (wrapper/bb-command "/src" "crap")))
+    (spit script (wrapper/script (wrapper/coverage-rewrite (str (fs/which "bb")) sf-src "/cfg/bb.edn") (wrapper/bb-command "/src" "crap")))
     (let [{:keys [exit out err]} (p/shell {:cmd (into ["bash" script] args) :dir (str dir) :out :string :err :string
                                             :continue true :extra-env {"PATH" (str bin ":/usr/bin:/bin")}})]
       {:exit exit :err err :args (str/split-lines out)
@@ -146,9 +149,6 @@
       (should= 1 exit)
       (should= nil ran)
       (should (str/includes? err "missing")))))
-
-(def ^:private sf-src
-  (str (fs/parent (fs/parent (fs/path (.getPath (io/resource "sf/shell.clj")))))))
 
 (def ^:private block "# acceptance-mutation-manifest-begin\n# {}\n# acceptance-mutation-manifest-end\n")
 
