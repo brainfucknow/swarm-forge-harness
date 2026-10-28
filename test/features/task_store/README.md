@@ -22,6 +22,23 @@ copy of `swarmforge/`. git-bug is never on PATH. The end-to-end procedure is
   in `docs/spikes/git-task-store/features/`. Here, a task is a local
   `swarm/<id>` branch only.
 
+## Settled with the operator: sf finish resume
+
+For the task "Let sf finish resume after a merge conflict"
+(`finish_resume.feature`, QA procedure `../../qa/finish_resume.md`):
+
+- After a conflict the operator resolves and commits the merge, with any
+  message, then runs `sf finish <id>` again. sf finish then removes the
+  worktree and the branch, and rewrites the merge commit's message to the
+  finished record when it lacks it. Nobody writes `SwarmForge-*` trailers by
+  hand.
+- A merge still in progress is refused with "commit the merge first"; sf
+  finish does not commit it.
+- The conflict message is `sf: merge of swarm/<id> into <target> stopped on
+  conflicts: <files>; resolve them, commit, then run: sf finish <id>`.
+- crap4clj run from the repository root is a separate task, "Run crap4clj
+  from the repository root".
+
 ## Not covered by these features
 
 Per `AGENTS.md`, prompt and document text is not pinned by tests. QA reads
@@ -38,7 +55,7 @@ list `SWARMFORGE_GIT_BUG`, `migrate` or `SWARMFORGE_REMOTE`.
 | `$A:hex` | The 7 hex digits at the end of `$A`. |
 | `$A:created` | The abbreviated sha (`git rev-parse --short`) of the created record commit of task "A", the first commit on its branch. |
 | `NEW` | The id that the step under test (`sf new`) printed. "task NEW" is that task. |
-| `C1`, `C2`, `T1` | The abbreviated sha of the commit that a step named so. |
+| `C1`, `C2`, `T1`, `M1` | The abbreviated sha of the commit that a step named so. |
 | `L1` | The `Lore-id` that the hook gave commit `C1`. |
 | `DATE` | Any date in the form `YYYY-MM-DD`. |
 | `ROOT` | The absolute path of the main checkout. |
@@ -61,6 +78,11 @@ list `SWARMFORGE_GIT_BUG`, `migrate` or `SWARMFORGE_REMOTE`.
 | `the worktree of task "A" has the staged new file "S" and the unstaged change "U"` | Commits `U` with the line `1` (as the stage's role), appends the line `2` to `U` without staging it, then writes `S` with the line `s` and stages it with `git add S`. |
 | `the file "P" in the worktree of task "A" is written with "X"` | Writes `X` and a newline to `P` in that worktree. Makes directories as needed. |
 | `the tip of the branch of task "A" is named T1` | `T1` is the current tip of `swarm/$A`. |
+| `the worktree of task "A" and the branch "B" changed the files "F" differently` | For each path in `F` (separated by spaces): in the worktree of A, writes it with the line `ours` and commits it as the stage's role; on branch `B` (made at the main checkout's HEAD when missing), writes it with the line `theirs` and commits it. The main checkout is on `main` afterwards. |
+| `the operator resolved the conflicts and staged them` | In the main checkout, writes every conflicted file with the line `resolved` and runs `git add` on it. |
+| `the operator resolved the conflicts and committed the merge with the message "M"` | The same, then `git commit -m M` in the main checkout. |
+| `the operator resolved the conflicts and committed the merge with git's prepared message` | The same, then `git commit --no-edit` in the main checkout, which keeps the message sf finish prepared for the merge. |
+| `the HEAD of the main checkout is named M1` | `M1` is the current HEAD of the main checkout. |
 | `I ran "C"` / `I ran "C" in the worktree of task "A"` | Runs `C` (placeholders filled in, split on spaces) in the main checkout or that worktree. Output and status are not checked. |
 | `I ran "C" with the text "X"` | The same, with `X` (newlines expanded) added as one last argument. |
 | `I run …` | The same forms. This is the step under test, whose output and status the `Then` steps check. |
@@ -96,6 +118,11 @@ list `SWARMFORGE_GIT_BUG`, `migrate` or `SWARMFORGE_REMOTE`.
 | `the main checkout has the file "P" and no file "Q"` | `P` is in the main checkout, and `Q` is not. |
 | `the HEAD of the main checkout is a merge whose second parent is T1` | `HEAD^2` is `T1`. |
 | `the HEAD of the main checkout has the message "M"` | As for the tip commit, for `HEAD` of the main checkout. |
+| `the HEAD of the main checkout is M1` | `HEAD` is the commit `M1`. |
+| `the HEAD of the main checkout has the parents and the tree of M1` | `HEAD` has the same parents, in order, and the same tree as `M1`. |
+| `the main checkout is on the branch "B" merging T1 with the conflicted files "F"` | In the main checkout, `git branch --show-current` prints `B`, `MERGE_HEAD` is `T1`, and `git diff --name-only --diff-filter=U` prints exactly the paths of `F` (separated by spaces in `F`), one per line. |
+| `the main checkout is on the branch "B" merging T1 with no conflicted file` | The same, and `git diff --name-only --diff-filter=U` prints nothing. |
 | `the worktree of task "A" has no uncommitted change` | `git status --porcelain` in it prints nothing. |
 | `the worktree of task "A" does not exist` | There is no `.worktrees/$A` directory. |
+| `the worktree of task "A" exists` | `.worktrees/$A` is a directory. |
 | `the worktree of task "A" still has the staged new file "S" and the unstaged change "U"` | In that worktree, `git status --porcelain` prints exactly `A  S` and ` M U`. `S` holds `s`, and `U` holds `1` and `2`. |
