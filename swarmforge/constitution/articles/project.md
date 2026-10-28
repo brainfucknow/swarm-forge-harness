@@ -5,7 +5,7 @@
 - Project language: set this after installing (for example Babashka, Go, Java, or C#). Until it is set, infer the language from the repository and say which one you inferred in your report.
 
 ## Local Configuration
-- Keep SwarmForge configuration under `swarmforge/`, task worktrees under `.worktrees/`, and task state in the `swarm/*` branches and `tasks/` (`tasks/done/` once a task is done). Nothing else is swarm state.
+- Keep SwarmForge configuration under `swarmforge/`, task worktrees under `.worktrees/`, and task state in the `swarm/*` branches and `tasks/` (`tasks/done/` once a task is done). The orphan branch `swarmforge/metrics` caches mutation manifests. Nothing else is swarm state.
 - `.worktrees/` and `./tmp/` are ignored by git and never committed.
 
 ## Verification

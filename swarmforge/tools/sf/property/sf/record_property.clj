@@ -73,25 +73,27 @@
                          (= (cond-> r (:text r) (update :text str/trim))
                             (dissoc parsed :sha :commit))))))))
 
-(describe "role-commits"
-  (let [chain (gen/let [created hex7
-                        steps (gen/vector (gen/tuple hex7 (gen/one-of [(gen/return nil) hex7])) 0 6)]
-                ;; Each step is a record sha and the role commit it was made on, or nil when
-                ;; it was made straight on the record before it.
-                (reduce (fn [records [sha role-commit]]
-                          (conj records {:record "question" :sha sha
-                                         :commit (or role-commit (:sha (peek records)))}))
-                        [{:record "created" :sha created :commit created}]
-                        steps))]
-    (it "points every record at the created commit or a role's commit, never at a later record"
-      (should (passes? (prop/for-all [records chain]
-                         (let [later (set (map :sha (rest records)))]
-                           (not-any? #(later (:commit %)) (record/role-commits records)))))))
+(def ^:private chain
+  (gen/let [created hex7
+            steps (gen/vector (gen/tuple hex7 (gen/one-of [(gen/return nil) hex7])) 0 6)]
+    ;; Each step is a record sha and the role commit it was made on, or nil when
+    ;; it was made straight on the record before it.
+    (reduce (fn [records [sha role-commit]]
+              (conj records {:record "question" :sha sha
+                             :commit (or role-commit (:sha (peek records)))}))
+            [{:record "created" :sha created :commit created}]
+            steps)))
 
-    (it "is idempotent"
-      (should (passes? (prop/for-all [records chain]
-                         (= (record/role-commits records)
-                            (record/role-commits (record/role-commits records)))))))))
+(describe "role-commits"
+  (it "points every record at the created commit or a role's commit, never at a later record"
+    (should (passes? (prop/for-all [records chain]
+                       (let [later (set (map :sha (rest records)))]
+                         (not-any? #(later (:commit %)) (record/role-commits records)))))))
+
+  (it "is idempotent"
+    (should (passes? (prop/for-all [records chain]
+                       (= (record/role-commits records)
+                          (record/role-commits (record/role-commits records))))))))
 
 (describe "files-value"
   (it "lists at most 40 paths and counts the rest"
