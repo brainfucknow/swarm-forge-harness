@@ -121,6 +121,14 @@
       (should= (str (fs/path @dir "tools" "x")) ran)
       (should= ["--config" "/src/bb.edn" "crap" "-s" "src"] (take 5 args))))
 
+  (it "follows a symlinked directory to its target before making the roots relative"
+    (fs/create-dirs (fs/path @dir "projects" "app"))
+    (fs/create-dirs (fs/path @dir "projects" "core" "src"))
+    (fs/create-sym-link (fs/path @dir "linked-project") (fs/path @dir "projects" "app"))
+    (let [{:keys [ran args]} (run-wrapper-in @dir false ["-s" "linked-project/src" "-s" "projects/core/src"])]
+      (should= (str (fs/path @dir "projects" "app")) ran)
+      (should= ["-s" "src" "-s" "../core/src"] (take 4 (drop 3 args)))))
+
   (it "looks for deps.edn in that directory"
     (fs/create-dirs (fs/path @dir "tools" "x"))
     (spit (str (fs/path @dir "tools" "x" "deps.edn")) "{}")

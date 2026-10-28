@@ -11,13 +11,20 @@ absolute() {
   done
   printf '%s' "$out"
 }
+physical() {
+  local path dir
+  path="$(absolute "$1")"
+  if [ -d "$path" ]; then (cd "$path" && pwd -P)
+  elif [ -d "${path%/*}" ]; then dir="$(cd "${path%/*}" && pwd -P)"; printf '%s/%s' "${dir%/}" "${path##*/}"
+  else printf '%s' "$path"; fi
+}
 relative() {
   local base="$2" up= rest
   while [ "$1" != "$base" ] && [ "${1#"$base"/}" = "$1" ]; do base="${base%/*}"; up="../$up"; done
   rest="${1#"$base"}"; rest="$up${rest#/}"; rest="${rest%/}"
   printf '%s' "${rest:-.}"
 }
-here="$PWD"
+here="$(pwd -P)"
 args=("$@")
 dir=
 k=0
@@ -26,7 +33,7 @@ while [ "$k" -lt "${#args[@]}" ]; do
     --source-root|-s)
       root="${args[$((k + 1))]:-}"
       if [ -n "$root" ]; then
-        root="$(absolute "$root")"
+        root="$(physical "$root")"
         if [ -z "$dir" ]; then
           dir="${root%/*}"
           cd "${dir:-/}" 2>/dev/null || { echo "${0##*/}: no such directory: ${dir:-/}" >&2; exit 1; }
