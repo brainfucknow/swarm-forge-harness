@@ -18,13 +18,29 @@
   [{:keys [stage route]} to]
   (or (not-empty to) (second (drop-while #(not= stage %) (route-list route))) "done"))
 
-(defn handoff-refusal [state]
-  (when (waiting? state)
-    (str "task is waiting on the operator (needs:" (:needs state) "); handoff refused")))
+(defn handoff-refusal
+  ([state] (handoff-refusal state (:commit state)))
+  ([state head]
+   (cond
+     (waiting? state)
+     (str "task is waiting on the operator (needs:" (:needs state) "); handoff refused")
+     (= "specifier" (:stage state))
+     (cond
+       (not (and (= "approval" (:record state)) (= "operator" (:from state))))
+       "specification requires operator approval; run sf review and sf approve"
+       (not= (:commit state) head)
+       "specification changed since approval; run sf review again"))))
 
-(defn approval-refusal [state]
-  (when (not= "approval" (:needs state))
-    "task is not waiting for approval"))
+(defn approval-refusal
+  ([state]
+   (when (not= "approval" (:needs state)) "task is not waiting for approval"))
+  ([state reviewed head]
+   (or (approval-refusal state)
+       (when (or (nil? reviewed) (not= reviewed head))
+         "specification changed since review; run sf review again"))))
+
+(defn reviewed-commit [records]
+  (:commit (last (filter #(= "review" (:record %)) records))))
 
 (defn route-refusal
   "Refuses a route that drops the stage of an open task."

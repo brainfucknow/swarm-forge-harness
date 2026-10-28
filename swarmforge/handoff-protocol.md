@@ -171,6 +171,9 @@ sf new ──► stage <first role>
   `none`. It records HEAD and moves the stage to the next role on the task's
   route, or to `done` after the last one. `--to <role>` jumps elsewhere; role
   prompts say when that is allowed.
+- The specifier leaves its stage only through `sf approve` after `sf review`.
+  Approval must match the reviewed role commit; a new specification commit
+  requires another review. Rejection or an answered question is not approval.
 - `sf route <id> <route>` changes an open task's route; the new route must
   contain the current stage. The change is recorded as `type: route`.
 - For a role flagged `audit` in `roles.conf`, the first `sf handoff` or
