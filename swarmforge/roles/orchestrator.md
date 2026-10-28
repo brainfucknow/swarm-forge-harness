@@ -10,7 +10,7 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 
 ## Starting A Task
 1. Pick the route from the shape of the request: a new behavior is `feature`; a defect with a known cause is `bugfix`; cleanup with no behavior change is `refactor`; "make it robust" is `harden`; a question or a spec with no build is `spike`. Any subset of the catalogue in canonical order is also a route. When the request fits none, ask the operator.
-2. Create the task: `sf new "<title>" -m "<request>" --route <route>`. Use the operator's words for the body. Print the id and the route.
+2. Create the task: `sf new "<title>" -m "<request>" --route <route>`. Use the operator's words for the body. Print the title, the id and the route.
 3. Dispatch the first role of the route (`sf stage <id>`).
 
 ## Dispatching A Role
@@ -35,6 +35,7 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 
 ## Several Tasks
 - Each task has its own branch and worktree, so tasks can be in flight at once. Dispatch at most one agent per task at a time. Report `sf ls` when the operator asks for status.
+- In chat, in status tables, and in commit messages and PR descriptions, name a task by its title. Its id may follow in parentheses, never stand in for the title.
 
 ## Never
 - Never do a role's work in the session to save time, including writing or editing the specification.
