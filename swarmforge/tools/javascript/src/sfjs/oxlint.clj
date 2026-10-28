@@ -37,7 +37,7 @@
   "The function's name in an oxlint complexity message: the one between
   backticks, # in front for a private method, else (anonymous)."
   [message]
-  (let [kind (:kind (crap/complexity-message message))
+  (let [kind (first (str/split message #" has a complexity of " 2))
         name (second (re-find #"`([^`]+)`" kind))]
     (cond
       (nil? name) "(anonymous)"
@@ -51,17 +51,20 @@
     (when (and (map? parsed) (contains? parsed "diagnostics"))
       parsed)))
 
+(defn validate-report
+  "Checks a parsed report, rejecting missing output or a run with no rule."
+  [status parsed]
+  (cond
+    (nil? parsed)
+    (throw (outcome/usage-error (str "oxlint exited " status " without a report; " version-requirement)))
+    (not (pos? (get parsed "number_of_rules" 0)))
+    (throw (outcome/usage-error (str "oxlint ran no complexity rule; " version-requirement)))
+    :else parsed))
+
 (defn read-report
-  "The JSON report oxlint printed with exit `status`; an input error when
-  there is none or when oxlint ran no rule."
+  "The JSON report oxlint printed, rejecting missing output or no rule."
   [status text]
-  (let [parsed (report text)]
-    (cond
-      (nil? parsed)
-      (throw (outcome/usage-error (str "oxlint exited " status " without a report; " version-requirement)))
-      (not (pos? (get parsed "number_of_rules" 0)))
-      (throw (outcome/usage-error (str "oxlint ran no complexity rule; " version-requirement)))
-      :else parsed)))
+  (validate-report status (report text)))
 
 (defn parse-report
   "Every eslint(complexity) diagnostic in an oxlint report, with the file
@@ -69,14 +72,14 @@
   [parsed root]
   (vec (for [diagnostic (get parsed "diagnostics")
              :when (= "eslint(complexity)" (get diagnostic "code"))
-             :let [text (get diagnostic "message")
+             :let [{:keys [kind complexity]} (crap/complexity-message (get diagnostic "message"))
                    span (get (first (get diagnostic "labels")) "span")]]
          {:file (changes/relative-path (get diagnostic "filename") root)
           :line (get span "line")
           :column (get span "column" 1)
           :end-line (get span "line")
-          :name (function-name text)
-          :complexity (:complexity (crap/complexity-message text))})))
+          :name (function-name kind)
+          :complexity complexity})))
 
 (defn analysis-errors
   "Each diagnostic with no code in an oxlint report: a file oxlint could not

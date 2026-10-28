@@ -15,9 +15,11 @@
     (lore/lines (lore/read-log (shell/must {:dir (shell/repo-root)} "git" "log" "--reverse" "--first-parent"
                                            (str "--format=" lore/log-format) (str base ".." rev))))))
 
+(defn- record-history [rev records]
+  {:records (store/with-files records) :lore (lore-lines rev records)})
+
 (defn- branch-history [rev id]
-  (let [records (store/records-at rev id)]
-    {:records (store/with-files records) :lore (lore-lines rev records)}))
+  (record-history rev (store/records-at rev id)))
 
 (defn- finished-history
   "From the merge of sf finish when HEAD has it, else from the archive, with
@@ -36,8 +38,11 @@
     (if (store/finished? id)
       (merge {:file file :status "finished" :state (record/archived-state file)}
              (finished-history id file))
-      (merge {:file file :status "open" :state (store/state id)}
-             (branch-history (store/ref-of id) id)))))
+      (let [rev (store/ref-of id)
+            records (store/records-at rev id)
+            state (or (last records) (shell/die "swarm/" id " has no records"))]
+        (merge {:file file :status "open" :state state}
+               (record-history rev records))))))
 
 (defn print-body
   "Prints a --- line, the request, the record blocks and the LORE: lines."

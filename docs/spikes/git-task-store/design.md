@@ -4,9 +4,9 @@ From the task "Spike: replace git-bug with Markdown task files and commit
 trailers". This note keeps only the part of its design that is still
 pending. The local store is built: `swarmforge/handoff-protocol.md` and
 `test/features/task_store/` describe it. Sharing is not built; it is below,
-with its draft Gherkin in `features/` here. The section on mutation
-manifests belongs to the task "Keep mutation manifests on an orphan metrics
-branch". git history keeps the rest of the spike's design.
+with its draft Gherkin in `features/` here. Mutation caching is implemented;
+see the [current contract](../../../swarmforge/handoff-protocol.md#sharing).
+Git history keeps the rest of the spike's design.
 
 ## Sharing
 
@@ -56,37 +56,6 @@ considered remote, and hex uniqueness of new ids against the remote's
     spike checked with git 2.43. History stays linear, and the newest
     record's snapshot is the state: the last writer wins. Role commits can
     still conflict like any other code, and the role resolves them.
-
-## Mutation manifests: the cache branch (for ec13ecd)
-
-The operator chose a branch detached from main, because the manifests are a
-cache. This fixes its shape. ec13ecd's specifier writes the Gherkin.
-
-- **Branch.** `swarmforge/metrics` is an orphan, with no common history with
-  main. It is not under `swarm/`, so sf never takes it for a task.
-- **Tree.** The tree is the contents of `.metrics/` by path:
-  `mutate/<path>.edn` from clj-mutate, and `gherkin/<feature path>` for the
-  gherkin-mutator block that ec13ecd's wrapper moves out of the feature.
-  `.metrics/` stays git-ignored in every worktree.
-- **Load.** In `sf start`, sf copies each file of the tip that the worktree's
-  `.metrics/` does not have. Files already there stay as they are.
-- **Save.** In `sf handoff`, before the record, sf commits each `.metrics/`
-  file that differs from the tip's copy. It uses `commit-tree` and
-  `update-ref` (compare-and-swap), so no worktree is touched. The message is
-  `sf metrics: <id>`, with `SwarmForge-Task: <id>`. The newest copy of a path
-  wins. A file deleted from `.metrics/` stays in the cache.
-- **Correctness.** A manifest carries the hashes of its source. Thus a copy
-  from unmerged work, or a lost or reset branch, costs a re-run, never a wrong
-  result. The branch can be squashed to one commit or deleted at any time.
-- **Sharing.** `git push origin swarmforge/metrics`. When
-  `SWARMFORGE_REMOTE` is set, sf pushes it after a save. When that push is
-  refused because another clone moved the branch, sf warns and keeps its
-  local copy. Merging the two copies is ec13ecd's question.
-- **What ec13ecd keeps.** The gherkin-mutator wrapper that moves the
-  feature's block, `sf manifest tested` and its `Tested:` trailers, and
-  `.metrics/` in `install.sh`'s ignore list.
-- **What ec13ecd drops.** `refs/notes/mutate`, notes on commits, and the rule
-  that a task loads only the notes on commits that HEAD reaches.
 
 ## Open questions
 

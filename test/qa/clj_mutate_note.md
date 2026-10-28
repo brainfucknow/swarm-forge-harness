@@ -1,74 +1,15 @@
-# QA procedure: Note the clj-mutate test command for the hardener, and fix a stale QA step
+# Historical QA: clj-mutate guidance
 
-This task changes documents only, so it has no Gherkin. The items below
-give the end state the operator approved. The coder makes the edits. QA
-checks the end state: run the checks in "Scripted checks" from the task
-worktree, then do the reading check. Record each result as a `Tested:` or
-`Not-tested:` trailer on the QA handoff commit. Do not commit a script.
+This records the completed task "Note the clj-mutate test command for the
+hardener, and fix a stale QA step". The original editing checklist remains
+in Git history.
 
-The task "Run crap4clj from the repository root" owns running crap4clj from
-the repository root. This task
-says nothing about crap4clj in the hardener prompt.
+The [Clojure guide](../../swarmforge/languages/clojure.md) explains why
+clj-mutate must run from the worktree root with the worker's own classpath
+and a custom test command, rather than a symlinked `bb.edn`. It is the current
+reference for this setup.
 
-## End state
-
-1. **`swarmforge/languages/clojure.md`** (new) holds a short note about
-   running clj-mutate on Babashka code, so no general role prompt carries
-   language-specific advice. In plain words it says:
-   - Run clj-mutate from the worktree root. clj-mutate keeps its manifest
-     under `.metrics/mutate/` of the directory it runs from, and `sf start`
-     and `sf handoff` load and save only the worktree root's.
-   - Do not use a `bb --config <path>/bb.edn` test command with clj-mutate.
-     It lets every mutant survive, because bb resolves the worker's
-     symlinked `bb.edn` back to the real checkout and so tests the
-     unmutated sources.
-   - Instead, pass a `--test-command` that puts the worker's own copy of
-     each `:paths` entry of the module's `bb.edn` on the classpath (source
-     and `spec` or `test` directories, and any shared ones such as
-     `../core/src`), together with `--no-coverage`, which clj-mutate
-     requires for a custom test command.
-
-   The note gives no example command. The Clojure line of the language tool
-   table in `swarmforge/constitution/articles/engineering.md` and the
-   layout table of `swarmforge/README.md` point to the file, as they do for
-   `csharp.md` and `javascript.md`. `swarmforge/roles/hardener.md` does not
-   change.
-2. **`test/qa/sf_tool.md`**, check QA-4, expects a CRAP report whose rows
-   include the function `parse-cobertura` in `sfcs.cobertura`, instead of
-   `crap-score`. Nothing else in the file changes.
-
-No other file changes, except this procedure and `tasks/`,
-which `sf` writes.
-
-## Scripted checks
-
-Run these from the task worktree. `BASE` is the merge base with `main`
-(`git merge-base HEAD main`).
-
-1. Changed files: `git diff --name-only BASE HEAD` lists only
-   `swarmforge/languages/clojure.md`,
-   `swarmforge/constitution/articles/engineering.md`, `swarmforge/README.md`,
-   `test/qa/sf_tool.md`, `test/qa/clj_mutate_note.md` and files under
-   `tasks/`.
-2. `grep -n 'crap-score' test/qa/sf_tool.md` prints nothing.
-   `git diff BASE HEAD -- test/qa/sf_tool.md` changes only lines inside
-   QA-4, and QA-4 names `parse-cobertura` and `sfcs.cobertura`.
-3. QA-4 still matches the tool. Follow the setup of `test/qa/sf_tool.md`
-   (clone into `$WT/tmp/qa/project`, `sf tool ensure crap4clj`), then run
-   QA-4 as written. It exits 0 and the CRAP report has a row with
-   `parse-cobertura` and `sfcs.cobertura`. Delete `$WT/tmp/qa/` afterwards.
-4. The suites still pass: `bash test/sf_test.sh` and
-   `bash test/acceptance.sh` (after `swarmforge/bin/sf tool ensure gherkin-parser`).
-
-## Reading check (manual, not scripted)
-
-The prompt text is not checked by script: AGENTS.md keeps prompt wording out
-of tests. Read `swarmforge/languages/clojure.md` and the diffs of
-`engineering.md` and `swarmforge/README.md` once and confirm by judgement:
-
-- The two pointers are one line each, in the style of the C# and JavaScript
-  ones.
-- A hardener who has not seen the earlier task can tell from the file where
-  to run clj-mutate, which test command to avoid and why, and what to pass
-  instead.
-- The note is a few sentences of plain wording and adds nothing beyond the three points in "End state".
+[Tool-wrapper QA](sf_tool.md#qa-4-crap4clj-with-clojuretest-and-no-clojure-cli) checks the
+CRAP report; it expects `parse-cobertura` in `sfcs.cobertura`. The separate
+task "Run crap4clj from the repository root" owns that working-directory
+behavior. This note does not change role policies.

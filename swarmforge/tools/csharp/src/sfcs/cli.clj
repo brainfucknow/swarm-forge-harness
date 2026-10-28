@@ -48,16 +48,21 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
 (defn- read-json [path]
   (json/parse-string (slurp (shell/in-dir path))))
 
+(defn- require-tool-run [command args]
+  (let [status (shell/run command args)]
+    (when-not (zero? status)
+      (throw (outcome/usage-error (str command " " (str/join " " args) " exited " status))))))
+
 (defn- cmd-tools [_]
   (let [missing (remove shell/available? ["dotnet" "node" "npx"])]
     (when (seq missing)
       (throw (outcome/usage-error (str "missing on PATH: " (str/join ", " missing))))))
   (let [manifest (str (fs/path ".config" "dotnet-tools.json"))]
     (when-not (exists? manifest)
-      (shell/run "dotnet" ["new" "tool-manifest"]))
+      (require-tool-run "dotnet" ["new" "tool-manifest"]))
     (when-not (get-in (read-json manifest) ["tools" "dotnet-stryker"])
-      (shell/run "dotnet" ["tool" "install" "dotnet-stryker"]))
-    (shell/run "dotnet" ["tool" "restore"])
+      (require-tool-run "dotnet" ["tool" "install" "dotnet-stryker"]))
+    (require-tool-run "dotnet" ["tool" "restore"])
     (shell/run "npx" ["--yes" "jscpd@4" "--version"])))
 
 (defn- cmd-test [{:keys [args]}]
@@ -134,6 +139,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
         status (if (:report-only opts)
                  outcome/exit-ok
                  (do (fs/create-dirs (shell/in-dir jscpd-dir))
+                     (fs/delete-if-exists (shell/in-dir report-path))
                      (shell/run "npx" ["--yes" "jscpd@4" "--format" "csharp"
                                        "--min-tokens" (str (or (:min-tokens opts) 50))
                                        "--reporters" "json" "--output" jscpd-dir
@@ -151,12 +157,13 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
         status (if (:report-only opts)
                  outcome/exit-ok
                  (do (fs/create-dirs (shell/in-dir stryker-dir))
+                     (fs/delete-if-exists (shell/in-dir report-path))
                      (shell/run "dotnet"
                                 (into (cond-> ["stryker" "--reporter" "json" "--reporter" "progress" "--output" stryker-dir]
                                         (not (:all opts)) (conj (str "--since:" (git/base-ref opts))))
                                       extra))))]
     (cond
-      (and (not (exists? report-path)) (not (:report-only opts))) status
+      (and (not (zero? status)) (not (exists? report-path))) status
       (not (exists? report-path)) (throw (outcome/usage-error (str report-path " not found")))
       :else (shell/emit (stryker/review (stryker/parse-mutants (read-json report-path)))))))
 
