@@ -1,4 +1,6 @@
-# QA procedure: the local task store (task e6b686e)
+# QA procedure: the local task store
+
+For the task "Build the git-native task store".
 
 This procedure runs end to end through the command line only, with real
 `git` and `swarmforge/bin/sf` used as the operator and the roles use them.
@@ -6,9 +8,8 @@ Do not call `sf` internals. Turn sections 1–8 into a throwaway script under
 `./tmp/` and do not commit it. Section 9 is a reading check and is not
 scripted.
 
-Design: `docs/spikes/git-task-store/design.md` (sharing and migration are
-not part of this task; see "Build plan" there). Gherkin:
-`test/features/task_store/`.
+Design: `swarmforge/handoff-protocol.md` describes the store. Sharing is
+not part of this task. Gherkin: `test/features/task_store/`.
 
 ## Setup
 
@@ -165,4 +166,4 @@ search:
 
 Record the outcome as trailers on the QA handoff commit. The rollout on this
 repository (re-creating the tasks still in git-bug and removing the
-`git-bug/*` branches) is the next task, not QA's.
+`git-bug/*` branches) was a separate task, not QA's.

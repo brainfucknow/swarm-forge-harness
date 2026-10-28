@@ -180,6 +180,7 @@ swarmforge/tools/sf/property/    test.check property tests for sf (run on their 
 test/sf_test.sh                  behavioral tests for sf
 test/features/  test/qa/         Gherkin acceptance features and QA procedures
 test/acceptance.sh  test/acceptance/   acceptance pipeline: generator, runtime, step handlers
+tasks/                           task files of open tasks; tasks/done/ for finished ones
 ```
 
 ## Tests
@@ -189,20 +190,20 @@ bash test/sf_test.sh
 bash test/sf_tool_test.sh
 bb --config swarmforge/tools/sf/bb.edn spec
 bb --config swarmforge/tools/sf/bb.edn property
+swarmforge/bin/sf tool ensure gherkin-parser
 bash test/acceptance.sh
 bb --config swarmforge/tools/csharp/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn property
-swarmforge/bin/sf tool ensure gherkin-parser
 bb --config swarmforge/tools/javascript/bb.edn acceptance
 ```
 
 The first drives `sf` and real git in a scratch repository, the
 second drives `sf tool` against a local tool source and a fake `bb`, the third
 runs the Speclj unit specs of `sf`, the fourth runs its test.check property
-tests (kept out of the unit specs), the fifth runs the Gherkin features in
-`test/features/` through `gherkin-parser` (`swarmforge/bin/sf tool ensure
-gherkin-parser`) and the generated acceptance tests, the sixth drives `sf-cs`
+tests (kept out of the unit specs), the fifth installs `gherkin-parser`,
+the sixth runs the Gherkin features in `test/features/` through
+`gherkin-parser` and the generated acceptance tests, the seventh drives `sf-cs`
 against fixture reports and a fake `dotnet`, together with the shared
 `tools/core/` readers, and the last three test `sf-js`: unit tests against
 fixture reports (with dependency rules for `tools/`), test.check properties of
