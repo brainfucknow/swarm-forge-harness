@@ -1,8 +1,9 @@
 # Lore trailer acceptance features
 
-Gherkin for task df7e1a7: roles record decision context and verification as
-[Lore](https://github.com/Ian-stetsenko/lore-protocol) git trailers, and QA
-stops committing its scripts. These features are the specification for the
+Gherkin for the task "QA records verification as Lore commit trailers
+instead of committed scripts": roles record decision context and
+verification as [Lore](https://github.com/Ian-stetsenko/lore-protocol) git
+trailers, and QA stops committing its scripts. These features are the specification for the
 `sf` side: the commit-msg hook and the `LORE:` lines of `sf start` and
 `sf show`. A test script under `test/` runs them, one check per scenario and
 example row, labelled with the scenario name (for example
@@ -57,7 +58,7 @@ these, and QA reads them by hand (see the QA procedure):
 
 | Step | Meaning |
 |---|---|
-| `a project with swarmforge initialized` | A scratch git repository on `main` whose first commit holds a copy of `swarmforge/`, with `sf init` run in it. git-bug is not needed. |
+| `a project with swarmforge initialized` | A scratch git repository on `main` whose first commit holds a copy of `swarmforge/`, with `sf init` run in it. |
 | `a task at stage "S" started with sf start` | `sf new "t" -m "t" --route S` ran, then `sf start ID`. The task's worktree is `.worktrees/ID`. |
 | `the main checkout has the commit "M"` | `git commit --allow-empty -m M` ran in the main checkout before the task was created. |
 | `I commit "M" in the task worktree` | `git commit --allow-empty -m M` in the task worktree, with the hook active and `SWARMFORGE_ROLE` unset. |

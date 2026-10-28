@@ -1,4 +1,6 @@
-# sf tool end-to-end QA procedure (task aca0457)
+# sf tool end-to-end QA procedure
+
+For the task "Port the tool-wrapper fix to the Babashka sf tool".
 
 This procedure runs `sf tool` and the wrappers it writes from the command
 line. It uses real Babashka, real GitHub clones, and this repository's own
@@ -23,7 +25,7 @@ that could not run. A failing check is a defect to fix, not a trailer.
 
 ## Setup
 
-1. `git clone -q --branch swarm/aca0457 "$WT" "$WT/tmp/qa/project"`.
+1. `git clone -q --branch "$(git -C "$WT" branch --show-current)" "$WT" "$WT/tmp/qa/project"`.
    `P` is `$WT/tmp/qa/project`. It has no `.swarmforge/` yet, so every tool
    is cloned fresh from GitHub.
 2. Run every command below with `PATH="$P/swarmforge/bin:$PATH"`, and with

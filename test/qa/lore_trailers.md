@@ -1,4 +1,7 @@
-# QA procedure: Lore trailers (task df7e1a7)
+# QA procedure: Lore trailers
+
+For the task "QA records verification as Lore commit trailers instead of
+committed scripts".
 
 End to end through the command line only: real `git` and
 `swarmforge/bin/sf` as an operator and roles run them. Do not call `sf`
@@ -7,14 +10,13 @@ not commit it. Section 6 is a reading check and is not scripted.
 
 ## Setup
 
-1. Remove git-bug from PATH, if it is there; sf does not need it.
-2. Make a scratch directory `S` under `./tmp/`. In it: `git init -b main`,
+1. Make a scratch directory `S` under `./tmp/`. In it: `git init -b main`,
    copy the task worktree's `swarmforge/` in, commit it, run
    `swarmforge/bin/sf init`. Expect exit 0 and a `roles:` line.
-3. Commit `Base\n\nTested: base` in `S` with `git commit --allow-empty`.
+2. Commit `Base\n\nTested: base` in `S` with `git commit --allow-empty`.
    Expect the message unchanged: the main checkout gets no byline and no
    Lore-id.
-4. `sf new "Lore QA" -m "Lore QA" --route specifier,coder,qa`; note the id
+3. `sf new "Lore QA" -m "Lore QA" --route specifier,coder,qa`; note the id
    `ID`. `sf start ID`; note `DIR:`.
 
 ## 1. Byline placement

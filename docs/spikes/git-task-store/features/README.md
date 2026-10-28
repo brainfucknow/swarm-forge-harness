@@ -1,10 +1,10 @@
 # Sharing features (draft, for the sharing task)
 
-Task e6b686e built the local store and moved the spike's other features to
-`test/features/task_store/`. These two features are what is left: the third
-task of the build, sharing, adopts them, moves them to
-`test/features/task_store/`, and adds a QA section for them (the spike's
-section 6, "Sharing and SWARMFORGE_REMOTE":
+The task "Build the git-native task store" built the local store and moved
+the spike's other features to `test/features/task_store/`. These two
+features are what is left: the sharing task, not yet built, adopts them,
+moves them to `test/features/task_store/`, and adds a QA section for them
+(the spike's section 6, "Sharing and SWARMFORGE_REMOTE":
 `git show c7091d5:docs/spikes/git-task-store/qa.md`). They are kept here
 because CI runs every feature under `test/features/`.
 
