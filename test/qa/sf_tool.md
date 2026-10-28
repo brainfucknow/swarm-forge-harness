@@ -227,7 +227,7 @@ Part A, `D` is `$P/swarmforge/tools/csharp` (clojure.test, no `spec`):
    `$P/.swarmforge/bin/crap4clj --source-root swarmforge/tools/csharp/src`.
 
 - Exit 0, as in step 1. The output has the same `Ran N tests` line, with
-  `0 failures, 0 errors`, and a CRAP report with the function `crap-score`
+  `0 failures, 0 errors`, and a CRAP report with the function `parse-cobertura`
   in `sfcs.cobertura`. Stdout and stderr do not mention `test/acceptance`
   or `acceptance.`.
 - `D/target/coverage/lcov.info` and `D/.metrics/crap.edn` exist.
