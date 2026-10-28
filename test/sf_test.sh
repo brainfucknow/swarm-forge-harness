@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Behavioral tests for swarmforge/bin/sf against a real git-bug in a scratch repo.
+# Behavioral tests for swarmforge/bin/sf in a scratch repo. Tasks live in git
+# branches; git-bug is not used.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-command -v git-bug >/dev/null || { echo "git-bug not found on PATH" >&2; exit 1; }
 
 failures=0
 pass() { echo "ok   $1"; }
@@ -16,19 +16,14 @@ scratch="$(mktemp -d)"
 trap 'rc=$?; [ "$rc" -eq 0 ] || diagnose "exit status $rc"; rm -rf "$scratch"' EXIT
 export HOME="$scratch/home"; mkdir -p "$HOME"
 
-# On a non-zero exit, dump the git-bug state so that the CI log shows the cause.
+# On a non-zero exit, dump the task branches so that the CI log shows the cause.
 diagnose() {
   echo "=== diagnostics after failure ($1) ===" >&2
   [ -d "$repo/.git" ] || return 0
   cd "$repo"
-  echo "--- refs" >&2; git for-each-ref refs/bugs >&2 || true
-  echo "--- git-bug files" >&2; ls -laR .git/git-bug 2>&1 | head -40 >&2 || true
-  echo "--- clocks" >&2; for c in .git/git-bug/clocks/*; do printf '%s: ' "$c" >&2; od -An -tu8 "$c" >&2 || true; done
-  echo "--- bugs" >&2
-  for b in $(git-bug bug --format id 2>/dev/null); do
-    git-bug bug show "$b" >&2 || true
-    echo "--- ref log for $b" >&2
-    git log --format='%h %ci %s' "refs/bugs/$b" >&2 || true
+  for b in $(git for-each-ref --format='%(refname)' refs/heads/swarm/); do
+    echo "--- $b" >&2
+    git log --first-parent --format='%h %s%n%(trailers)' "$b" >&2 || true
   done
 }
 git config --global user.name tester
@@ -45,21 +40,23 @@ export PATH="$repo/swarmforge/bin:$PATH"
 
 # init
 out="$(sf init)"
-assert_match "init creates identity" "$out" "identity: operator \(created\)"
+assert_match "init prints the identity of record commits" "$out" "identity: tester <tester@example.com>"
 assert_match "init reports the catalogue" "$out" "roles: specifier coder cleaner architect hardener qa"
 assert_match "init reports the routes" "$out" "routes: feature bugfix refactor harden spike"
-assert_eq "init is idempotent" "$(sf init | head -n 1)" "identity: operator"
+assert_eq "init is idempotent" "$(sf init | head -n 1)" "identity: tester <tester@example.com>"
+assert_eq "init writes no git-bug data" "$(git for-each-ref refs/bugs refs/identities)" ""
 
 # new
 id="$(sf new "Add login" -m "Users can log in with email and password.")"
-assert_match "new prints a short id" "$id" '^[0-9a-f]{7}$'
+assert_match "new prints a slug and hex id" "$id" '^add-login-[0-9a-f]{7}$'
 assert_eq "new puts the task at the first stage" "$(sf stage "$id")" "specifier"
 full="specifier,coder,cleaner,architect,hardener,qa"
 assert_eq "new defaults to the feature route" "$(sf route "$id")" "$full"
 assert_eq "new creates the task branch" "$(git branch --list "swarm/$id" | tr -d ' *')" "swarm/$id"
 assert_match "show prints the body" "$(sf show "$id")" "email and password"
 assert_match "new records the branch point" "$(sf show "$id")" "type: created"
-assert_match "created names the base commit" "$(sf show "$id")" "commit: $(git rev-parse --short main)"
+assert_match "created names its own commit" "$(sf show "$id")" "commit: $(git rev-parse --short "swarm/$id")"
+assert_eq "the created commit sits on main" "$(git rev-parse "swarm/$id^")" "$(git rev-parse main)"
 
 # next
 assert_eq "next finds the task for its stage" "$(sf next specifier)" "$id"
@@ -97,7 +94,12 @@ git commit -q --allow-empty -m "On main checkout"
 assert_eq "hook leaves commits outside task worktrees alone" "$(git log -1 --format=%B)" "On main checkout"
 SWARMFORGE_ROLE=coder git commit -q --allow-empty -m "Forced role outside"
 assert_eq "SWARMFORGE_ROLE does not reach outside task worktrees" "$(git log -1 --format=%B)" "Forced role outside"
-assert_fails "task commit is refused when the role cannot be found" env SWARMFORGE_GIT_BUG=/nonexistent/git-bug git -C ".worktrees/$id" commit -q --allow-empty -m "No role"
+git -C ".worktrees/$id" commit -q --allow-empty -m "$(printf 'Prose\n\nSwarmForge-Stage: done\n\nmore prose')"
+assert_eq "hook allows a SwarmForge line outside the trailer block" "$(git -C ".worktrees/$id" log -1 --format=%s)" "Prose"
+assert_fails "hook refuses a SwarmForge trailer" git -C ".worktrees/$id" commit -q --allow-empty -m "$(printf 'Forged\n\nSwarmForge-Stage: done')"
+mv "$repo/swarmforge/bin/sf" "$scratch/sf.moved"
+assert_fails "task commit is refused when the role cannot be found" git -C ".worktrees/$id" commit -q --allow-empty -m "No role"
+mv "$scratch/sf.moved" "$repo/swarmforge/bin/sf"
 cp "$hook" "$scratch/our-hook" && printf '#!/bin/sh\nexit 0\n' > "$hook"
 assert_match "start leaves a foreign hook alone" "$(sf start "$id")" "^HOOK: existing commit-msg hook left alone"
 assert_eq "foreign hook is unchanged" "$(cat "$hook")" "$(printf '#!/bin/sh\nexit 0')"
@@ -108,7 +110,7 @@ git -C ".worktrees/$id" reset -q --hard "$sha"
 out="$(sf review "$id" -m "spec ready")"
 assert_match "review asks for approval" "$out" "waits for operator approval"
 assert_match "review lists the files since the branch point" "$(sf show "$id")" "^ *files: login.feature$"
-assert_match "review labels needs:approval" "$(sf ls --needs)" "^$id	specifier	approval	"
+assert_match "review waits for approval" "$(sf ls --needs)" "^$id	specifier	approval	"
 assert_fails "handoff while waiting for approval" sf handoff "$id"
 assert_eq "next skips tasks waiting on the operator" "$(sf next specifier)" "NO_TASK"
 assert_match "reject keeps the stage" "$(sf reject "$id" "split the scenarios")" "stays at stage:specifier"
@@ -118,7 +120,7 @@ sf review "$id" >/dev/null
 out="$(sf approve "$id")"
 assert_match "approve hands off to the next stage" "$out" "^HANDOFF: $id specifier -> coder at $sha$"
 assert_eq "approve moves the stage" "$(sf stage "$id")" "coder"
-assert_match "handoff comment records the commit" "$(sf show "$id")" "commit: $sha"
+assert_match "handoff record names the role's commit" "$(sf show "$id")" "commit: $sha"
 assert_match "handoff with no new commits lists no files" "$(sf show "$id")" "^ *files: -$"
 echo "Feature: logout" > ".worktrees/$id/logout.feature"
 echo "Feature: login v2" > ".worktrees/$id/login.feature"
@@ -126,7 +128,7 @@ git -C ".worktrees/$id" add -A && git -C ".worktrees/$id" commit -q -m "Add logo
 SWARMFORGE_ROLE=coder sf handoff "$id" --to coder >/dev/null
 assert_match "handoff lists files since the previous record" "$(sf show "$id")" "^ *files: login.feature,logout.feature$"
 sf ask "$id" "$(printf 'which hash?\ncommit: deadbee looked fine')" >/dev/null
-assert_match "free text is flattened to one header line" "$(sf show "$id")" "^ *question: which hash\? commit: deadbee looked fine$"
+assert_match "free text keeps its lines, indented" "$(sf show "$id")" "^  commit: deadbee looked fine$"
 sf answer "$id" "argon2id" >/dev/null
 echo "Feature: reset" > ".worktrees/$id/reset.feature"
 git -C ".worktrees/$id" add -A && git -C ".worktrees/$id" commit -q -m "Add reset"
@@ -150,34 +152,25 @@ assert_match "handoff honors -m" "$(sf show "$id")" "summary: skip ahead"
 out="$(sf handoff "$id")"
 assert_match "last stage hands off to done" "$out" "qa -> done"
 assert_eq "done is the terminal stage" "$(sf stage "$id")" "done"
+assert_eq "the handoff to done archives the task file" "$(git ls-tree --name-only -r "swarm/$id" tasks)" "tasks/done/$id.md"
 
 # finish
-assert_fails "finish from a non-done task" sf finish "zzzzzzz"
+assert_fails "finish an unknown task" sf finish "zzzzzzz"
+idn="$(sf new "Not done" -m x --route coder)"
+assert_fails "finish from a non-done task" sf finish "$idn"
 out="$(sf finish "$id")"
 assert_match "finish merges into the current branch" "$out" "merged into main"
 assert_match "main contains the task work" "$(git log --oneline main)" "Specify login"
 assert_eq "finish removes the worktree" "$(test -d ".worktrees/$id" && echo present || echo gone)" "gone"
 assert_eq "finish deletes the branch" "$(git branch --list "swarm/$id")" ""
-assert_eq "finish closes the task" "$(sf ls)" ""
-assert_eq "closed task is not next" "$(sf next done 2>/dev/null || echo NO_TASK)" "NO_TASK"
-
-# sf repeats a label write that git-bug drops until the label is visible
-shim="$scratch/dropping-git-bug"; dropped="$scratch/dropped"
-cat > "$shim" <<EOF
-#!/usr/bin/env bash
-if [ "\$1" = bug ] && [ "\$2" = label ] && [ "\$3" = new ] && [ ! -f "$dropped" ]; then touch "$dropped"; echo "label dropped"; exit 0; fi
-exec "$(command -v git-bug)" "\$@"
-EOF
-chmod +x "$shim"
-idx="$(SWARMFORGE_GIT_BUG="$shim" sf new "Dropped write" -m x)"
-assert_eq "the shim dropped one write" "$(test -f "$dropped" && echo dropped)" "dropped"
-assert_eq "a dropped route write is repeated" "$(sf route "$idx")" "$full"
-assert_eq "the stage after it is still set" "$(sf stage "$idx")" "specifier"
+assert_eq "finish leaves only unfinished tasks" "$(sf ls | cut -f1)" "$idn"
+assert_match "a finished task is still shown" "$(sf show "$id")" "^STATUS: finished$"
+assert_fails "a finished task cannot be started" sf start "$id"
 
 # routes
 assert_eq "routes lists the presets" "$(sf routes | awk '{print $1}' | paste -sd ' ' -)" "feature bugfix refactor harden spike"
 id2="$(sf new "Fix rounding" -m "x" --route bugfix)"
-assert_eq "named route sets the label" "$(sf route "$id2")" "specifier,coder,qa"
+assert_eq "named route is recorded" "$(sf route "$id2")" "specifier,coder,qa"
 sf start "$id2" >/dev/null
 git -C ".worktrees/$id2" commit -q --allow-empty -m "Spec. By specifier."
 sf review "$id2" >/dev/null && sf approve "$id2" >/dev/null

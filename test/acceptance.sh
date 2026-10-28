@@ -6,7 +6,6 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$HERE"
-command -v git-bug >/dev/null || { echo "git-bug not found on PATH" >&2; exit 1; }
 export PATH="$(swarmforge/bin/sf tool bin):$PATH"
 command -v gherkin-parser >/dev/null || { echo "gherkin-parser missing; run: swarmforge/bin/sf tool ensure gherkin-parser" >&2; exit 1; }
 

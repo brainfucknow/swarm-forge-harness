@@ -110,14 +110,20 @@ GitHub source at one local checkout instead of cloning.")
   (doseq [[name kind source] (catalogue)]
     (println (format "%-22s %-6s %s" name kind source))))
 
+(defn- named
+  "The tool the command was given; stops when there is none."
+  [command tool]
+  (when (str/blank? tool) (shell/die command " needs a tool"))
+  tool)
+
 (defn main
   "Runs one sf tool command and returns its exit status."
   [[command tool]]
   (shell/main-with
    "sf tool: "
    #(case command
-      "require" (do (when (str/blank? tool) (shell/die "require needs a tool")) (require-tool tool))
-      "ensure" (do (when (str/blank? tool) (shell/die "ensure needs a tool")) (ensure-tool tool))
+      "require" (require-tool (named command tool))
+      "ensure" (ensure-tool (named command tool))
       "list" (list-tools)
       "bin" (println (bin-dir))
       (nil "" "-h" "--help" "help") (println usage)

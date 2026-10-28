@@ -24,16 +24,17 @@ Feature: sf task ids
     Then the exit status is 0
     And the output matches "^<slug>-[0-9a-f]{7}$"
     And the branch "swarm/NEW" exists
+    And the file "tasks/NEW.md" on the branch of task NEW has the line "# <heading>"
 
     Examples:
-      | title                                   | slug                           |
-      | Add login                               | add-login                      |
-      | Fix: the API's 2 bugs!                  | fix-the-api-s-2-bugs           |
-      | Ändra inloggningen för användare        | andra-inloggningen-for         |
-      | twelve chars one two three fou          | twelve-chars-one-two-three-fou |
-      | twelve chars one two three four         | twelve-chars-one-two-three     |
-      | Supercalifragilisticexpialidocious word | supercalifragilisticexpialidoc |
-      | !!!                                     | task                           |
+      | title                                   | heading                                 | slug                           |
+      | Add login                               | Add login                               | add-login                      |
+      | Fix: the API's 2 bugs!                  | Fix: the API's 2 bugs!                  | fix-the-api-s-2-bugs           |
+      | Ändra inloggningen för användare        | Ändra inloggningen för användare        | andra-inloggningen-for         |
+      | twelve chars one two three fou          | twelve chars one two three fou          | twelve-chars-one-two-three-fou |
+      | twelve chars one two three four         | twelve chars one two three four         | twelve-chars-one-two-three     |
+      | Supercalifragilisticexpialidocious word | Supercalifragilisticexpialidocious word | supercalifragilisticexpialidoc |
+      | !!!                                     | !!!                                     | task                           |
 
   # sf task ids 2
   Scenario: sf task ids 2: two tasks with the same title get different ids

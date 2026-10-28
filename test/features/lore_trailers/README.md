@@ -57,7 +57,7 @@ these, and QA reads them by hand (see the QA procedure):
 
 | Step | Meaning |
 |---|---|
-| `a project with swarmforge initialized` | A scratch git repository on `main` whose first commit holds a copy of `swarmforge/`, with `sf init` run in it. git-bug is on PATH. |
+| `a project with swarmforge initialized` | A scratch git repository on `main` whose first commit holds a copy of `swarmforge/`, with `sf init` run in it. git-bug is not needed. |
 | `a task at stage "S" started with sf start` | `sf new "t" -m "t" --route S` ran, then `sf start ID`. The task's worktree is `.worktrees/ID`. |
 | `the main checkout has the commit "M"` | `git commit --allow-empty -m M` ran in the main checkout before the task was created. |
 | `I commit "M" in the task worktree` | `git commit --allow-empty -m M` in the task worktree, with the hook active and `SWARMFORGE_ROLE` unset. |

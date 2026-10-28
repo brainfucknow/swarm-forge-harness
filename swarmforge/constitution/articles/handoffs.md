@@ -1,14 +1,14 @@
 # Handoff Rules
 
-Tasks are git-bug issues. Roles pass work by committing on the task branch and
-recording a handoff on the task. All task bookkeeping goes through
-`swarmforge/bin/sf`; never run `git bug` directly on a task and never edit
-labels or comments by hand. See `swarmforge/handoff-protocol.md` for the
+A task is its branch, `swarm/<id>`. Roles pass work by committing on the task
+branch, and `sf` records each handoff as a commit on it. All task bookkeeping
+goes through `swarmforge/bin/sf`; never edit a task file under `tasks/` and
+never write a `SwarmForge-*` trailer by hand. See `swarmforge/handoff-protocol.md` for the
 record formats.
 
 ## Receiving Work
 - `sf next <role>` prints the ids of tasks waiting at `stage:<role>`, or `NO_TASK`. If it prints `NO_TASK`, stop; there is nothing for your role.
-- `sf start <id>` prints the task: title, stage, branch, `DIR:`, the request body, every comment so far, and then one `LORE:` line per Lore trailer on the task branch's commits. The latest `type: handoff` comment is the work you received, and its `files:` header names what that role changed; the `answer` comments settle earlier questions; the `LORE:` lines carry the earlier roles' constraints, rejected alternatives, directives, and verification. Read them with the request and the records, and follow a `Directive:`. Use only that printed information as the task.
+- `sf start <id>` prints the task: title, stage, branch, `DIR:`, the request body, every record so far, and then one `LORE:` line per Lore trailer on the task branch's commits. The latest `type: handoff` record is the work you received, and its `files:` header names what that role changed; the `answer` records settle earlier questions; the `LORE:` lines carry the earlier roles' constraints, rejected alternatives, directives, and verification. Read them with the request and the records, and follow a `Directive:`. Use only that printed information as the task.
 - Work in the printed `DIR:`. The branch already carries every earlier role's commits.
 - If you were given a task id in your prompt, start that task. Do not take another.
 
@@ -22,9 +22,9 @@ record formats.
 - If `sf handoff` or `sf review` prints `AUDIT_REQUIRED`, nothing was recorded. Do the listed self-review against the committed work, fix and commit what it finds, then run the command again. Running it again without the review defeats the gate and is a failure condition.
 
 ## Questions
-- When blocked by ambiguity, contradiction, or a test/specification conflict, run `sf ask <id> "<question>"`, stop, and report the question verbatim. The task is labeled `needs:operator`; nobody can hand it off until the operator answers with `sf answer`.
+- When blocked by ambiguity, contradiction, or a test/specification conflict, run `sf ask <id> "<question>"`, stop, and report the question verbatim. The task then needs the operator; nobody can hand it off until the operator answers with `sf answer`.
 - Ask one clear question with the options you see. Do not guess and continue.
-- When resumed after an answer, `sf start <id>` shows the `type: answer` comment. Follow it.
+- When resumed after an answer, `sf start <id>` shows the `type: answer` record. Follow it.
 - A role the orchestrator plays in chat (`session` in `roles.conf`) asks the operator directly, then records the exchange with `sf ask` and `sf answer` so the task carries it.
 
 ## Specification Gate

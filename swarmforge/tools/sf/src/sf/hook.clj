@@ -4,6 +4,7 @@
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
             [sf.lore :as lore]
+            [sf.record :as record]
             [sf.shell :as shell]))
 
 (def marker "# swarmforge commit-msg hook")
@@ -42,14 +43,20 @@
     (if (or (str/blank? char) (= "auto" char)) "#" char)))
 
 (defn commit-msg
-  "Adds the byline for role and a Lore-id to the commit message in file, as
-  sf.lore/sign-commit does. git interpret-trailers finds the trailer block as
-  git log reads it: a --- line in the message is text, not a patch divider."
+  "Refuses a commit message in file whose trailer block has a SwarmForge-
+  trailer; only sf writes those. Otherwise adds the byline for role and a
+  Lore-id, as sf.lore/sign-commit does, except at stage done. git
+  interpret-trailers finds the trailer block as git log reads it: a --- line in
+  the message is text, not a patch divider."
   [[role file]]
   (when (or (str/blank? role) (str/blank? file))
     (shell/die "commit-msg needs a role and a message file"))
   (let [message (slurp file)
         trailers (shell/lines (shell/must {:in message} "git" "interpret-trailers" "--parse" "--no-divider"))
-        signed (lore/sign-commit message (comment-char) role (keep lore/trailer-key trailers) lore/new-id)]
-    (when (not= signed message)
-      (spit file signed))))
+        keys (keep lore/trailer-key trailers)]
+    (when-let [key (record/record-trailer keys)]
+      (shell/die key " is a SwarmForge record trailer; only sf writes those"))
+    (when (not= "done" role)
+      (let [signed (lore/sign-commit message (comment-char) role keys lore/new-id)]
+        (when (not= signed message)
+          (spit file signed))))))

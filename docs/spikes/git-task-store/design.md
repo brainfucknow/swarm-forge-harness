@@ -1,13 +1,32 @@
 # Design note: tasks in plain git, without git-bug
 
-Spike 01d767f. This note is the design. `features/` holds the Gherkin for the
-settled behaviour, and `qa.md` is the end-to-end procedure. Nothing is built
-in this task. A later `feature` task builds it (see Order of work).
+Spike 01d767f. This note is the design. The build adopted its Gherkin and
+QA procedure: see Build plan below for where they are now and what the
+operator changed when the build started.
 
-The features are kept here and not under `test/features/`. The CI runs
-`test/acceptance.sh` on every feature there, and these features would fail
-on main until the build lands. The build task moves them to
-`test/features/task_store/`.
+## Build plan
+
+Settled with the operator in task e6b686e. These override the rest of this
+note where they differ.
+
+- **No migration.** The template has no users yet. There is no
+  `sf migrate`, and git-bug leaves the tests and CI entirely. Decision 8,
+  the Migration section, and steps 3 and 4 of the rollout no longer apply.
+- **Three tasks.**
+  1. e6b686e, the local store: sf off git-bug, ids, the task file, record
+     commits, the state from local `swarm/*` branches, start and show,
+     the archive and finish, the hook's refusal, init, and the prompt,
+     install and CI changes. Gherkin in `test/features/task_store/`, QA
+     procedure in `test/qa/task_store.md`. A task is a local branch only.
+  2. The rollout on this repository: re-create by hand in the new store the
+     tasks still in git-bug (ec13ecd, and 5bbff27 if it is not finished
+     by then), and remove the `git-bug/*` mirror branches on GitHub and
+     `refs/bugs`, `refs/identities` locally.
+  3. Sharing: the push to `SWARMFORGE_REMOTE`, the check for unseen remote
+     records, remote-tracking task branches, the one considered remote, and
+     hex uniqueness against remote branches; `sf --help` gains
+     `SWARMFORGE_REMOTE` then. Its draft Gherkin is in
+     `features/` here.
 
 ## Decisions
 
@@ -266,6 +285,9 @@ one commit per task. The record commits are not squashed.
 
 ## Sharing
 
+The documented pushes are part of the local store. `SWARMFORGE_REMOTE`, the
+remote-tracking branches and the two-clone check are the sharing task.
+
 - **The pushes.** Everything lives under `refs/heads/`, so a branch-only
   host (this environment's proxy) takes it all:
   `git push origin swarm/<id>` moves a task, with its records;
@@ -302,6 +324,8 @@ one commit per task. The record commits are not squashed.
     still conflict like any other code, and the role resolves them.
 
 ## Migration
+
+Dropped; see Build plan. Kept as the spike's record.
 
 `sf migrate` is the only command that needs git-bug. It is one-shot and safe
 to run again. For each open git-bug issue that has a `stage:` label, it does

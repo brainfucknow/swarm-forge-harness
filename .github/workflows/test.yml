@@ -7,19 +7,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install git-bug
-        run: |
-          mkdir -p "$HOME/bin"
-          curl -sSL -o "$HOME/bin/git-bug" \
-            https://github.com/git-bug/git-bug/releases/latest/download/git-bug_linux_amd64
-          chmod +x "$HOME/bin/git-bug"
-          echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Install Babashka
         run: |
+          mkdir -p "$HOME/bin"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
           curl -sSL https://raw.githubusercontent.com/babashka/babashka/master/install -o install-bb
           bash install-bb --dir "$HOME/bin"
-      - name: Probe git-bug read-after-write
-        run: bb test/probe_gitbug.clj 30
       - name: Test sf
         run: bash test/sf_test.sh
       - name: Test sf tool

@@ -3,15 +3,15 @@
 A harness-integrated [SwarmForge](https://github.com/brainfucknow/swarm-forge).
 The roles are agents you run directly in Claude Code, Codex, or Copilot CLI.
 There is no tmux, no daemon, and no web dashboard. Roles talk to each other
-through [git-bug](https://github.com/git-bug/git-bug) issues stored in the
-project repository, and they talk to you in chat.
+through task branches in the project repository, and they talk to you in
+chat.
 
 ## What changed from SwarmForge
 
 | SwarmForge | This harness |
 |---|---|
 | One tmux session per role, each a long-running CLI. | Roles are harness subagents. The session only orchestrates. |
-| Handoff daemon, inbox and outbox files, `roles.tsv`. | A git-bug task per feature: `stage:<role>` label, `type: handoff` comments, one branch. |
+| Handoff daemon, inbox and outbox files, `roles.tsv`. | A branch per task, `swarm/<id>`: a task file, and record commits whose trailers hold the stage. |
 | Dashboard approval gate (Attention). | The specifier commits, runs `sf review`, and stops. You approve or reject in chat. |
 | Dashboard clarifications. | A role runs `sf ask`, stops, and the question reaches you in chat. `sf answer` resumes it. |
 | Per-role worktrees with back-propagation merges. | One worktree per task; roles work in sequence on the same branch, so nothing propagates backwards. |
@@ -20,8 +20,6 @@ project repository, and they talk to you in chat.
 ## Prerequisites
 
 - `git`, and `bash` for `install.sh`, the commit-msg hook, and the tool wrappers
-- [`git-bug`](https://github.com/git-bug/git-bug) on PATH (release binaries are
-  single files)
 - [Babashka](https://babashka.org) (`bb`) for `sf`, the C# and JavaScript tool
   wrappers, and the Clojure constitution tools
 - One of Claude Code, Codex CLI, or Copilot CLI
@@ -36,7 +34,7 @@ cd your-project
 
 The installer copies `swarmforge/` and the `swarm` skill into the project,
 adds one line to `AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md`,
-generates the agent files, and creates the git-bug identity. Commit the result.
+generates the agent files, and installs the commit-msg hook. Commit the result.
 
 Then set the project language in `swarmforge/constitution/articles/project.md`.
 
@@ -64,12 +62,14 @@ The session becomes the orchestrator:
    `sf handoff`. The orchestrator dispatches the next role.
 4. A role that is blocked runs `sf ask` and stops. The question appears in chat.
    Your answer goes back with `sf answer` and the same role resumes.
-5. After the last role on the route, the task is `stage:done`. `sf finish`
-   merges the branch into your base branch and closes the task.
+5. After the last role on the route, the task is at stage `done` and its task
+   file moves to `tasks/done/`. `sf finish` merges the branch into your base
+   branch and removes it.
 
 `sf ls` shows every open task with its stage and whether it is waiting on you.
-`sf show <id>` prints the whole history. Both work in any clone that has
-pulled the git-bug refs (`git bug pull`).
+`sf show <id>` prints the whole history, also after the merge. Both work in
+any clone that has the task branch (`git push origin swarm/<id>` and a fetch
+move it).
 
 ## Harness integration
 
@@ -162,7 +162,7 @@ package manager that `packageManager` or the lockfile names. See
 ```text
 install.sh                       copy SwarmForge into a project
 swarmforge/
-  bin/sf  tools/sf/              git-bug task helper (Babashka)
+  bin/sf  tools/sf/              task helper over git branches (Babashka)
   bin/sf-tool  tools.conf        constitution tool installer and catalogue (sf tool ...)
   bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers (Babashka)
   languages/csharp.md            what each sf-cs command runs and prints
@@ -172,15 +172,14 @@ swarmforge/
   roles.conf  routes.conf  tiers.conf   catalogue, routes, models
   constitution.md  constitution/articles/
   roles/                         specifier, coder, cleaner, architect, hardener, qa, orchestrator
-  handoff-protocol.md            labels, records, lifecycle
+  handoff-protocol.md            task branch, records, lifecycle
 .claude/agents  .codex/agents  .github/agents     generated role agents
 .claude/skills/swarm  .agents/skills/swarm        the /swarm entry point
 swarmforge/tools/sf/spec/        Speclj unit specs for sf
 swarmforge/tools/sf/property/    test.check property tests for sf (run on their own)
-test/sf_test.sh                  behavioral tests for sf (needs git-bug)
+test/sf_test.sh                  behavioral tests for sf
 test/features/  test/qa/         Gherkin acceptance features and QA procedures
 test/acceptance.sh  test/acceptance/   acceptance pipeline: generator, runtime, step handlers
-test/probe_gitbug.clj            checks that git-bug reads its own label writes
 ```
 
 ## Tests
@@ -198,7 +197,7 @@ swarmforge/bin/sf tool ensure gherkin-parser
 bb --config swarmforge/tools/javascript/bb.edn acceptance
 ```
 
-The first drives `sf` against a real git-bug in a scratch repository, the
+The first drives `sf` and real git in a scratch repository, the
 second drives `sf tool` against a local tool source and a fake `bb`, the third
 runs the Speclj unit specs of `sf`, the fourth runs its test.check property
 tests (kept out of the unit specs), the fifth runs the Gherkin features in
