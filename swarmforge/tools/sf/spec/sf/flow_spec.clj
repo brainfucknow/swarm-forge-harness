@@ -90,3 +90,18 @@
 
   (it "finds the finished record"
     (should= "f1" (:sha (flow/finished-record records)))))
+
+(describe "a finished task that sf finish resumes"
+  (it "keeps HEAD when HEAD's history has the finished record"
+    (should= :keep (flow/resume-action true "t1" ["m0"])))
+
+  (it "rewords HEAD when it is the merge of the branch tip without the record"
+    (should= :reword (flow/resume-action false "t1" ["m0" "t1"])))
+
+  (it "refuses a task without a branch"
+    (should-be-nil (flow/resume-action true nil ["m0" "t1"])))
+
+  (it "refuses a HEAD that does not merge the branch tip"
+    (should-be-nil (flow/resume-action false "t1" ["m0"]))
+    (should-be-nil (flow/resume-action false "t1" ["m0" "t2"]))
+    (should-be-nil (flow/resume-action false "t1" ["t1" "m0"]))))

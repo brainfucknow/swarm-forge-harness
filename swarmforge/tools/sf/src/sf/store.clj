@@ -25,8 +25,13 @@
 (defn finished? [id]
   (boolean (some #{id} (done-ids))))
 
+(defn tip
+  "The commit at the tip of the task branch, or nil."
+  [id]
+  (git/rev (ref-of id)))
+
 (defn has-branch? [id]
-  (some? (git/rev (ref-of id))))
+  (some? (tip id)))
 
 (defn resolve-id
   "The task that arg names, among the task branches and the finished tasks."
@@ -118,8 +123,30 @@
     (when error (shell/die error))
     rec))
 
+(defn merging?
+  "True while a merge is in progress in the main checkout."
+  []
+  (some? (git/rev "MERGE_HEAD")))
+
 (defn merge!
   "Merges the task branch into the checked-out branch with --no-ff; the merge
-  commit has message."
+  commit has message. Returns the conflicted paths when the merge stops on
+  conflicts, and leaves it in progress; else nil."
   [id message]
-  (git/git-with {:env (git/author-env)} "merge" "--no-ff" "--no-edit" "--quiet" "-m" message (record/branch id)))
+  (let [result (git/run {:env (git/author-env) :err :inherit}
+                        "merge" "--no-ff" "--no-edit" "--quiet" "-m" message (record/branch id))]
+    (when-not (shell/ok? result)
+      (or (seq (shell/lines (git/git "diff" "--name-only" "--diff-filter=U")))
+          (shell/fail (:exit result) nil)))))
+
+(defn head-parents
+  "The parents of the main checkout's HEAD, in order."
+  []
+  (shell/lines (git/git "rev-parse" "HEAD^@")))
+
+(defn reword-head!
+  "Gives the main checkout's HEAD message, with the same parents and tree."
+  [message]
+  (let [head (git/git "rev-parse" "HEAD")
+        commit (git/commit-tree (str head "^{tree}") (head-parents) message)]
+    (git/git "update-ref" "HEAD" commit head)))
