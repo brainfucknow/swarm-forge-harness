@@ -24,26 +24,27 @@
   (it "is task when nothing is left"
     (should= "task" (record/slug "!!!"))))
 
+(def ^:private ids ["add-login-1111111" "add-logout-2222222"])
+
 (describe "resolve"
-  (let [ids ["add-login-1111111" "add-logout-2222222"]]
-    (it "takes the full id"
-      (should= [:ok "add-login-1111111"] (record/resolve "add-login-1111111" ids)))
+  (it "takes the full id"
+    (should= [:ok "add-login-1111111"] (record/resolve "add-login-1111111" ids)))
 
-    (it "takes the hex part"
-      (should= [:ok "add-logout-2222222"] (record/resolve "2222222" ids)))
+  (it "takes the hex part"
+    (should= [:ok "add-logout-2222222"] (record/resolve "2222222" ids)))
 
-    (it "takes a unique prefix"
-      (should= [:ok "add-login-1111111"] (record/resolve "add-logi" ids)))
+  (it "takes a unique prefix"
+    (should= [:ok "add-login-1111111"] (record/resolve "add-logi" ids)))
 
-    (it "names every match of an ambiguous prefix, sorted"
-      (should= [:ambiguous ["add-login-1111111" "add-logout-2222222"]]
-               (record/resolve "add-log" (reverse ids))))
+  (it "names every match of an ambiguous prefix, sorted"
+    (should= [:ambiguous ["add-login-1111111" "add-logout-2222222"]]
+             (record/resolve "add-log" (reverse ids))))
 
-    (it "finds nothing"
-      (should= [:none] (record/resolve "nothing" ids)))
+  (it "finds nothing"
+    (should= [:none] (record/resolve "nothing" ids)))
 
-    (it "prefers the full id over a longer id it prefixes"
-      (should= [:ok "a-1111111"] (record/resolve "a-1111111" ["a-1111111" "a-1111111-2222222"])))))
+  (it "prefers the full id over a longer id it prefixes"
+    (should= [:ok "a-1111111"] (record/resolve "a-1111111" ["a-1111111" "a-1111111-2222222"]))))
 
 (describe "free-text"
   (it "joins arguments with spaces and trims both ends"
