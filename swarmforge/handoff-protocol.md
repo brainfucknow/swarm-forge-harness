@@ -192,6 +192,12 @@ work, and a fetch brings it back. Records change no file, so
 `git pull --rebase origin swarm/<id>` never conflicts on them; the newest
 record wins.
 
+Mutation manifests are a cache on the orphan branch `swarmforge/metrics`,
+whose tree mirrors `.metrics/mutate/` and `.metrics/gherkin/`. `sf start`
+copies the cached files a worktree lacks, and `sf handoff` commits the new and
+changed ones without a checkout. sf does not push it: `git push origin
+swarmforge/metrics` shares the cache, and a fetch brings it back.
+
 ## Audit
 
 `sf show <id>` prints the complete history: request, every question and

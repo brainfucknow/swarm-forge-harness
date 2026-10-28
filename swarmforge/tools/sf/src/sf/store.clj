@@ -117,15 +117,15 @@
     (or (last (records-at (ref-of id) id)) (shell/die "swarm/" id " has no records"))
     (record/archived-state (task-file id))))
 
-(defn- tree-with
-  "The tree of rev with the paths in removed taken out and files (path to
-  text) added, built in a temporary index."
+(defn tree-with
+  "The tree of rev (the empty tree when nil) with the paths in removed taken
+  out and files (path to text) added, built in a temporary index."
   [rev removed files]
   (let [common (git "rev-parse" "--path-format=absolute" "--git-common-dir")
         dir (fs/create-temp-dir {:dir common :prefix "sf-index-"})
         index {:env {"GIT_INDEX_FILE" (str (fs/path dir "index"))}}]
     (try
-      (git-with index "read-tree" rev)
+      (when rev (git-with index "read-tree" rev))
       (doseq [path removed] (git-with index "update-index" "--force-remove" path))
       (doseq [[path text] files]
         (let [blob (git-with {:in text} "hash-object" "-w" "--stdin")]
@@ -133,7 +133,7 @@
       (git-with index "write-tree")
       (finally (fs/delete-tree dir)))))
 
-(defn- commit-tree [tree parents message]
+(defn commit-tree [tree parents message]
   (apply git-with {:in message :env (author-env)} "commit-tree" tree (mapcat #(vector "-p" %) parents)))
 
 (defn create!

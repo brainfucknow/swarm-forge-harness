@@ -95,7 +95,9 @@ GitHub source at one local checkout instead of cloning.")
 
 (defn- install-one [tool]
   (let [spec (spec-of tool)
-        command (command-for tool spec)
+        command (cond->> (command-for tool spec)
+                  (= "gherkin" (:rewrite spec))
+                  (wrapper/keeping-feature-block (str (fs/path (shell/repo-root) "swarmforge" "tools" "sf" "src"))))
         path (wrapper-path tool)]
     (fs/create-dirs (bin-dir))
     (spit path (wrapper/script (rewrite-for (:rewrite spec) tool) command))

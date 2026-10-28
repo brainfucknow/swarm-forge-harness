@@ -2,8 +2,9 @@
   "The task commands end to end in a throwaway repository."
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
-            [speclj.core :refer [around describe it should should= should-contain]]
+            [speclj.core :refer [around describe it should should= should-not= should-contain should-not-contain]]
             [sf.repo-support :refer [*dir* git with-repo write-conf!]]
+            [sf.shell :as shell]
             [sf.store :as store]
             [sf.task :as task]))
 
@@ -142,6 +143,24 @@
       (fails-with "answer needs text" #(task/answer [id]))
       (fails-with "reject needs a reason" #(task/reject [id]))
       (fails-with "unknown ls option" #(task/ls ["--bogus"]))))
+
+  (it "saves the manifests on a handoff it records and loads them on start"
+    (spit (str *dir* "/.git/info/exclude") ".metrics/\n")
+    (let [a (new-id "Quick" "--route" "coder,cleaner")
+          manifest #(str *dir* "/.worktrees/" % "/.metrics/mutate/a.edn")
+          cached #(:exit (shell/run {:dir *dir*} "git" "cat-file" "-e" "swarmforge/metrics:mutate/a.edn"))]
+      (out task/start [a])
+      (fs/create-dirs (fs/parent (manifest a)))
+      (spit (manifest a) "v1\n")
+      (out task/ask [a "Which?"])
+      (fails-with "waiting on the operator" #(task/handoff [a] {:audit-passed? true}))
+      (should-not= 0 (cached))
+      (out task/answer [a "This"])
+      (should-contain (str "HANDOFF: " a " coder -> cleaner") (out task/handoff [a] {:audit-passed? true}))
+      (should= 0 (cached))
+      (let [b (new-id "Other" "--route" "coder")]
+        (should-not-contain "metrics" (out task/start [b]))
+        (should= "v1\n" (slurp (manifest b))))))
 
   (it "installs the hook and names the roles on init"
     (let [text (out task/init [])]
