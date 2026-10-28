@@ -19,6 +19,7 @@ Feature: sf tool write guard
     And the task worktree's tools.conf adds the line "odd bb example.invalid/x/odd crap rot13 cloverage"
     And the task worktree's tools.conf adds the line "outer bb example.invalid/x/outer crap coverage weird"
     And an earlier install left a wrapper for "cloverage"
+    And an earlier install left a wrapper for "weird"
     And an earlier install left a wrapper for "<tool>"
     And a snapshot of "MAIN/.swarmforge"
     When I run "sf tool ensure <tool>" in the task worktree
