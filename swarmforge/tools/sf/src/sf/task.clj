@@ -229,9 +229,11 @@
   "Gives the merge the operator committed into target the finished record when
   it lacks it, or stops when the task is finished."
   [id state target]
-  (case (flow/resume-action (some? (flow/finished-record (store/records-at "HEAD" id)))
-                            (store/tip id) (store/head-parents))
+  (case (let [tip (store/tip id)]
+          (flow/resume-action (some? (flow/finished-record (store/records-at "HEAD" id)))
+                              tip (store/head-parents) (boolean (and tip (store/in-head? tip)))))
     :keep nil
+    :unmerged (shell/die (record/branch id) " has commits that HEAD does not contain; merge them, then run: sf finish " id)
     :reword (store/reword-head! (finished-message id state target))
     (shell/die "task " id " is finished")))
 

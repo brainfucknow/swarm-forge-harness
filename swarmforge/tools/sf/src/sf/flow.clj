@@ -59,12 +59,13 @@
 
 (defn resume-action
   "What sf finish does with a task whose archive is in HEAD: :keep HEAD when
-  recorded? (HEAD's history has the finished record), :reword HEAD when it is
-  the merge of the branch tip without that record, else nil: the task is
-  finished. tip is nil when the task has no branch."
-  [recorded? tip head-parents]
+  recorded? (HEAD's history has the finished record) and HEAD contains the
+  branch tip (tip-merged?), :unmerged when the branch moved after that merge,
+  :reword HEAD when it is the merge of the branch tip without that record,
+  else nil: the task is finished. tip is nil when the task has no branch."
+  [recorded? tip head-parents tip-merged?]
   (cond (nil? tip) nil
-        recorded? :keep
+        recorded? (if tip-merged? :keep :unmerged)
         (and (= 2 (count head-parents)) (= tip (second head-parents))) :reword))
 
 (defn role-commit

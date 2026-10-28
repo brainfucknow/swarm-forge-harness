@@ -139,6 +139,11 @@
       (or (seq (shell/lines (git/git "diff" "--name-only" "--diff-filter=U")))
           (shell/fail (:exit result) nil)))))
 
+(defn in-head?
+  "True when the main checkout's HEAD contains commit."
+  [commit]
+  (shell/ok? (git/run {} "merge-base" "--is-ancestor" commit "HEAD")))
+
 (defn head-parents
   "The parents of the main checkout's HEAD, in order."
   []

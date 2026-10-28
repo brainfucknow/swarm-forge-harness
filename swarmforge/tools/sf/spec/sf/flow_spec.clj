@@ -92,16 +92,19 @@
     (should= "f1" (:sha (flow/finished-record records)))))
 
 (describe "a finished task that sf finish resumes"
-  (it "keeps HEAD when HEAD's history has the finished record"
-    (should= :keep (flow/resume-action true "t1" ["m0"])))
+  (it "keeps HEAD when HEAD's history has the finished record and the branch tip"
+    (should= :keep (flow/resume-action true "t1" ["m0"] true)))
+
+  (it "stops when the branch moved after the recorded merge"
+    (should= :unmerged (flow/resume-action true "t1" ["m0"] false)))
 
   (it "rewords HEAD when it is the merge of the branch tip without the record"
-    (should= :reword (flow/resume-action false "t1" ["m0" "t1"])))
+    (should= :reword (flow/resume-action false "t1" ["m0" "t1"] true)))
 
   (it "refuses a task without a branch"
-    (should-be-nil (flow/resume-action true nil ["m0" "t1"])))
+    (should-be-nil (flow/resume-action true nil ["m0" "t1"] false)))
 
   (it "refuses a HEAD that does not merge the branch tip"
-    (should-be-nil (flow/resume-action false "t1" ["m0"]))
-    (should-be-nil (flow/resume-action false "t1" ["m0" "t2"]))
-    (should-be-nil (flow/resume-action false "t1" ["t1" "m0"]))))
+    (should-be-nil (flow/resume-action false "t1" ["m0"] false))
+    (should-be-nil (flow/resume-action false "t1" ["m0" "t2"] false))
+    (should-be-nil (flow/resume-action false "t1" ["t1" "m0"] true))))

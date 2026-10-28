@@ -173,6 +173,19 @@
         (should= merge (git *dir* "rev-parse" "HEAD")))
       (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
 
+  (it "keeps the worktree and branch when the branch moved after the recorded merge"
+    (let [id (conflicting-task)
+          dir (str *dir* "/.worktrees/" id)]
+      (captured #(task/finish [id]))
+      (resolve-conflicts)
+      (git *dir* "commit" "-q" "--no-verify" "--no-edit")
+      (commit-in-worktree id "late")
+      (should= {:status 1 :err (str "swarm/" id " has commits that HEAD does not contain;"
+                                    " merge them, then run: sf finish " id)}
+               (select-keys (captured #(task/finish [id])) [:status :err]))
+      (should (fs/exists? (str dir "/late")))
+      (should-not= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
+
   (it "refuses a finished task whose branch tip HEAD does not merge"
     (let [id (new-id "Quick" "--route" "coder")]
       (task/handoff [id "--to" "done"] {:audit-passed? true})
