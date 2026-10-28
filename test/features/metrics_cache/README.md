@@ -1,0 +1,107 @@
+# Metrics cache acceptance features
+
+Gherkin for task keep-mutation-manifests-on-an-2a5978d. Mutation manifests
+are a cache. They leave the tree and every PR, and live on the orphan branch
+`swarmforge/metrics` (design: "Mutation manifests: the cache branch" in
+`docs/spikes/git-task-store/design.md`). The manifests are the clj-mutate
+files under `.metrics/mutate/` and the gherkin-mutator stamp and manifest
+block, which the wrapper now keeps in `.metrics/gherkin/<feature path>`
+instead of the feature file.
+
+- `metrics_load.feature`: `sf start` copies the cache into the worktree.
+- `metrics_save.feature`: `sf handoff` (and `sf approve`) saves to the cache.
+- `gherkin_block.feature`: the gherkin-mutator wrapper moves the block.
+- `install_ignore.feature`: `install.sh` ignores `.metrics/`.
+
+`test/acceptance.sh` runs them, one check per scenario and example row, with
+the real `sf`, real git and a real `bb` in a scratch repository that holds a
+copy of `swarmforge/`. The end-to-end procedure is
+`../../qa/metrics_cache.md`. It replaces paused task ec13ecd (git notes,
+branch `old/ec13ecd-git-notes`).
+
+## Settled with the operator
+
+- The cache is the branch `swarmforge/metrics`, an orphan with no common
+  history with main. Its tree holds each manifest at its path under
+  `.metrics/`. It is not under `swarm/`, so sf never takes it for a task.
+- Only `.metrics/mutate/` and `.metrics/gherkin/` are cached.
+  `.metrics/crap.edn` and other reports are per-run output.
+- Only clj-mutate and gherkin-mutator are covered. The footers of mutate4go
+  and mutate4java stay in their source files, and Stryker keeps its files
+  under `tmp/`.
+- Automatic only. `sf start` loads, `sf handoff` saves, and the wrapper moves
+  the block. There is no new sf subcommand.
+- The output of `sf start` and `sf handoff` does not change.
+- `install.sh` adds `.metrics/` to `.gitignore` once. sf does not check that
+  git ignores `.metrics/`.
+- A load never overwrites a file already in the worktree. The newest save of
+  a path wins. A file deleted from `.metrics/` stays in the cache. A refused
+  handoff saves nothing.
+- A save moves the branch with `commit-tree` and a compare-and-swap
+  `update-ref`, so no worktree is touched.
+- sf does not push or fetch the cache. `SWARMFORGE_REMOTE` belongs to the
+  sharing task. There is no squash command.
+- A manifest carries the hashes of its source, so a stale copy costs a
+  re-run, never a wrong result.
+- One task: the cache branch, the install line and the block move.
+
+## Not covered by these features
+
+Per `AGENTS.md`, prompt and document text is not pinned by tests. QA reads
+these by hand (section 6 of the QA procedure).
+
+- `swarmforge/constitution/articles/engineering.md`: mutation manifests live
+  on `swarmforge/metrics`, not in tracked files. Do not commit `.metrics/` or
+  a mutation block in a feature file. `sf start` loads them and `sf handoff`
+  saves them. Differential mutation and "do not edit manifests by hand" stay.
+- `swarmforge/roles/hardener.md`: "Manifest edits still move forward with the
+  task" now means `sf handoff` saves them to the cache.
+- `swarmforge/roles/hardener.md` and `cleaner.md`: when a split moves code to
+  a new source file, keep the manifest state under `.metrics/` (for example,
+  move the manifest file to the new path), and do not commit it.
+- `swarmforge/handoff-protocol.md`, Sharing: `git push origin
+  swarmforge/metrics` shares the cache, and a fetch brings it back.
+- `swarmforge/README.md` names the cache branch.
+- clj-mutate's own README says to commit `.metrics/`. That does not apply
+  here.
+
+A compare-and-swap that fails because a second handoff moved the branch at
+the same moment is not specified here. The coder picks a retry or a warning
+and records the choice as a Lore trailer.
+
+## Placeholders
+
+| Text | Meaning |
+|---|---|
+| `\n` in a quoted value or a table cell | A newline. |
+| `$A`, `$B` | The id that `sf new` printed for task "A" or "B". |
+| `C1` | The abbreviated sha of the commit that a step named so. |
+| `M1` | The tip of `swarmforge/metrics` that a step named so. |
+
+## Step meanings
+
+Steps not listed here mean what `../task_store/README.md` says.
+
+| Step | Meaning |
+|---|---|
+| `a project with swarmforge initialized and .metrics/ ignored` | The task store step `a project with swarmforge initialized`, with the line `.metrics/` added to the `.gitignore` of its first commit. |
+| `the metrics branch holds the file "P" with "X"` | In the main checkout, without a checkout of the branch: a commit on `swarmforge/metrics` whose tree is the tip's tree with `P` holding `X` and a newline. When the branch does not exist, the commit has no parent. |
+| `the tip of the metrics branch is named M1` | `M1` is the current tip of `swarmforge/metrics`. |
+| `the file "P" in the worktree of task "A" was deleted` | Removes `P` from that worktree. |
+| `the file "P" in the worktree of task "A" holds "X"` | `P` in that worktree holds `X` and a newline. |
+| `the worktree of task "A" has no file "P"` | There is no file or directory `P` in that worktree. |
+| `the worktree of task "A" has the committed file "P" that holds "X"` | Writes `X` and a newline to `P` in that worktree, then `git add P` and commits it as the task's stage role. |
+| `the file "P" in the worktree of task "A" is as committed` | `git status --porcelain -- P` in that worktree prints nothing. |
+| `gherkin-mutator is a fake that writes the block "B" and exits with status N` | `SWARMFORGE_TOOL_SRC` names a scratch tool source whose `bb.edn` task `gherkin-mutator` copies the `--feature` file to `seen.feature` in a scratch directory outside the worktree, removes any block from the file, writes `B`, a newline, a blank line and the rest of the file, and exits with `N`. `sf tool ensure gherkin-mutator` then ran in the main checkout. |
+| `I run the gherkin-mutator wrapper with "ARGS" in the worktree of task "A"` | Runs the main checkout's `.swarmforge/bin/gherkin-mutator` with `ARGS`, split on spaces, from the root of that worktree. This is the step under test. |
+| `I run the gherkin-mutator wrapper with "ARGS" in the directory "D" of the worktree of task "A"` | The same, from directory `D` inside that worktree. |
+| `the fake saw the feature file holding "X"` | The fake's `seen.feature` holds `X` and a newline. |
+| `the file "P" on the metrics branch is "X"` | `git show swarmforge/metrics:P`, without its last newline, equals `X`. |
+| `the metrics branch is one commit with no parent` | `git rev-list swarmforge/metrics` prints one commit, and `git rev-list --parents -n 1 swarmforge/metrics` prints only that sha. So `git merge-base main swarmforge/metrics` fails. |
+| `the tip commit of the metrics branch has the message "M"` | `git log -1 --format=%B swarmforge/metrics`, without its trailing newlines, equals `M`. |
+| `the tip commit of the metrics branch changes the files "X"` | `git diff-tree --root --no-commit-id -r --name-status --no-renames swarmforge/metrics` prints exactly the lines of `X`, with the tab between status and path written as a space in `X`. |
+| `the parent of the tip commit of the metrics branch is M1` | `git rev-parse swarmforge/metrics^` is the sha of `M1`. |
+| `the metrics branch did not move` | `swarmforge/metrics` names the same commit as before the step under test. |
+| `a git repository with one commit and no swarmforge` | A scratch git repository on `main` with one commit, no `swarmforge/` and no `.gitignore`. |
+| `I run install.sh into it N times` | Runs this repository's `install.sh <scratch repository>` N times. The exit status is the status of the last run. |
+| `the .gitignore of the repository has the line ".metrics/" exactly once` | `grep -cxF .metrics/ .gitignore` in the scratch repository prints `1`. |
