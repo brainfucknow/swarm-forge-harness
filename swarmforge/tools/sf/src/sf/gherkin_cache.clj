@@ -17,12 +17,14 @@
         (fs/path root ".metrics" "gherkin" path)))))
 
 (defn restore!
-  "Puts the cached block on top of the feature when it has none."
+  "Puts the cached block on top of the feature when it has none. A cache that
+  is not a block is left out of the feature."
   [feature]
   (when-let [cache (cache-file feature)]
-    (let [text (slurp (str feature))]
-      (when (and (fs/exists? cache) (nil? (block/split text)))
-        (spit (str feature) (block/with-block (slurp (str cache)) text))))))
+    (let [text (slurp (str feature))
+          cached (when (fs/exists? cache) (slurp (str cache)))]
+      (when (and cached (block/block? cached) (nil? (block/split text)))
+        (spit (str feature) (block/with-block cached text))))))
 
 (defn stash!
   "Moves the block of the feature to its cache."

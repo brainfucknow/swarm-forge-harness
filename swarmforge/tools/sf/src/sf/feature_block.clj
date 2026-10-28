@@ -23,6 +23,11 @@
       {:block (str (str/join "\n" (subvec lines 0 (inc end))) "\n")
        :body (str/join "\n" (drop-while str/blank? (subvec lines (inc end))))})))
 
+(defn block?
+  "Whether text is a block and nothing else."
+  [text]
+  (str/blank? (:body (split text) "x")))
+
 (defn with-block
   "The feature text with the lines of block and a blank line on top."
   [block text]

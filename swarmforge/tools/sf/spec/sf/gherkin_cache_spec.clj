@@ -40,6 +40,13 @@
     (cache/restore! (file "x.feature"))
     (should= (str block "\nFeature: x\n") (slurp (file "x.feature"))))
 
+  (it "leaves the feature alone when the cache is not a block"
+    (doseq [cached ["g1\n" (str block "\nFeature: y\n") (str "g1\n" block)]]
+      (write (file "x.feature") "Feature: x\n")
+      (write (file ".metrics" "gherkin" "x.feature") cached)
+      (cache/restore! (file "x.feature"))
+      (should= "Feature: x\n" (slurp (file "x.feature")))))
+
   (it "keeps the block a feature already has"
     (write (file "x.feature") (str block "\nFeature: x\n"))
     (write (file ".metrics" "gherkin" "x.feature") "# acceptance-mutation-manifest-begin\n# acceptance-mutation-manifest-end\n")

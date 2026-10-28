@@ -1,5 +1,5 @@
 (ns sf.feature-block-spec
-  (:require [speclj.core :refer [describe it should= should-be-nil]]
+  (:require [speclj.core :refer [describe it should should= should-be-nil should-not]]
             [sf.feature-block :as block]))
 
 (def manifest ["# acceptance-mutation-manifest-begin" "# {\"scenarios\":[]}" "# acceptance-mutation-manifest-end"])
@@ -30,3 +30,13 @@
   (it "is undone by split"
     (should= {:block (apply text stamped) :body (text "Feature: x")}
              (block/split (block/with-block (apply text stamped) (text "Feature: x"))))))
+
+(describe "block?"
+  (it "is true for a block with nothing after it"
+    (should (block/block? (apply text manifest)))
+    (should (block/block? (apply text (concat stamped ["" ""])))))
+
+  (it "is false for text that is not only a block"
+    (should-not (block/block? (text "g1")))
+    (should-not (block/block? ""))
+    (should-not (block/block? (apply text (concat manifest ["" "Feature: x"]))))))
