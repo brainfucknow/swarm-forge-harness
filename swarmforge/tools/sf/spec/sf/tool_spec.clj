@@ -19,7 +19,8 @@ speclj         clj    speclj/speclj         speclj.main    -        -
 clj-mutate     clj    clj-mutate/clj-mutate clj-mutate.core mutate  -
 probe          local  bin/probe             -              -        -
 weird          java   x                     -              -        -
-odd            local  bin/odd               -              rot13    -
+odd            local  bin/odd               -              rot13    probe
+outer          bb     github.com/x/outer    crap           coverage weird
 ")
 
 (defn- with-checkout [run-spec]
@@ -116,18 +117,23 @@ odd            local  bin/odd               -              rot13    -
       (should= 0 (first (sf-tool "ensure" "probe")))
       (should (str/includes? (slurp (wrapper "probe")) (str "'" *dir* "/bin/probe'"))))
 
-    (it "removes a stale wrapper and stops when the entry point is missing"
+    (it "keeps an earlier wrapper and stops when the entry point is missing"
       (source "aps" :tasks ["other"])
       (fs/create-dirs (fs/path *dir* ".swarmforge" "bin"))
       (spit (wrapper "gherkin-parser") "stale")
       (let [[status _ err] (sf-tool "ensure" "gherkin-parser")]
         (should= 1 status)
         (should (str/includes? err "gherkin-parser: ")))
-      (should-not (fs/exists? (wrapper "gherkin-parser"))))
+      (should= "stale" (slurp (wrapper "gherkin-parser"))))
 
-    (it "stops on an unknown kind or rewrite"
-      (should= [1 "" "sf tool: unknown kind 'java' for weird\n"] (sf-tool "ensure" "weird"))
-      (should= [1 "" "sf tool: unknown rewrite 'rot13' in swarmforge/tools.conf\n"] (sf-tool "ensure" "odd"))))
+    (it "stops on an unknown kind or rewrite in the needs chain before it writes or clones anything"
+      (let [cloned (atom [])]
+        (binding [*clone* (fn [cmd] (swap! cloned conj cmd) {:exit 1})]
+          (should= [1 "" "sf tool: unknown kind 'java' for weird\n"] (sf-tool "ensure" "weird"))
+          (should= [1 "" "sf tool: unknown rewrite 'rot13' in swarmforge/tools.conf\n"] (sf-tool "ensure" "odd"))
+          (should= [1 "" "sf tool: unknown kind 'java' for weird\n"] (sf-tool "ensure" "outer")))
+        (should= [] @cloned))
+      (should-not (fs/exists? (fs/path *dir* ".swarmforge")))))
 
   (context "require"
     (it "names a missing need, then reports a ready tool"

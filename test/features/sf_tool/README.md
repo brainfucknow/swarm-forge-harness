@@ -17,9 +17,14 @@ GitHub clones are used only in the QA procedure (`../../qa/sf_tool.md`).
   crap4clj's task `crap`, and dry4clj through a new kind `bbmain`
   (`bb -cp <clone>/src -m dry4clj.core`), which `sf check` accepts.
 - `ensure` fails clearly when the source lacks the entry point: exit 1, an
-  error naming the tool and the entry point, no wrapper, and a stale wrapper
-  removed. It does not try to install the Go and Java tools another way; that
-  needs a human.
+  error naming the tool and the entry point, and no wrapper written. It does
+  not try to install the Go and Java tools another way; that needs a human.
+- Task keep-sf-tool-ensure-from-ff06da1 replaced "a stale wrapper removed":
+  a failing `ensure` leaves a wrapper from an earlier install byte-for-byte
+  unchanged, and `require` keeps reporting it OK. Before it writes anything
+  (wrapper, clone, coverage config), `ensure` checks the kind and rewrite of
+  the tool and its whole needs chain. It does not compare a task worktree's
+  catalogue line with the main checkout's.
 - `ensure crap4clj` also sets up a Babashka coverage path: a
   `crap4clj-coverage/bb.edn` outside the clone, Cloverage pinned to a git sha,
   speclj pinned at 3.12.2. The wrapper adds `--coverage-command` when `clj` or
@@ -51,9 +56,12 @@ GitHub clones are used only in the QA procedure (`../../qa/sf_tool.md`).
 | `a tool source whose bb.edn defines the tasks "A B"` | `SWARMFORGE_TOOL_SRC` names a scratch directory whose `bb.edn` has a `:tasks` map with exactly those task keys. |
 | `the tool source has the namespace "N"` | The tool source has `src/<N as a path>.clj`. |
 | `a tool source without bb.edn` | `SWARMFORGE_TOOL_SRC` names a scratch directory with no `bb.edn`. |
-| `no tool source override` | `SWARMFORGE_TOOL_SRC` is unset. |
+| `no tool source override` | `SWARMFORGE_TOOL_SRC` is unset. `sf` runs with `GIT_TERMINAL_PROMPT=0`, so a clone that should not happen fails fast instead of waiting for credentials. |
 | `the directory "D" exists without bb.edn` | `D` exists, holds a `README.md`, and has no `bb.edn`. |
 | `an earlier install left a wrapper for "T"` | An executable `MAIN/.swarmforge/bin/T` exists before the step under test. |
+| `the wrapper for "T" is unchanged` | `MAIN/.swarmforge/bin/T` is still executable and its content is byte-for-byte what `an earlier install left a wrapper for "T"` wrote. |
+| `a snapshot of "D"` | Records every file and directory under `D` (placeholders filled in), with each file's content and permissions. |
+| `"D" matches the snapshot` | The files and directories under `D`, their content and their permissions are exactly those the snapshot recorded: nothing added, removed, or changed. |
 | `"C" ran in the main checkout` | Command `C` ran from `MAIN` and exited 0. Its output is not checked. |
 | `I run "C" in the <checkout>` | Runs command `C` (split on spaces) from the main checkout or the task worktree. `sf` is the scratch project's `swarmforge/bin/sf`. |
 | `I run the T wrapper with "ARGS"` | Runs `MAIN/.swarmforge/bin/T` from `MAIN` with `ARGS`, split on spaces. An empty value passes no arguments. |

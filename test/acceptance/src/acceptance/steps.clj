@@ -26,9 +26,10 @@
     "another git repository" (:other world)))
 
 (defn- tool-env
-  "SWARMFORGE_TOOL_SRC when the world has a tool source override."
+  "SWARMFORGE_TOOL_SRC when the world has a tool source override, else
+  GIT_TERMINAL_PROMPT=0 so a clone that should not happen fails fast."
   [world]
-  (if-let [src (:src world)] {"SWARMFORGE_TOOL_SRC" src} {}))
+  (if-let [src (:src world)] {"SWARMFORGE_TOOL_SRC" src} {"GIT_TERMINAL_PROMPT" "0"}))
 
 (defn- run-command
   "Runs command, split on spaces, from the place; sf is the scratch project's sf."
@@ -207,6 +208,15 @@
   (require-ok (run dir ["git" "add" "-A"]) "git add")
   (require-ok (run dir ["git" "commit" "-q" "-m" message] {"SWARMFORGE_ROLE" "tester"}) "git commit"))
 
+(def ^:private stale-wrapper "echo stale")
+
+(defn- tree-state
+  "Every path under dir with its permissions, and each file's content."
+  [dir]
+  (into {} (for [path (fs/glob dir "**" {:hidden true})]
+             [(str (fs/relativize dir path))
+              [(fs/posix-file-permissions path) (when (fs/regular-file? path) (seq (fs/read-all-bytes path)))]])))
+
 (defn- fake-bb-args [world]
   (check (some? (:out world)) "no wrapper ran")
   (check (zero? (:exit world)) (str "wrapper exited " (:exit world) ": " (str/trim (str (:err world)))))
@@ -250,7 +260,23 @@
 
    [#"an earlier install left a wrapper for \"([^\"]+)\""
     (fn [world tool]
-      (write-script (wrapper-path world tool) "echo stale")
+      (write-script (wrapper-path world tool) stale-wrapper)
+      world)]
+
+   [#"the wrapper for \"([^\"]+)\" is unchanged"
+    (fn [world tool]
+      (let [path (wrapper-path world tool)]
+        (check (fs/executable? path) (str path " is not executable"))
+        (check (= (str "#!/usr/bin/env bash\n" stale-wrapper "\n") (slurp (str path))) (str path " changed"))
+        world))]
+
+   [#"a snapshot of \"([^\"]+)\""
+    (fn [world dir]
+      (assoc world :snapshot (tree-state (fill-paths world dir))))]
+
+   [#"\"([^\"]+)\" matches the snapshot"
+    (fn [world dir]
+      (check (= (:snapshot world) (tree-state (fill-paths world dir))) (str dir " changed"))
       world)]
 
    [#"\"(.*)\" ran in the main checkout"

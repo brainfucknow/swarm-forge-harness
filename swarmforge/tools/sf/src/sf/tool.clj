@@ -4,6 +4,7 @@
   of the checkout sf tool runs in."
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
+            [sf.config :as config]
             [sf.entry-point :as entry-point]
             [sf.shell :as shell]
             [sf.wrapper :as wrapper]))
@@ -58,12 +59,11 @@ GitHub source at one local checkout instead of cloning.")
     dir))
 
 (defn- checked-source
-  "The tool's source directory. A source without the entry point gets no
-  wrapper, and loses an old one."
+  "The tool's source directory. A source without the entry point stops the
+  install and leaves any earlier wrapper as it is."
   [tool {:keys [kind source task]}]
   (let [dir (ensure-source source)]
     (when-let [problem (entry-point/problem kind dir task)]
-      (fs/delete-if-exists (wrapper-path tool))
       (shell/die tool ": " problem))
     dir))
 
@@ -75,8 +75,7 @@ GitHub source at one local checkout instead of cloning.")
     "mutate" (shell/template "rewrite-mutate.sh")
     "gherkin" (shell/template "rewrite-gherkin.sh")
     "coverage" (wrapper/coverage-rewrite (coverage-config-path tool))
-    "-" ""
-    (shell/die "unknown rewrite '" rewrite "' in swarmforge/tools.conf")))
+    "-" ""))
 
 (defn- write-coverage-config [tool dir]
   (let [path (coverage-config-path tool)]
@@ -90,8 +89,7 @@ GitHub source at one local checkout instead of cloning.")
            (wrapper/bb-command dir task))
     "bbmain" (wrapper/bbmain-command (checked-source tool spec) task)
     "clj" (wrapper/clj-command tool source task)
-    "local" (wrapper/local-command (shell/repo-root) source)
-    (shell/die "unknown kind '" kind "' for " tool)))
+    "local" (wrapper/local-command (shell/repo-root) source)))
 
 (defn- install-one [tool]
   (let [spec (spec-of tool)
@@ -104,9 +102,22 @@ GitHub source at one local checkout instead of cloning.")
     (fs/set-posix-file-permissions path "rwxr-xr-x")
     (println (str "INSTALLED: " tool " " path))))
 
-(defn- ensure-tool [tool]
-  (run! ensure-tool (:needs (spec-of tool)))
+(defn- check-known
+  "Stops when the tool or a tool in its needs chain has a kind or rewrite sf
+  tool does not know."
+  [tool]
+  (let [{:keys [kind rewrite needs]} (spec-of tool)]
+    (run! check-known needs)
+    (when-not (config/tool-kinds kind) (shell/die "unknown kind '" kind "' for " tool))
+    (when-not (config/tool-rewrites rewrite) (shell/die "unknown rewrite '" rewrite "' in swarmforge/tools.conf"))))
+
+(defn- install-with-needs [tool]
+  (run! install-with-needs (:needs (spec-of tool)))
   (install-one tool))
+
+(defn- ensure-tool [tool]
+  (check-known tool)
+  (install-with-needs tool))
 
 (defn- list-tools []
   (doseq [[name kind source] (catalogue)]
