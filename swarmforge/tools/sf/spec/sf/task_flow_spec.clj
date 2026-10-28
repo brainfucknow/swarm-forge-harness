@@ -2,8 +2,8 @@
   "The task commands end to end in a throwaway repository."
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
-            [speclj.core :refer [around describe it should should= should-not= should-contain should-not-contain]]
-            [sf.repo-support :refer [*dir* git with-repo write-conf!]]
+            [speclj.core :refer [around describe it should should-not should= should-not= should-contain should-not-contain]]
+            [sf.repo-support :refer [*dir* captured git with-repo write-conf!]]
             [sf.shell :as shell]
             [sf.store :as store]
             [sf.task :as task]))
@@ -23,6 +23,23 @@
 (defn- fails-with [text f]
   (try (f) nil
        (catch clojure.lang.ExceptionInfo e (should-contain text (ex-message e)))))
+
+(defn- conflicting-task
+  "A task at done whose files a and b conflict with main."
+  []
+  (let [id (new-id "Quick" "--route" "coder")
+        dir (str *dir* "/.worktrees/" id)]
+    (out task/start [id])
+    (doseq [[at text] [[dir "ours"] [*dir* "theirs"]]]
+      (doseq [file ["a" "b"]] (spit (str at "/" file) text))
+      (git at "add" "a" "b")
+      (git at "commit" "-q" "--no-verify" "-m" text))
+    (out task/handoff [id] {:audit-passed? true})
+    id))
+
+(defn- resolve-conflicts []
+  (doseq [file ["a" "b"]] (spit (str *dir* "/" file) "resolved"))
+  (git *dir* "add" "a" "b"))
 
 (describe "a task through the pipeline"
   (around [it] (with-repo it))
@@ -121,6 +138,61 @@
       (should-contain "STATUS: finished" (out task/show [id]))
       (fails-with "is finished" #(task/ask [id "q"]))
       (should= "" (out task/ls []))))
+
+  (it "stops a conflicting finish with the files and resumes it once the merge is committed"
+    (let [id (conflicting-task)
+          dir (str *dir* "/.worktrees/" id)
+          tip (git *dir* "rev-parse" (str "swarm/" id))]
+      (should= {:status 1 :err (str "merge of swarm/" id " into main stopped on conflicts: a b;"
+                                    " resolve them, commit, then run: sf finish " id)}
+               (select-keys (captured #(task/finish [id])) [:status :err]))
+      (should= tip (git *dir* "rev-parse" "MERGE_HEAD"))
+      (should (fs/exists? dir))
+      (resolve-conflicts)
+      (should= {:status 1 :err "a merge is in progress; commit the merge first"}
+               (select-keys (captured #(task/finish [id])) [:status :err]))
+      (should= tip (git *dir* "rev-parse" "MERGE_HEAD"))
+      (git *dir* "commit" "-q" "--no-verify" "-m" "Resolve")
+      (let [resolved (git *dir* "log" "-1" "--format=%P %T")]
+        (should= (str "FINISHED: " id " merged into main") (out task/finish [id]))
+        (should= resolved (git *dir* "log" "-1" "--format=%P %T")))
+      (should= (str "sf finished: " id) (git *dir* "log" "-1" "--format=%s"))
+      (should-contain "SwarmForge-Merged-Into: main" (git *dir* "log" "-1" "--format=%B"))
+      (should-not (fs/exists? dir))
+      (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))
+      (should-contain "STATUS: finished" (out task/show [id]))
+      (fails-with "is finished" #(task/finish [id]))))
+
+  (it "keeps a resolved merge that has the finished record"
+    (let [id (conflicting-task)]
+      (captured #(task/finish [id]))
+      (resolve-conflicts)
+      (git *dir* "commit" "-q" "--no-verify" "--no-edit")
+      (let [merge (git *dir* "rev-parse" "HEAD")]
+        (should= (str "FINISHED: " id " merged into main") (out task/finish [id]))
+        (should= merge (git *dir* "rev-parse" "HEAD")))
+      (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
+
+  (it "keeps the worktree and branch when the branch moved after the recorded merge"
+    (let [id (conflicting-task)
+          dir (str *dir* "/.worktrees/" id)]
+      (captured #(task/finish [id]))
+      (resolve-conflicts)
+      (git *dir* "commit" "-q" "--no-verify" "--no-edit")
+      (commit-in-worktree id "late")
+      (should= {:status 1 :err (str "swarm/" id " has commits that HEAD does not contain;"
+                                    " merge them, then run: sf finish " id)}
+               (select-keys (captured #(task/finish [id])) [:status :err]))
+      (should (fs/exists? (str dir "/late")))
+      (should-not= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
+
+  (it "refuses a finished task whose branch tip HEAD does not merge"
+    (let [id (new-id "Quick" "--route" "coder")]
+      (task/handoff [id "--to" "done"] {:audit-passed? true})
+      (git *dir* "merge" "-q" "--squash" (str "swarm/" id))
+      (git *dir* "commit" "-q" "--no-verify" "-m" "Squash")
+      (should= {:status 1 :err (str "task " id " is finished")}
+               (select-keys (captured #(task/finish [id])) [:status :err]))))
 
   (it "hands a task to done from any stage and refuses to finish an unfinished one"
     (let [id (new-id "Add login")]

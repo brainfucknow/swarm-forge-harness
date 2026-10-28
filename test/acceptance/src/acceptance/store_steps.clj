@@ -32,7 +32,7 @@
                          ":created" (get-in world [:created name])
                          id))))
       (str/replace #"\bNEW\b" (fn [_] (id-of world nil)))
-      (str/replace #"\b[CLT]\d+\b" (fn [name] (or (get-in world [:names name])
+      (str/replace #"\b[CLTM]\d+\b" (fn [name] (or (get-in world [:names name])
                                                    (throw (ex-info (str "no value for " name) {})))))
       (str/replace "ROOT" (:repo world))))
 
@@ -195,6 +195,38 @@
     (fn [world path name text]
       (write-file (worktree world name) path (str (unescape text) "\n"))
       world)]
+
+   [#"the worktree of task \"(\w)\" and the branch \"([^\"]+)\" changed the files \"([^\"]*)\" differently"
+    (fn [world name branch files]
+      (let [dir (worktree world name)
+            repo (:repo world)
+            paths (str/split files #" ")]
+        (doseq [path paths]
+          (write-file dir path "ours\n")
+          (must-in world dir "git" "add" path)
+          (require-ok (commit world name (str "Ours " path) {}) "git commit"))
+        (when-not (zero? (:exit (run-in world repo ["git" "rev-parse" "--verify" "--quiet" (str "refs/heads/" branch)])))
+          (git world "branch" branch))
+        (git world "checkout" "-q" branch)
+        (doseq [path paths]
+          (write-file repo path "theirs\n")
+          (git world "add" path)
+          (git world "commit" "-q" "-m" (str "Theirs " path)))
+        (git world "checkout" "-q" "main")
+        world))]
+
+   [#"the operator resolved the conflicts and (?:staged them|committed the merge with (?:the message \"(.*)\"|(git's prepared message)))"
+    (fn [world message prepared]
+      (doseq [path (lines (git world "diff" "--name-only" "--diff-filter=U"))]
+        (write-file (:repo world) path "resolved\n")
+        (git world "add" path))
+      (cond message (git world "commit" "-q" "-m" (unescape message))
+            prepared (git world "commit" "-q" "--no-edit"))
+      world)]
+
+   [#"the HEAD of the main checkout is named (M\d+)"
+    (fn [world head-name]
+      (assoc-in world [:names head-name] (git world "rev-parse" "--short" "HEAD")))]
 
    [#"the tip of the branch of task \"(\w)\" is named (T\d+)"
     (fn [world name tip-name]
@@ -361,6 +393,25 @@
       (check (= (git world "rev-parse" (fill world tip-name)) (git world "rev-parse" "HEAD^2")) "another second parent")
       world)]
 
+   [#"the HEAD of the main checkout is (M\d+)"
+    (fn [world head-name]
+      (check (= (git world "rev-parse" (fill world head-name)) (git world "rev-parse" "HEAD")) "HEAD moved")
+      world)]
+
+   [#"the HEAD of the main checkout has the parents and the tree of (M\d+)"
+    (fn [world head-name]
+      (let [shape #(git world "log" "-1" "--format=%P %T" %)]
+        (check (= (shape (fill world head-name)) (shape "HEAD")) (str "HEAD is " (shape "HEAD")))
+        world))]
+
+   [#"the main checkout is on the branch \"([^\"]+)\" merging (T\d+) with (?:the conflicted files \"(.*)\"|no conflicted file)"
+    (fn [world branch tip-name files]
+      (check (= branch (git world "branch" "--show-current")) "on another branch")
+      (check (= (git world "rev-parse" (fill world tip-name)) (git world "rev-parse" "MERGE_HEAD")) "merging another commit")
+      (let [actual (git world "diff" "--name-only" "--diff-filter=U")]
+        (check (= (if files (str/replace files " " "\n") "") actual) (str "conflicted: " (pr-str actual))))
+      world)]
+
    [#"the HEAD of the main checkout has the message \"(.*)\""
     (fn [world text]
       (let [actual (commit-message world "HEAD")]
@@ -373,10 +424,11 @@
         (check (str/blank? actual) (str "changes: " (pr-str actual)))
         world))]
 
-   [#"the worktree of task \"(\w)\" does not exist"
-    (fn [world name]
-      (check (not (fs/exists? (worktree world name))) "the worktree exists")
-      world)]
+   [#"the worktree of task \"(\w)\" (exists|does not exist)"
+    (fn [world name how]
+      (let [found (fs/directory? (worktree world name))]
+        (check (= found (= "exists" how)) (str "the worktree " (if found "exists" "is missing")))
+        world))]
 
    [#"the worktree of task \"(\w)\" still has the staged new file \"([^\"]+)\" and the unstaged change \"([^\"]+)\""
     (fn [world name staged unstaged]

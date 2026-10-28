@@ -214,16 +214,44 @@
                     (fn [state] (refuse (flow/approval-refusal state)) {:text text :needs "none"}))]
     (println (str "REJECTED: " id " stays at stage:" (:stage rec)))))
 
-(defn finish [[id-arg & args]]
-  (let [id (open-task id-arg)
+(defn- finished-message [id state target]
+  (record/message (assoc (flow/finished state target) :task id)))
+
+(defn- merge-task!
+  "Merges the task into target, or stops with the conflicted files."
+  [id state target]
+  (git (shell/repo-root) "checkout" "--quiet" target)
+  (when-let [files (store/merge! id (finished-message id state target))]
+    (shell/die "merge of " (record/branch id) " into " target " stopped on conflicts: " (str/join " " files)
+               "; resolve them, commit, then run: sf finish " id)))
+
+(defn- resume!
+  "Gives the merge the operator committed into target the finished record when
+  it lacks it, or stops when the task is finished."
+  [id state target]
+  (case (let [tip (store/tip id)]
+          (flow/resume-action (some? (flow/finished-record (store/records-at "HEAD" id)))
+                              tip (store/head-parents) (boolean (and tip (store/in-head? tip)))))
+    :keep nil
+    :unmerged (shell/die (record/branch id) " has commits that HEAD does not contain; merge them, then run: sf finish " id)
+    :reword (store/reword-head! (finished-message id state target))
+    (shell/die "task " id " is finished")))
+
+(defn finish
+  "Merges a done task into its target and removes its worktree and branch.
+  Run again after the operator commits a conflicting merge, it completes it."
+  [[id-arg & args]]
+  (let [id (store/resolve-id id-arg)
         {:keys [target]} (options/parse "finish" args {"--into" :target} {})
+        _ (when (store/merging?) (shell/die "a merge is in progress; commit the merge first"))
         state (store/state id)
         _ (when (not= "done" (:stage state)) (shell/die "task is at stage:" (:stage state) ", not done"))
         root (shell/repo-root)
         dir (worktree-of id)
-        target (or (not-empty target) (git root "rev-parse" "--abbrev-ref" "HEAD"))]
-    (git root "checkout" "--quiet" target)
-    (store/merge! id (record/message (assoc (flow/finished state target) :task id)))
+        current (git root "rev-parse" "--abbrev-ref" "HEAD")
+        resuming? (store/finished? id)
+        target (if resuming? current (or (not-empty target) current))]
+    (if resuming? (resume! id state target) (merge-task! id state target))
     (when (fs/directory? dir) (git root "worktree" "remove" "--force" dir))
     (git root "branch" "-D" (record/branch id))
     (println (str "FINISHED: " id " merged into " target))))

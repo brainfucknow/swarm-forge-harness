@@ -57,6 +57,17 @@
   {:record "finished" :from "operator" :stage "done" :route (:route state) :needs "none"
    :merged-into target})
 
+(defn resume-action
+  "What sf finish does with a task whose archive is in HEAD: :keep HEAD when
+  recorded? (HEAD's history has the finished record) and HEAD contains the
+  branch tip (tip-merged?), :unmerged when the branch moved after that merge,
+  :reword HEAD when it is the merge of the branch tip without that record,
+  else nil: the task is finished. tip is nil when the task has no branch."
+  [recorded? tip head-parents tip-merged?]
+  (cond (nil? tip) nil
+        recorded? (if tip-merged? :keep :unmerged)
+        (and (= 2 (count head-parents)) (= tip (second head-parents))) :reword))
+
 (defn role-commit
   "The role's commit at the branch tip: the tip itself, or the commit under the
   newest record when the tip is that record."
