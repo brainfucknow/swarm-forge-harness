@@ -1,6 +1,6 @@
 (ns sf.gherkin-cache-spec
   (:require [babashka.fs :as fs]
-            [speclj.core :refer [describe it should= should-not around]]
+            [speclj.core :refer [describe it should= should-not should-throw around]]
             [sf.gherkin-cache :as cache]
             [sf.shell :as shell]))
 
@@ -55,4 +55,15 @@
         (cache/stash! outside)
         (should= (str block "\nFeature: x\n") (slurp outside))
         (finally (fs/delete outside))))
-    (should-not (fs/exists? (file ".metrics")))))
+    (should-not (fs/exists? (file ".metrics"))))
+
+  (it "runs the command it is given on the feature"
+    (write (file "x.feature") (str block "\nFeature: x\n"))
+    (cache/main ["stash" (file "x.feature")])
+    (should= "Feature: x\n" (slurp (file "x.feature")))
+    (cache/main ["restore" (file "x.feature")])
+    (should= (str block "\nFeature: x\n") (slurp (file "x.feature"))))
+
+  (it "refuses a command it does not know"
+    (should-throw clojure.lang.ExceptionInfo "usage: restore|stash <feature>"
+                  (cache/main ["bake" (file "x.feature")]))))

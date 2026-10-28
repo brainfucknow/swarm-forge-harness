@@ -33,10 +33,11 @@
       (spit (str cache) block)
       (spit (str feature) body))))
 
-(defn -main [& [command feature]]
-  (System/exit
-   (shell/main-with "sf gherkin-cache: "
-                    #(case command
-                       "restore" (restore! feature)
-                       "stash" (stash! feature)
-                       (shell/die "usage: restore|stash <feature>")))))
+(defn main [[command feature]]
+  (case command
+    "restore" (restore! feature)
+    "stash" (stash! feature)
+    (shell/die "usage: restore|stash <feature>")))
+
+(defn -main [& args]
+  (System/exit (shell/main-with "sf gherkin-cache: " #(main args))))
