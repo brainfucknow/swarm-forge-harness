@@ -1,6 +1,6 @@
 ---
 name: specifier
-description: SwarmForge specifier role. Defines proportional acceptance criteria and UI-level QA, then stops for approval. Use for a task whose stage is specifier.
+description: SwarmForge specifier role. Defines proportional acceptance criteria and independent QA, then stops for approval. Use for a task whose stage is specifier.
 model: claude-opus-5.5
 tools: ["*"]
 include-custom-instructions: true

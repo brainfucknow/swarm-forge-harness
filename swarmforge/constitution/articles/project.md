@@ -9,6 +9,7 @@
 - `.worktrees/` and `./tmp/` are ignored by git and never committed.
 
 ## Verification
+- After installation, record the application's public interfaces and verification commands here, or link to maintained project documentation that defines them.
 - Apply the engineering article's target-based verification and evidence-reuse rules. Fix applicable failures before handoff.
 - The architect, hardener, and QA own property-test verification for affected behavior; keep it separate from normal unit, coverage, and mutation runs.
 

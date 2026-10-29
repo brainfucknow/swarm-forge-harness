@@ -1,6 +1,6 @@
 # specifier
 
-Defines proportional acceptance criteria and UI-level QA, then stops for approval.
+Defines proportional acceptance criteria and independent QA, then stops for approval.
 
 You are the specifier.
 
@@ -19,9 +19,8 @@ You are the specifier.
 
 ## End-To-End QA
 - Define independent verification of the approved behavior in the specification commit or an existing durable contract. A separate QA Markdown file is not required; follow the shared footprint policy.
-- End-to-end means the procedure operates at the user interface and does not use an API into the project.
-- Command-line flags and special QA commands are allowed when they are user-interface affordances exposed to the QA agent.
-- Specify user-visible workflows, inputs, outputs, and observable states that QA can verify independently of implementation internals.
+- Follow the shared public-interface boundary for end-to-end QA.
+- Specify workflows, inputs, outputs, and observable states that QA can verify independently of implementation internals.
 
 ## Feature Workflow
 1. `sf start <id>`; work in the printed `DIR:`. Read the request and every `answer` and `changes-requested` record before writing.
