@@ -72,6 +72,23 @@
                  :when (= (legacy-shape path text) (legacy-shape path actual))]
              [path (digest actual)])))
 
+(defn- tracked-canonical? [root path text]
+  (every? (fn [revision]
+            (let [{:keys [exit out]} (shell/run {:dir root} "git" "show" (str revision path))]
+              (and (zero? exit) (= text out))))
+          ["HEAD:" ":"]))
+
+(defn- refreshed-ownership [root desired recorded]
+  (into {} (for [[path hash] recorded
+                 :let [text (get desired path)
+                       expected (when text (digest text))
+                       file (fs/path root path)]]
+             [path (if (and text (not= hash expected) (not (fs/sym-link? file))
+                            (fs/regular-file? file) (= text (slurp (str file)))
+                            (tracked-canonical? root path text))
+                     expected
+                     hash)])))
+
 (defn- preflight [root paths owned]
   (doseq [dir targets
           part [dir (fs/parent dir)]
@@ -92,7 +109,7 @@
         desired (into {} (mapcat (fn [[role tier]] (agent-files role tier)) roles))
         state (fs/path root ".swarmforge" "adapters.edn")
         recorded (read-ownership state)
-        owned (merge (legacy-ownership root recorded) recorded)]
+        owned (merge (legacy-ownership root recorded) (refreshed-ownership root desired recorded))]
     (preflight root (distinct (concat (keys desired) (keys owned))) owned)
     (doseq [path (remove (set (keys desired)) (keys owned))]
       (fs/delete-if-exists (fs/path root path)))
