@@ -21,8 +21,8 @@
     (git dir "commit" "-q" "--no-verify" "-m" (str "Add " file))))
 
 (defn- fails-with [text f]
-  (try (f) nil
-       (catch clojure.lang.ExceptionInfo e (should-contain text (ex-message e)))))
+  (let [message (try (f) nil (catch clojure.lang.ExceptionInfo e (ex-message e)))]
+    (should-contain text (or message ""))))
 
 (defn- conflicting-task
   "A task at done whose files a and b conflict with main."
@@ -85,6 +85,40 @@
       (out task/review [id])
       (should-contain "stays at stage:specifier" (out task/reject [id "Too vague"]))
       (should-contain "Too vague" (out task/show [id]))))
+
+  (it "refuses direct specifier handoff before review and after rejection or clarification"
+    (let [id (new-id "Gate")
+          unchanged #(git *dir* "rev-parse" (str "swarm/" id))]
+      (doseq [args [[id] [id "--to" "coder"] [id "--to" "done"]]]
+        (let [tip (unchanged)]
+          (fails-with "requires operator approval" #(task/handoff args {:role "coder" :audit-passed? true}))
+          (should= tip (unchanged))))
+      (out task/review [id])
+      (out task/reject [id "Revise"])
+      (fails-with "requires operator approval" #(task/handoff [id] {}))
+      (out task/review [id])
+      (out task/ask [id "Which?"])
+      (out task/answer [id "This"])
+      (fails-with "requires operator approval" #(task/handoff [id] {}))))
+
+  (it "requires fresh review after a new role commit even when metadata follows it"
+    (let [id (new-id "Gate")]
+      (out task/start [id])
+      (commit-in-worktree id "first")
+      (out task/review [id])
+      (commit-in-worktree id "second")
+      (out task/route [id "specifier,cleaner"])
+      (let [tip (git *dir* "rev-parse" (str "swarm/" id))]
+        (fails-with "changed since review" #(task/approve [id]))
+        (should= tip (git *dir* "rev-parse" (str "swarm/" id))))
+      (out task/review [id])
+      (should-contain "specifier -> cleaner" (out task/approve [id]))))
+
+  (it "keeps a reviewed role commit valid through a metadata-only route change"
+    (let [id (new-id "Gate")]
+      (out task/review [id])
+      (out task/route [id "specifier,cleaner"])
+      (should-contain "specifier -> cleaner" (out task/approve [id]))))
 
   (it "keeps the task waiting for approval when the handoff would fail"
     (let [id (new-id "Add login")]
@@ -194,8 +228,8 @@
       (should= {:status 1 :err (str "task " id " is finished")}
                (select-keys (captured #(task/finish [id])) [:status :err]))))
 
-  (it "hands a task to done from any stage and refuses to finish an unfinished one"
-    (let [id (new-id "Add login")]
+  (it "hands a non-specifier task to done and refuses to finish an unfinished one"
+    (let [id (new-id "Add login" "--route" "coder")]
       (fails-with "not done" #(task/finish [id]))
       (task/handoff [id "--to" "done" "-F" (str *dir* "/swarmforge/roles.conf")] {:audit-passed? true})
       (should= "done" (out task/stage [id]))))
