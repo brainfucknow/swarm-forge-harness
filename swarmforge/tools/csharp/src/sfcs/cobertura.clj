@@ -27,15 +27,18 @@
             (str (fs/path base filename))
             filename)))
 
+(defn- usable-method-data? [lines complexity coverage]
+  (and (seq lines) (every? #(and (int? %) (pos? %)) lines)
+       (number? complexity) (<= 0 complexity Double/MAX_VALUE)
+       (number? coverage) (<= 0 coverage 1)))
+
 (defn- method-entry [class-name file method strict?]
   (let [numbers (map #(parse-long (:number (:attrs %))) (elements :line method))]
     (when (or strict? (seq numbers))
       (let [complexity (number-attr method :complexity (when-not strict? 1.0))
             coverage (number-attr method :line-rate (when-not strict? 0.0))]
         (when (and strict?
-                   (not (and (seq numbers) (every? #(and (int? %) (pos? %)) numbers)
-                             (number? complexity) (<= 0 complexity Double/MAX_VALUE)
-                             (number? coverage) (<= 0 coverage 1))))
+                   (not (usable-method-data? numbers complexity coverage)))
           (throw (outcome/usage-error (str "unusable method data: " file " " class-name "." (:name (:attrs method))))))
         {:class-name class-name
          :name (:name (:attrs method))
