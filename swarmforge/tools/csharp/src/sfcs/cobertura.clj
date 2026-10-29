@@ -2,7 +2,8 @@
   (:require [babashka.fs :as fs]
             [clojure.data.xml :as xml]
             [clojure.string :as str]
-            [sfcore.crap :as crap]))
+            [sfcore.crap :as crap]
+            [sfcore.outcome :as outcome]))
 
 (defn- elements [tag node]
   (filter #(and (map? %) (= tag (:tag %))) (tree-seq map? :content node)))
@@ -26,11 +27,16 @@
             (str (fs/path base filename))
             filename)))
 
-(defn- method-entry [class-name file method]
+(defn- method-entry [class-name file method strict?]
   (let [numbers (map #(parse-long (:number (:attrs %))) (elements :line method))]
-    (when (seq numbers)
-      (let [complexity (number-attr method :complexity 1.0)
-            coverage (number-attr method :line-rate 0.0)]
+    (when (or strict? (seq numbers))
+      (let [complexity (number-attr method :complexity (when-not strict? 1.0))
+            coverage (number-attr method :line-rate (when-not strict? 0.0))]
+        (when (and strict?
+                   (not (and (seq numbers) (every? #(and (int? %) (pos? %)) numbers)
+                             (number? complexity) (<= 0 complexity Double/MAX_VALUE)
+                             (number? coverage) (<= 0 coverage 1))))
+          (throw (outcome/usage-error (str "unusable method data: " file " " class-name "." (:name (:attrs method))))))
         {:class-name class-name
          :name (:name (:attrs method))
          :signature (or (:signature (:attrs method)) "")
@@ -45,16 +51,18 @@
   "Reads every method out of a coverlet Cobertura file: its class, the source
   file (resolved against <source> entries when relative), cyclomatic
   complexity, line coverage, and the span of coverable lines."
-  [xml-text]
-  (let [doc (xml/parse-str (str/replace xml-text #"<!DOCTYPE[^>]*>" ""))
-        sources (map text (elements :source doc))]
-    (vec (for [class (elements :class doc)
-               :let [class-name (:name (:attrs class))
-                     file (resolve-file (:filename (:attrs class)) sources)]
-               method (elements :method class)
-               :let [entry (method-entry class-name file method)]
-               :when entry]
-           entry))))
+  ([xml-text] (parse-cobertura xml-text nil))
+  ([xml-text {:keys [extension strict?]}]
+   (let [doc (xml/parse-str (str/replace xml-text #"<!DOCTYPE[^>]*>" ""))
+         sources (map text (elements :source doc))]
+     (vec (for [class (elements :class doc)
+                :let [class-name (:name (:attrs class))
+                      file (resolve-file (:filename (:attrs class)) sources)]
+                :when (or (nil? extension) (str/ends-with? file extension))
+                method (elements :method class)
+                :let [entry (method-entry class-name file method strict?)]
+                :when entry]
+            entry)))))
 
 (defn find-cobertura-files
   "coverage.cobertura.xml files under a results directory, newest first."
