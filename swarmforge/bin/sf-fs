@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# F# entrypoint for the shared .NET tools. See swarmforge/languages/fsharp.md.
+set -euo pipefail
+command -v bb >/dev/null || { echo "sf-fs: Babashka (bb) is required: https://babashka.org" >&2; exit 2; }
+exec bb --config "$(cd "$(dirname "$0")/../tools/csharp" && pwd)/bb.edn" -m sffs.cli "$@"

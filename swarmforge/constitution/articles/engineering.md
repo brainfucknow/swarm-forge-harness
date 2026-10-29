@@ -9,6 +9,7 @@
   - Clojure: install with Clojure CLI/deps.edn; mutation `github.com/unclebob/clj-mutate`, CRAP `github.com/unclebob/crap4clj`, DRY `github.com/unclebob/dry4clj`. `swarmforge/languages/clojure.md` explains how to run them on Babashka code.
   - Java: install with Maven (`mvn`); mutation `github.com/unclebob/mutate4java`, CRAP `github.com/unclebob/crap4java`, DRY `github.com/unclebob/dry4java`.
   - C#: install with `sf-cs tools`; mutation `sf-cs mutate` (Stryker.NET), CRAP `sf-cs crap` (coverlet Cobertura), DRY `sf-cs dry` (jscpd). `swarmforge/languages/csharp.md` maps every constitution tool to its `sf-cs` command and explains the output.
+  - F#: install with `sf-fs tools`; tests, coverage, CRAP and DRY through `sf-fs`. Mutation is unsupported (exit 2). `swarmforge/languages/fsharp.md` describes compiled-method scope and requirements.
   - JavaScript/TypeScript: install with `sf-js tools`; tests `sf-js test` (Vitest, else Jest, after `tsc --noEmit`), mutation `sf-js mutate` (StrykerJS), CRAP `sf-js crap` (oxlint or ESLint complexity with Istanbul coverage), DRY `sf-js dry` (jscpd). `swarmforge/languages/javascript.md` maps every constitution tool to its `sf-js` command and explains the output.
 - Install every listed tool with `sf tool ensure <tool>` and check it with `sf tool require <tool>`; `sf tool list` prints the catalogue. Wrappers land in `.swarmforge/bin/` at the repository root, ignored by git and shared by every task worktree, so a tool install never writes outside the project. Run tools through those wrappers (`sf tool bin` prints the directory to put on PATH); they carry the argument guardrails below.
 
@@ -17,6 +18,7 @@
 - For Clojure or Babashka projects, write Speclj specs, not `clojure.test`.
 - For Java projects, avoid using Maven to run tests; build dedicated test runners and run those instead.
 - For C# projects, run tests, coverage, CRAP, DRY, and mutation through `sf-cs`; mark property tests with `[Trait("Category", "Property")]`.
+- For F# projects, use `sf-fs`; mark property tests with `[<Trait("Category", "Property")>]`. Follow `swarmforge/languages/fsharp.md` for unsupported mutation and scan/count.
 - For JavaScript and TypeScript projects, run tests, coverage, CRAP, DRY, and mutation through `sf-js`; write property tests with fast-check in files named `*.property.test.*`.
 
 ## Design And Testability
@@ -57,7 +59,7 @@
 - Before handoff, confirm the relevant local verification evidence is current for the affected targets.
 
 ## Guardrails
-- Do not invent project-local CRAP, DRY, mutation, or coverage proxies. Install and run the constitution tools (`crap4clj` with cloverage, `dry4clj`, `clj-mutate`, speclj, `sf-cs`, `sf-js`, or the language table). Do not treat a homegrown `bb crap` / `bb coverage` / `bb mutation-count` task or a throwaway report-parsing script as those tools.
+- Do not invent project-local CRAP, DRY, mutation, or coverage proxies. Install and run the constitution tools (`crap4clj` with cloverage, `dry4clj`, `clj-mutate`, speclj, `sf-cs`, `sf-fs`, `sf-js`, or the language table). Do not treat a homegrown `bb crap` / `bb coverage` / `bb mutation-count` task or a throwaway report-parsing script as those tools.
 - Do not edit mutation testing or Gherkin acceptance mutation manifests by hand; allow approved mutation tools to update those manifests as part of their normal runs.
 - Mutation manifests live on the branch `swarmforge/metrics`, not in tracked files: clj-mutate's under `.metrics/mutate/`, and the gherkin-mutator stamp and manifest block, which the `gherkin-mutator` wrapper keeps in `.metrics/gherkin/<feature path>` between runs. `sf start` loads them and `sf handoff` saves them. Do not commit `.metrics/` or a mutation block in a feature file.
 - Do not commit unrelated local changes or generated artifacts unless required for the task.
