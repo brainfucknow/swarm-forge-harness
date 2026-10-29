@@ -1,10 +1,6 @@
 # sf tool acceptance features
 
-Gherkin for `sf tool` (the task "Port the tool-wrapper fix to the Babashka
-sf tool", a port of the approved spec of the task "Fix the dry4clj and
-clj-mutate tool wrappers" to the Babashka `sf`, and the task "Run crap4clj
-from the repository root" for `crap4clj_directory.feature`). These features
-are the specification.
+Executable acceptance contracts for `sf tool`.
 `test/acceptance.sh` runs them through the APS acceptance runtime, one
 execution per scenario and example row, with step handlers in
 `test/acceptance/src/acceptance/steps.clj`. Each execution runs the real `sf`
@@ -13,16 +9,15 @@ in. The wrappers `sf tool ensure` writes run a fake `bb`. Real upstream
 compatibility checks are in the
 [Clojure guide](../../../swarmforge/languages/clojure.md#tool-compatibility-checks).
 
-## Settled with the operator
+## Behavior
 
 - `tools.conf` names the upstream entry points: clj-mutate's task `mutate`,
-  crap4clj's task `crap`, and dry4clj through a new kind `bbmain`
+  crap4clj's task `crap`, and dry4clj through kind `bbmain`
   (`bb -cp <clone>/src -m dry4clj.core`), which `sf check` accepts.
 - `ensure` fails clearly when the source lacks the entry point: exit 1, an
   error naming the tool and the entry point, and no wrapper written. It does
   not try to install the Go and Java tools another way; that needs a human.
-- Task keep-sf-tool-ensure-from-ff06da1 replaced "a stale wrapper removed":
-  a failing `ensure` leaves a wrapper from an earlier install byte-for-byte
+- A failing `ensure` leaves a wrapper from an earlier install byte-for-byte
   unchanged, and `require` keeps reporting it OK. Before it writes anything
   (wrapper, clone, coverage config), `ensure` checks the kind and rewrite of
   the tool and its whole needs chain. It does not compare a task worktree's
@@ -40,10 +35,7 @@ compatibility checks are in the
   Every other argument (`--lcov`, `--coverage-command`, module filters) is
   passed unchanged, as when run from that directory. When that directory
   does not exist the wrapper exits 1 without running crap4clj.
-- Updating existing clones is out of scope.
-- These features run through the APS runtime. `test/sf_tool_test.sh` keeps
-  its existing checks, with its clj-mutate expectations changed from the task
-  `clj-mutate` to `mutate`.
+- Existing source clones are reused.
 - The APS `gherkin-parser` drops data tables attached to steps, so no step
   here uses one.
 

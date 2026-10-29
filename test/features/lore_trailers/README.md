@@ -1,9 +1,7 @@
 # Lore trailer acceptance features
 
-Gherkin for the task "QA records verification as Lore commit trailers
-instead of committed scripts": roles record decision context and
-verification as [Lore](https://github.com/Ian-stetsenko/lore-protocol) git
-trailers, and QA stops committing its scripts. These features are the specification for the
+Roles record decision context and verification as
+[Lore](https://github.com/Ian-stetsenko/lore-protocol) git trailers. These features specify the
 `sf` side: the commit-msg hook and the `LORE:` lines of `sf start` and
 `sf show`. A test script under `test/` runs them, one check per scenario and
 example row, labelled with the scenario name (for example
@@ -12,7 +10,7 @@ a scratch git repository with `swarmforge/` copied in. The
 [workflow article](../../../swarmforge/constitution/articles/workflow.md)
 defines the current commit and verification conventions.
 
-## Settled with the operator
+## Behavior
 
 - The byline stays `By <role>.`. When the message ends in a trailer block,
   the hook puts the byline in its own paragraph just before that block;
@@ -24,25 +22,11 @@ defines the current commit and verification conventions.
   formed (for example `Rejected: alternative | reason`). Roles are asked to
   write them; nothing enforces it.
 
-## Not covered by these features (prompt changes)
+## Not covered by these features
 
-Per `AGENTS.md`, prompt text is not pinned by tests. The task also changes
-these, and QA reads them by hand against the current role guidance:
-
-- `swarmforge/roles/qa.md`: QA recovers approved criteria and QA from commits
-  or durable files, reuses current evidence, and uses ignored scratch scripts
-  only where needed. Its handoff commit carries `Tested:`, `Not-tested:` and
-  `Confidence:` trailers; with no fixes, that commit is empty
-  (`git commit --allow-empty`).
-- `swarmforge/roles/coder.md`, `cleaner.md`, `architect.md`, `hardener.md`:
-  record departures from the specification and trade-offs as `Constraint:`,
-  `Rejected: <alternative> | <reason>`, and `Directive:` trailers on the
-  commit that makes them, in the last paragraph, and never write the byline
-  after the trailers.
-- `swarmforge/constitution/articles/workflow.md`: the hook's new byline
-  placement and Lore-id. `handoffs.md`: `sf start` prints `LORE:` lines; read
-  them with the request and records.
-- `swarmforge/handoff-protocol.md`: the `LORE:` line format.
+Per `AGENTS.md`, prompt text is not pinned by tests. Review the current
+role and workflow guidance manually; the
+[handoff protocol](../../../swarmforge/handoff-protocol.md) defines the `LORE:` format.
 
 ## Placeholders
 
