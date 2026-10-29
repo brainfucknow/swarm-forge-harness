@@ -147,6 +147,9 @@ Stryker's sandbox stays in its default `.stryker-tmp/`.
 
 ## Testing sf-js itself
 
+Run these maintainer checks from the swarm-forge-harness source checkout;
+the installer does not copy their tests and fixtures.
+
 ```sh
 bb --config swarmforge/tools/javascript/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn property

@@ -58,5 +58,43 @@ sf tool ensure sf-cs >/dev/null
 assert_match "local wrapper execs the repository script" "$(tail -1 .swarmforge/bin/sf-cs)" "^exec '$repo/swarmforge/bin/sf-cs' "
 assert_match "wrappers run from a task worktree too" "$(git worktree add -q "$scratch/wt" -b wt && cd "$scratch/wt" && sf tool require sf-cs)" "^OK: sf-cs $repo/.swarmforge/bin/sf-cs$"
 
+consumer="$scratch/consumer"
+git init -q "$consumer"
+bash "$HERE/install.sh" "$consumer" >/dev/null
+assert_match "fresh install validates its runtime configuration" "$(cd "$consumer" && swarmforge/bin/sf check)" '^CHECK: ok'
+assert_match "installed init is repeatable" "$(cd "$consumer" && swarmforge/bin/sf init)" '^roles: '
+assert_eq "installed compatibility entrypoint lists the same tools" \
+  "$(cd "$consumer" && swarmforge/bin/sf-tool list)" "$(cd "$consumer" && swarmforge/bin/sf tool list)"
+for wrapper in sf sf-tool sf-cs sf-js; do
+  (cd "$consumer" && "swarmforge/bin/$wrapper" --help >/dev/null) \
+    && pass "installed $wrapper exposes help" || fail "installed $wrapper cannot load"
+done
+development="$(find "$consumer/swarmforge/tools" -type d \( -name spec -o -name test -o -name property -o -name fixtures -o -name features -o -name acceptance \))"
+assert_eq "fresh install excludes development asset directories" "$development" ""
+assert_fails "fresh install excludes the developer-only sf task config" test -e "$consumer/swarmforge/tools/sf/bb.edn"
+test -f "$HERE/swarmforge/tools/sf/bb.edn" && test -d "$HERE/swarmforge/tools/javascript/fixtures" \
+  && pass "installation leaves source development assets in place" || fail "source development assets changed"
+mkdir -p "$consumer/tmp/jscpd"
+cp "$HERE/swarmforge/tools/csharp/fixtures/jscpd-report.json" "$consumer/tmp/jscpd/jscpd-report.json"
+for wrapper in sf-cs sf-js; do
+  (cd "$consumer" && swarmforge/bin/sf-tool ensure "$wrapper" >/dev/null)
+  status=0
+  out="$(cd "$consumer" && ".swarmforge/bin/$wrapper" dry --all --report-only)" || status=$?
+  assert_eq "installed $wrapper reports clone findings" "$status" 1
+  assert_match "installed $wrapper reads reports through shared runtime code" "$out" '3 of 3 clone'
+done
+mkdir -p "$consumer/swarmforge/tools/sf/spec" "$consumer/.agents/skills/project"
+echo owned > "$consumer/swarmforge/tools/sf/spec/project.clj"
+echo owned > "$consumer/.agents/skills/project/SKILL.md"
+for path in .claude/agents/project.md .github/agents/project.agent.md .codex/agents/project.toml; do
+  echo owned > "$consumer/$path"
+done
+bash "$HERE/install.sh" "$consumer" >/dev/null
+for path in swarmforge/tools/sf/spec/project.clj .agents/skills/project/SKILL.md \
+  .claude/agents/project.md .github/agents/project.agent.md .codex/agents/project.toml; do
+  assert_eq "reinstall preserves consumer file $path" "$(cat "$consumer/$path")" owned
+done
+assert_eq "reinstall leaves one ignore entry" "$(grep -cxF .metrics/ "$consumer/.gitignore")" 1
+
 if [ "$failures" -gt 0 ]; then echo "$failures failure(s)" >&2; exit 1; fi
 echo "all tests passed"

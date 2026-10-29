@@ -1,10 +1,7 @@
 # sf-js acceptance features
 
-Gherkin for `swarmforge/bin/sf-js`, from these tasks: "Add JavaScript and
-TypeScript support (sf-js)"; "sf-js crap: oxlint as complexity source,
-ESLint fallback"; "sf-js crap: exit 2 when oxlint cannot parse a file"; and
-"Tighten sf-js Gherkin examples to kill mutation survivors". Each
-feature drives the real `sf-js` command in a scratch git repository with fake `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`
+Each feature drives the real `sf-js` command in a scratch git repository with
+fake `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`
 and `bunx` on PATH. The fakes record their arguments, exit with a chosen
 status, and write the reports a scenario sets up. Real-tool release checks
 are in the [JavaScript guide](../../../languages/javascript.md#tool-compatibility-checks).

@@ -1,11 +1,7 @@
 # CI manifest guard acceptance features
 
-Gherkin for task fail-ci-when-mutation-7b7d47b. Mutation manifests stay out
-of the tree. Commit b1555ae ("Record Gherkin mutation manifests for sf-js
-features") put gherkin-mutator blocks into 15 feature files anyway. This
-task adds a check to CI that fails when the tree holds a manifest:
-a gherkin-mutator block in a tracked `.feature` file, or a tracked file under
-`.metrics/`.
+The CI guard rejects a gherkin-mutator block in a tracked `.feature` file
+or a tracked file under `.metrics/`.
 
 - `manifest_guard.feature`: what `test/no_manifests.sh` reports and when it
   fails.
@@ -14,23 +10,18 @@ a gherkin-mutator block in a tracked `.feature` file, or a tracked file under
 this repository's `test/no_manifests.sh`, real git and bash in a scratch
 repository. `test/no_manifests_test.sh` also exercises the guard directly.
 
-## Decisions
-
-The orchestrator passed on that the operator prefers simple solutions and
-small PRs. On that basis:
+## Behavior
 
 - The check is a bash script, `test/no_manifests.sh`, next to the other test
   scripts. It needs only bash and git. It is not an `sf` subcommand and
-  `install.sh` does not ship it: this task guards this repository's CI.
+  `install.sh` does not ship it: the guard belongs to this repository's CI.
 - `.github/workflows/test.yml` runs `bash test/no_manifests.sh` as a step of
   the job `sf`, right after checkout and before Babashka is installed.
 - The block is found by its marker lines, as gherkin-mutator writes them at
   the start of a line: `# mutation-stamp:` or
   `# acceptance-mutation-manifest-begin`. The block's shape is the one in
-  `test/features/metrics_cache/gherkin_block.feature` on the branch of task
-  keep-mutation-manifests-on-an-2a5978d. A marker inside a line, or indented,
-  as specifications that describe the block quote it, does not count. So the
-  sibling task's specs, and this one, pass.
+  `test/features/metrics_cache/gherkin_block.feature`. A marker inside a
+  line, or indented, does not count.
 - `.metrics` counts at any depth, as the `.metrics/` line in `.gitignore`
   does.
 - "Tracked" means the git index. In CI the index is the checked-out commit;
