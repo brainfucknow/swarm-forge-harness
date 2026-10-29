@@ -41,7 +41,7 @@
 - Gherkin acceptance mutation runs must report periodic progress/status so agents can distinguish normal long-running work from a hang.
 
 ## Verification
-- Verify end-to-end behavior through the project's supported public interface: CLI, GUI, HTTP API, or library API as appropriate. Do not bypass that boundary by calling private implementation modules.
+- Verify end-to-end behavior through the public interface exercised by the approved workflow: CLI, GUI, HTTP API, or library API as appropriate. Do not substitute lower-level checks or private implementation calls for that workflow.
 - Choose checks from the changed behavior and affected executable targets, within each role's ownership. Documentation-only work uses manual review and relevant existing checks, not prompt-text tests or source analyses with no target. Keep applicable source-quality gates and thresholds.
 - Reuse passing results for the same relevant source revision and targets. Rerun when an edit, failure, or unresolved concern warrants it, not merely because the stage changed. Record the commands, revision, outcomes, and limits in commits so later roles can assess the evidence independently.
 - Before running language, build, or test commands, prefer project-local cache/configuration paths inside the task worktree. Avoid default cache locations that write outside the project and may trigger sandbox or permission restrictions.
