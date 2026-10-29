@@ -2,7 +2,8 @@
   (:require [babashka.fs :as fs]
             [speclj.core :refer :all]
             [sf.adapters :as adapters]
-            [sf.repo-support :refer [*dir* with-repo write-conf! captured]]))
+            [clojure.string :as str]
+            [sf.repo-support :refer [*dir* with-repo write-conf! captured git]]))
 
 (def paths [".claude/agents/coder.md" ".github/agents/coder.agent.md" ".codex/agents/coder.toml"])
 
@@ -15,6 +16,18 @@
   (into {} (for [dir [".claude/agents" ".github/agents" ".codex/agents"]
                  file (fs/glob (fs/path *dir* dir) "*")]
              [(str file) (slurp (str file))])))
+
+(defn stale-checkout []
+  (write-agent ".gitignore" ".swarmforge/\n")
+  (adapters/adapters [])
+  (git *dir* "add" ".")
+  (git *dir* "commit" "-q" "-m" "Generate A")
+  (git *dir* "checkout" "-q" "-b" "generated-b")
+  (write-conf! *dir* "tiers.conf" "frontier inherit high gpt\nstrong ultra high new-model\nfast sonnet low gpt-mini\n")
+  (adapters/adapters [])
+  (git *dir* "add" ".")
+  (git *dir* "commit" "-q" "-m" "Generate B")
+  (git *dir* "checkout" "-q" "main"))
 
 (describe "adapter ownership"
   (around [it] (with-repo (fn [] (it))))
@@ -62,6 +75,70 @@
     (should= 0 (:status (captured #(adapters/adapters []))))
     (should-not (fs/exists? (fs/path *dir* ".codex/agents/specifier.toml")))
     (should-contain "model_reasoning_effort = \"low\"" (slurp (str (fs/path *dir* (last paths))))))
+
+  (it "refreshes stale ownership after clean checkouts and fast-forward pulls"
+    (stale-checkout)
+    (should= "" (git *dir* "status" "--porcelain"))
+    (let [before (snapshot)]
+      (should= 0 (:status (captured #(adapters/adapters []))))
+      (should= before (snapshot)))
+    (git *dir* "pull" "-q" "--ff-only" "." "generated-b")
+    (should= "" (git *dir* "status" "--porcelain"))
+    (let [before (snapshot)]
+      (should= 0 (:status (captured #(adapters/adapters []))))
+      (should= before (snapshot)))
+    (should= "" (git *dir* "status" "--porcelain")))
+
+  (it "refreshes each clean adapter despite unrelated project edits"
+    (stale-checkout)
+    (write-agent "project.txt" "unrelated work")
+    (write-conf! *dir* "tools.conf" "# unrelated configuration edit\n")
+    (should= 0 (:status (captured #(adapters/adapters []))))
+    (should= "unrelated work" (slurp (str (fs/path *dir* "project.txt")))))
+
+  (it "does not adopt local model-only or body edits through stale ownership"
+    (doseq [change [#(str/replace % "model_reasoning_effort = \"medium\"" "model_reasoning_effort = \"low\"")
+                    #(str % "project instructions\n")]]
+      (with-repo
+        (fn []
+          (stale-checkout)
+          (let [path (last paths)
+                original (slurp (str (fs/path *dir* path)))]
+            (write-agent path (change original))
+            (let [before (snapshot)]
+              (should= 1 (:status (captured #(adapters/adapters []))))
+              (should= before (snapshot))))))))
+
+  (it "refuses staged edits even when the working file equals its clean canonical version"
+    (stale-checkout)
+    (let [path (last paths)
+          canonical (slurp (str (fs/path *dir* path)))]
+      (write-agent path (str/replace canonical "model_reasoning_effort = \"medium\"" "model_reasoning_effort = \"low\""))
+      (git *dir* "add" path)
+      (write-agent path canonical)
+      (let [before (snapshot)]
+        (should= 1 (:status (captured #(adapters/adapters []))))
+        (should= before (snapshot)))))
+
+  (it "does not claim an unknown tracked file when ownership is stale"
+    (stale-checkout)
+    (write-agent (last paths) "project agent instructions")
+    (git *dir* "add" (last paths))
+    (git *dir* "commit" "-q" "-m" "Install project agent")
+    (let [before (snapshot)]
+      (should= 1 (:status (captured #(adapters/adapters []))))
+      (should= before (snapshot))))
+
+  (it "does not claim an untracked canonical-looking file through stale ownership"
+    (stale-checkout)
+    (let [path (last paths)
+          canonical (slurp (str (fs/path *dir* path)))]
+      (git *dir* "rm" "-q" path)
+      (git *dir* "commit" "-q" "-m" "Remove old adapter")
+      (write-agent path canonical)
+      (let [before (snapshot)]
+        (should= 1 (:status (captured #(adapters/adapters []))))
+        (should= before (snapshot)))))
 
   (it "rejects ownership paths outside the agent directories"
     (write-agent "unrelated.txt" "keep")

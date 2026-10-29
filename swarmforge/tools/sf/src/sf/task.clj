@@ -161,11 +161,12 @@
         to (flow/next-stage state to)
         _ (when (not= "done" to) (config/require-role to))
         head (role-head id)]
+    (refuse (flow/handoff-refusal state head))
     (when-not audit-passed? (audit/gate id from head))
     (store/write! id (fn [records]
                        (let [state (last records)
                              rec (flow/handoff state from to head summary)]
-                         (refuse (flow/handoff-refusal state))
+                         (refuse (flow/handoff-refusal state (role-head id)))
                          (cond-> rec (= "done" to) (assoc :archive (archive id records rec))))))
     (metrics/save! id (worktree-of id))
     (when (and (= "done" to) (fs/directory? (worktree-of id)))
@@ -201,8 +202,11 @@
     ;; The handoff's own checks run before the approval is recorded, so a
     ;; handoff that cannot happen leaves the task waiting for approval.
     (when (not= "done" to) (config/require-role to))
-    (role-head id)
-    (write! id "approval" "operator" (fn [state] (refuse (flow/approval-refusal state)) {:needs "none"}))
+    (store/write! id
+                  (fn [records]
+                    (let [state (last records)]
+                      (refuse (flow/approval-refusal state (flow/reviewed-commit records) (role-head id)))
+                      (flow/follow state "approval" "operator" {:needs "none"}))))
     ;; The review that asked for approval passed the audit gate at this commit.
     ;; Thus the handoff must not run the gate again.
     (handoff [id] {:role (acting-role state) :audit-passed? true})))
