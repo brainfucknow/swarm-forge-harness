@@ -2,9 +2,9 @@
 
 Gherkin for task keep-mutation-manifests-on-an-2a5978d. Mutation manifests
 are a cache. They leave the tree and every PR, and live on the orphan branch
-`swarmforge/metrics` (design: "Mutation manifests: the cache branch" in
-`docs/spikes/git-task-store/design.md`). The manifests are the clj-mutate
-files under `.metrics/mutate/` and the gherkin-mutator stamp and manifest
+`swarmforge/metrics` (see [Sharing](../../../swarmforge/handoff-protocol.md#sharing)).
+The manifests are the clj-mutate files under `.metrics/mutate/` and the
+gherkin-mutator stamp and manifest
 block, which the wrapper now keeps in `.metrics/gherkin/<feature path>`
 instead of the feature file.
 
@@ -15,9 +15,8 @@ instead of the feature file.
 
 `test/acceptance.sh` runs them, one check per scenario and example row, with
 the real `sf`, real git and a real `bb` in a scratch repository that holds a
-copy of `swarmforge/`. The end-to-end procedure is
-`../../qa/metrics_cache.md`. It replaces paused task ec13ecd (git notes,
-branch `old/ec13ecd-git-notes`).
+copy of `swarmforge/`. Real-mutator compatibility checks are in the
+[handoff protocol](../../../swarmforge/handoff-protocol.md#sharing).
 
 ## Settled with the operator
 
@@ -48,7 +47,7 @@ branch `old/ec13ecd-git-notes`).
 ## Not covered by these features
 
 Per `AGENTS.md`, prompt and document text is not pinned by tests. QA reads
-these by hand (section 6 of the QA procedure).
+these by hand against the current protocol and role guidance.
 
 - `swarmforge/constitution/articles/engineering.md`: mutation manifests live
   on `swarmforge/metrics`, not in tracked files. Do not commit `.metrics/` or

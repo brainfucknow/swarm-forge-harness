@@ -6,8 +6,8 @@ ESLint fallback"; "sf-js crap: exit 2 when oxlint cannot parse a file"; and
 "Tighten sf-js Gherkin examples to kill mutation survivors". Each
 feature drives the real `sf-js` command in a scratch git repository with fake `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`
 and `bunx` on PATH. The fakes record their arguments, exit with a chosen
-status, and write the reports a scenario sets up. The real tools appear only
-in the QA procedure (`../qa/sf-js.md`).
+status, and write the reports a scenario sets up. Real-tool release checks
+are in the [JavaScript guide](../../../languages/javascript.md#tool-compatibility-checks).
 
 ## Example tables
 

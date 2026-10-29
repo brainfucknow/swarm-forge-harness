@@ -28,4 +28,4 @@ record formats.
 - A role the orchestrator plays in chat (`session` in `roles.conf`) asks the operator directly, then records the exchange with `sf ask` and `sf answer` so the task carries it.
 
 ## Specification Gate
-- The specifier does not hand off. It commits the specification, runs `sf review <id>`, and stops. The orchestrator shows the operator the committed files; `sf approve <id>` records the approval and performs the handoff to the next role; `sf reject <id> "<reason>"` keeps the task with the specifier.
+- The specifier does not hand off. It commits the specification, runs `sf review <id>`, and stops. The orchestrator shows the operator the criteria and QA from that commit or durable contract files; `sf approve <id>` records the approval and performs the handoff to the next role; `sf reject <id> "<reason>"` keeps the task with the specifier.

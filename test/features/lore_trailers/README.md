@@ -8,8 +8,9 @@ trailers, and QA stops committing its scripts. These features are the specificat
 `sf show`. A test script under `test/` runs them, one check per scenario and
 example row, labelled with the scenario name (for example
 `sf commit Lore-id 1: Tested`). Each check runs the real `sf` and real git in
-a scratch git repository with `swarmforge/` copied in. The end-to-end
-procedure is `../../qa/lore_trailers.md`.
+a scratch git repository with `swarmforge/` copied in. The
+[workflow article](../../../swarmforge/constitution/articles/workflow.md)
+defines the current commit and verification conventions.
 
 ## Settled with the operator
 
@@ -26,7 +27,7 @@ procedure is `../../qa/lore_trailers.md`.
 ## Not covered by these features (prompt changes)
 
 Per `AGENTS.md`, prompt text is not pinned by tests. The task also changes
-these, and QA reads them by hand (see the QA procedure):
+these, and QA reads them by hand against the current role guidance:
 
 - `swarmforge/roles/qa.md`: QA recovers approved criteria and QA from commits
   or durable files, reuses current evidence, and uses ignored scratch scripts
