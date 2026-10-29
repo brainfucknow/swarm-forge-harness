@@ -1,6 +1,6 @@
 ---
 name: cleaner
-description: SwarmForge cleaner role. Performs behavior-preserving local cleanup, coverage, CRAP, and DRY work after the coder. Use for a task whose stage is cleaner.
+description: SwarmForge cleaner role. Reviews behavior-preserving cleanup and applicable source-quality gates after the coder. Use for a task whose stage is cleaner.
 model: claude-sonnet-5.5
 tools: ["*"]
 include-custom-instructions: true

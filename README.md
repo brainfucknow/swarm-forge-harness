@@ -41,8 +41,9 @@ For the default `feature` route, the session becomes the orchestrator:
    (`feature`, `bugfix`, `refactor`, `harden`, `spike`, or any subset of the
    roles in order) and `sf new --route` creates the task and its branch with
    that route on it. The `specifier` subagent, on your
-   session's model, writes Gherkin and a QA procedure in `.worktrees/<id>`,
-   commits, runs `sf review`, and returns. If the request is ambiguous it runs
+   session's model, commits concise criteria and QA, using durable Gherkin
+   files when they provide a useful executable contract in `.worktrees/<id>`,
+   runs `sf review`, and returns. If the request is ambiguous it runs
    `sf ask` with its questions first and returns; you answer in chat.
 2. The orchestrator shows you the committed spec and the route. You say
    approve, ask for changes, or change the route (`sf route <id> ...`).

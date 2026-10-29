@@ -1,6 +1,6 @@
 ---
 name: coder
-description: SwarmForge coder role. Implements the approved specification with TDD, unit tests, and generated acceptance tests. Use for a task whose stage is coder.
+description: SwarmForge coder role. Implements approved changes with focused tests and existing acceptance machinery. Use for a task whose stage is coder.
 model: claude-opus-5.5
 tools: ["*"]
 include-custom-instructions: true

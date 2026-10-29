@@ -92,8 +92,8 @@ answer: argon2id
 type: review
 from: specifier
 commit: 4e21d0c
-files: features/login.feature,qa/login.md
-summary: login spec and QA procedure
+files: features/login.feature
+summary: login acceptance contract; manual QA in the specification commit
 ```
 
 ```text
@@ -200,6 +200,14 @@ whose tree mirrors `.metrics/mutate/` and `.metrics/gherkin/`. `sf start`
 copies the cached files a worktree lacks, and `sf handoff` commits the new and
 changed ones without a checkout. sf does not push it: `git push origin
 swarmforge/metrics` shares the cache, and a fetch brings it back.
+
+When changing cache transport or mutator wrappers, check with real tools in
+scratch projects: clj-mutate reuses killed forms after handoff and a new task;
+gherkin-mutator reuses its manifest from both the worktree root and a feature
+subdirectory. On success and failure, keep the feature as committed, retain
+the block under `.metrics/gherkin/`, and preserve the tool's exit status.
+After handoff, verify the cached files load in a new task or a clone that
+fetches `swarmforge/metrics`. Do not commit manifests or test output.
 
 ## Audit
 

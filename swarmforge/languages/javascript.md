@@ -174,9 +174,31 @@ gherkin-mutator --feature swarmforge/tools/javascript/features/crap.feature \
   --runner-worker "bb --config swarmforge/tools/javascript/bb.edn acceptance-worker"
 ```
 
-The end-to-end QA procedure for sf-js is `qa/sf-js.md`. It runs against real
-npm, pnpm, yarn and bun projects with the real Vitest, Jest, tsc, oxlint,
-ESLint, jscpd and StrykerJS, and needs the npm registry.
+## Tool compatibility checks
+
+When changing wrappers or tool versions, supplement fixture tests with real
+tools in disposable Git projects under `tmp/`; npm registry access is needed.
+
+- Exercise npm/Vitest/TypeScript and pnpm/Jest/JavaScript with real lockfiles;
+  check Yarn and Bun when available and record any skipped manager. Pin
+  TypeScript to versions supported by the chosen parser and Stryker plugins.
+- Run `sf-js tools` twice: missing packages install once and the second run
+  is idle. Verify ordinary/property test separation, type errors stopping the
+  ordinary tests, failing-test exits and actual Istanbul coverage output.
+- Compare oxlint and ESLint CRAP rows for the same covered, uncovered and
+  anonymous functions. Verify isolated project/nested configs, disable-directive
+  warnings, test-file exclusions and analysis errors (including invalid UTF-8).
+  Check oxlint's minimum supported version and a current version; older,
+  rule-less or missing oxlint must fail without silently switching linters.
+- With real jscpd, check changed and untracked clones, excluded generated files
+  and declaration files, and `--report-only` reuse.
+- With real StrykerJS and both runners, verify survivors and killed mutants,
+  TypeScript checking, incremental reuse, and differential results excluding
+  unchanged files retained in the incremental report. Test literal bracketed
+  paths, reject comma paths before launch, and skip mutation for test-only edits.
+
+Record versions, outcomes and compatibility limits in commit Lore, not another
+per-task QA document.
 
 The shared core in `swarmforge/tools/core/` serves `sf-cs` as well. Its
 policy namespaces are pure: `sfcore.changes` (diff parsing, path matching),

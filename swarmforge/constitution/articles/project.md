@@ -9,8 +9,9 @@
 - `.worktrees/` and `./tmp/` are ignored by git and never committed.
 
 ## Verification
-- Every role except the specifier runs unit tests and acceptance tests before handoff and fixes any failures.
-- The architect, hardener, and QA run property tests before handoff when the project has them and fix any failures.
+- After installation, record the application's public interfaces and verification commands here, or link to maintained project documentation that defines them.
+- Apply the engineering article's target-based verification and evidence-reuse rules. Fix applicable failures before handoff.
+- The architect, hardener, and QA own property-test verification for affected behavior; keep it separate from normal unit, coverage, and mutation runs.
 
 ## Handoffs
 - Prefer terse, explicit handoffs that report state. Do not include verification transcripts or process narrative in the summary.

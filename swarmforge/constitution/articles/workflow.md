@@ -29,6 +29,11 @@ By coder.
 - Parse and dry-check into `./tmp/…`.
 - Do not commit `./tmp/`.
 
+## Repository Footprint
+- Keep task plans, manual QA procedures, review reports, and verification detail in commits or ignored scratch files. Track documentation only when it serves a lasting user or maintainer need. Preserve required `sf` task files and history.
+- Reuse existing code and test structures. Add a framework, generator, runner, abstraction, or permanent file only for behavior that existing structures cannot express clearly.
+- A review may conclude with no changes. Record its findings and evidence in a commit (`--allow-empty` when needed) and handoff; do not invent edits or reports to justify a stage.
+
 ## Announcements
 - Do not add role bylines to chat messages or task records; `sf` records the role.
 
