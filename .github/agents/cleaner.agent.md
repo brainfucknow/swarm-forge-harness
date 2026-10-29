@@ -1,7 +1,7 @@
 ---
 name: cleaner
 description: SwarmForge cleaner role. Reviews behavior-preserving cleanup and applicable source-quality gates after the coder. Use for a task whose stage is cleaner.
-model: claude-sonnet-5.5
+model: gpt-6.1-terra
 tools: ["*"]
 include-custom-instructions: true
 ---

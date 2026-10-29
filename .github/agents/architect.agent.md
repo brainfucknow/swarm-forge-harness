@@ -1,7 +1,7 @@
 ---
 name: architect
 description: SwarmForge architect role. Owns boundaries, dependency direction, structural corrections, and property-test support. Use for a task whose stage is architect.
-model: claude-opus-5.5
+model: gpt-6.1-sol
 tools: ["*"]
 include-custom-instructions: true
 ---
