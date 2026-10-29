@@ -235,7 +235,8 @@ assert_eq "adapters for copilot" "$(ls .github/agents | paste -sd ' ' -)" "clean
 assert_eq "adapters for codex" "$(ls .codex/agents | paste -sd ' ' -)" "cleaner.toml coder.toml"
 assert_match "claude adapter uses the tier model" "$(cat .claude/agents/cleaner.md)" "^model: sonnet$"
 assert_match "frontier adapter inherits the session model" "$(cat .claude/agents/coder.md)" "^model: inherit$"
-assert_match "copilot adapter uses the tier model" "$(cat .github/agents/cleaner.agent.md)" "^model: claude-sonnet-5.5$"
+assert_eq "copilot adapter uses the tier model" \
+  "$(sed -n 's/^model: //p' .github/agents/cleaner.agent.md)" "$(awk '$1 == "fast" {print $4}' swarmforge/tiers.conf)"
 assert_match "codex adapter uses the tier effort" "$(cat .codex/agents/cleaner.toml)" '^model_reasoning_effort = "low"$'
 
 # committed adapters are current
