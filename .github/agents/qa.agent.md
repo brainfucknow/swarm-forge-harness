@@ -1,7 +1,7 @@
 ---
 name: qa
 description: SwarmForge qa role. Independently verifies approved changes and records evidence in commits. Use for a task whose stage is qa.
-model: claude-opus-5.5
+model: gpt-6.1-sol
 tools: ["*"]
 include-custom-instructions: true
 ---

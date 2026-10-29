@@ -43,9 +43,9 @@ For the default `feature` route, the session becomes the orchestrator:
 1. The orchestrator picks a route for the request from `swarmforge/routes.conf`
    (`feature`, `bugfix`, `refactor`, `harden`, `spike`, or any subset of the
    roles in order) and `sf new --route` creates the task and its branch with
-   that route on it. The `specifier` subagent, on your
-   session's model, commits concise criteria and QA, using durable Gherkin
-   files when they provide a useful executable contract in `.worktrees/<id>`,
+   that route on it. The `specifier` subagent commits concise criteria and QA,
+   using durable Gherkin files when they provide a useful executable contract
+   in `.worktrees/<id>`,
    runs `sf review`, and returns. If the request is ambiguous it runs
    `sf ask` with its questions first and returns; you answer in chat.
 2. The orchestrator shows you the committed spec and the route. You say
@@ -70,7 +70,7 @@ move it).
 |---|---|---|---|
 | Claude Code | `/swarm` from `.claude/skills/swarm/` | `.claude/agents/<role>.md` | `model: opus` or `sonnet` |
 | Codex CLI | `$swarm` from `.agents/skills/swarm/` | `.codex/agents/<role>.toml` | `model_reasoning_effort` high / medium / low |
-| Copilot CLI | `/swarm` from `.agents/skills/swarm/` | `.github/agents/<role>.agent.md` | `model: claude-opus-5.5` or `claude-sonnet-5.5` |
+| Copilot CLI | `/swarm` from `.agents/skills/swarm/` | `.github/agents/<role>.agent.md` | `model: gpt-6.1-sol` or `gpt-6.1-terra` |
 
 The agent files are generated from `swarmforge/roles.conf` and
 `swarmforge/tiers.conf` by `swarmforge/bin/sf adapters`. Each one is a thin
@@ -106,16 +106,18 @@ The catalogue:
 
 | Role | Tier | Runs as |
 |---|---|---|
-| specifier | frontier | subagent (your session's model) |
+| specifier | frontier | subagent |
 | coder | strong | subagent |
 | cleaner | fast | subagent |
 | architect | strong | subagent |
 | hardener | fast | subagent |
 | qa | strong | subagent |
 
-`swarmforge/tiers.conf` maps `strong` to Opus and `fast` to Sonnet for Claude
-Code and Copilot, and to reasoning effort for Codex. Edit either file and run
-`sf adapters`. Setting a role to `session` instead of `subagent` makes the
+`swarmforge/tiers.conf` keeps Claude's frontier on the session model and maps
+`strong`/`fast` to Opus/Sonnet; Codex uses reasoning effort. Copilot defaults
+to GPT-6.1 Sol for `frontier`/`strong` and GPT-6.1 Terra for `fast`.
+Regenerate agents with `sf adapters` after editing roles or tiers.
+Setting a role to `session` instead of `subagent` makes the
 orchestrator play it in chat, which suits co-writing a specification turn by
 turn at the cost of a fuller session context. Adding `audit` to a role's line
 makes its first `sf handoff` at any commit come back with a self-review

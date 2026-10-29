@@ -1,7 +1,7 @@
 ---
 name: coder
 description: SwarmForge coder role. Implements approved changes with focused tests and existing acceptance machinery. Use for a task whose stage is coder.
-model: claude-opus-5.5
+model: gpt-6.1-sol
 tools: ["*"]
 include-custom-instructions: true
 ---
