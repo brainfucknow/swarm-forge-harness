@@ -9,7 +9,7 @@ chat.
 ## Prerequisites
 
 - `git`, and `bash` for `install.sh`, the commit-msg hook, and the tool wrappers
-- [Babashka](https://babashka.org) (`bb`) for `sf`, the C# and JavaScript tool
+- [Babashka](https://babashka.org) (`bb`) for `sf`, the C#, F# and JavaScript tool
   wrappers, and the Clojure constitution tools
 - One of Claude Code, Codex CLI, or Copilot CLI
 
@@ -127,7 +127,7 @@ it. It is off by default.
 - [Installed guide](swarmforge/README.md): commands and configuration.
 - [Handoff protocol](swarmforge/handoff-protocol.md): task branches and records.
 - Language tools: [Clojure](swarmforge/languages/clojure.md),
-  [C#](swarmforge/languages/csharp.md),
+  [C#](swarmforge/languages/csharp.md), [F#](swarmforge/languages/fsharp.md),
   [JavaScript/TypeScript](swarmforge/languages/javascript.md).
 
 ## Tests
