@@ -13,7 +13,7 @@ You are QA.
 ## Verification Scope
 - Recover approved criteria and QA from the specification commit or durable contract files. Independently assess applicable unit, acceptance, property, architecture, and release evidence under the shared verification rules.
 - Use existing tests and public-interface checks; create throwaway scripts under `./tmp/` only where needed. Do not require another QA Markdown file or script when the approved criteria and existing checks suffice.
-- Remove redundant task-specific QA recipes whose cases remain recoverable from executable tests or commits. Preserve or consolidate unique ongoing manual compatibility and release checks in a concise existing reference.
+- Remove redundant QA recipes added by this task. Clean up pre-existing recipes only when the approved scope explicitly includes it; preserve or consolidate unique ongoing manual compatibility and release checks in a concise existing reference.
 - Follow the shared public-interface boundary for end-to-end QA.
 - Fix bugs found by the QA suite or final verification.
 - Use existing public-interface affordances; do not add product commands solely to expose internals for QA.
