@@ -410,6 +410,18 @@
 (defn- sffs [env & args]
   (apply sfcs (assoc env "LANGUAGE" "fsharp") args))
 
+(deftest help-describes-the-language-capabilities
+  (let [{:keys [status lines]} (sfcs {} "help")
+        help (str/join "\n" lines)]
+    (is (= 0 status))
+    (is (str/includes? help "install dotnet-stryker locally"))
+    (is (str/includes? help "Stryker on changed files")))
+  (let [{:keys [status lines]} (sffs {} "help")
+        help (str/join "\n" lines)]
+    (is (= 0 status))
+    (is (str/includes? help "check dotnet, node, npx and prepare jscpd"))
+    (is (str/includes? help "unsupported for F#; exit 2"))))
+
 (deftest fsharp-tool-boundary
   (let [{:keys [status lines err]} (sffs {} "tools")]
     (is (= 0 status) err)
@@ -439,9 +451,13 @@
     (spit (str report) (str/replace xml "</classes>"
                                    "<class name=\"Other\" filename=\"Other.cs\"><methods><method name=\"Ignored\"/></methods></class></classes>"))
     (is (= 0 (:status (sffs {} "crap" "--all" "--report" (str dir)))))
+    (spit (str report) (str/replace xml "complexity=\"2\"" "complexity=\"0\""))
+    (is (= 0 (:status (sffs {} "crap" "--all" "--report" (str dir)))))
     (doseq [invalid [(str/replace xml " complexity=\"2\"" "")
                      (str/replace xml " line-rate=\"1\"" "")
                      (str/replace xml "number=\"3\"" "number=\"0\"")
+                     (str/replace xml "<line number=\"3\" hits=\"1\"/>"
+                                  "<line number=\"3\" hits=\"1\"/><line number=\"0\" hits=\"0\"/>")
                      (str/replace xml "<line number=\"3\" hits=\"1\"/>" "")
                      (str/replace xml "line-rate=\"1\"" "line-rate=\"2\"")
                      (str/replace xml "complexity=\"2\"" "complexity=\"NaN\"")
