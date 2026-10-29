@@ -16,11 +16,8 @@ copy of `swarmforge/`. git-bug is never on PATH. The current contract is
 
 - The spike's design and Gherkin were adopted as approved.
 - No `sf migrate`: the template had no users yet.
-- Sharing is not built: the push to `SWARMFORGE_REMOTE`, the check for
-  unseen remote records, remote-tracking task branches, the one considered
-  remote, and hex uniqueness against remote branches. Its draft Gherkin is
-  in `docs/spikes/git-task-store/features/`. Here, a task is a local
-  `swarm/<id>` branch only.
+- Tasks are local `swarm/<id>` branches. Automatic remote synchronization
+  is unsupported.
 
 ## Settled with the operator: sf finish resume
 

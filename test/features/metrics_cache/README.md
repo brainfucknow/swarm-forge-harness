@@ -38,8 +38,7 @@ copy of `swarmforge/`. Real-mutator compatibility checks are in the
   handoff saves nothing.
 - A save moves the branch with `commit-tree` and a compare-and-swap
   `update-ref`, so no worktree is touched.
-- sf does not push or fetch the cache. `SWARMFORGE_REMOTE` belongs to the
-  sharing task. There is no squash command.
+- sf does not push or fetch the cache. There is no squash command.
 - A manifest carries the hashes of its source, so a stale copy costs a
   re-run, never a wrong result.
 - One task: the cache branch, the install line and the block move.
