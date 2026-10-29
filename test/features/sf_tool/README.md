@@ -9,8 +9,9 @@ are the specification.
 execution per scenario and example row, with step handlers in
 `test/acceptance/src/acceptance/steps.clj`. Each execution runs the real `sf`
 (with the real `bb`) in a scratch git repository with `swarmforge/` copied
-in. The wrappers `sf tool ensure` writes run a fake `bb`. The real tools and
-GitHub clones are used only in the QA procedure (`../../qa/sf_tool.md`).
+in. The wrappers `sf tool ensure` writes run a fake `bb`. Real upstream
+compatibility checks are in the
+[Clojure guide](../../../swarmforge/languages/clojure.md#tool-compatibility-checks).
 
 ## Settled with the operator
 

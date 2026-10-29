@@ -12,7 +12,7 @@ a gherkin-mutator block in a tracked `.feature` file, or a tracked file under
 
 `test/acceptance.sh` runs it, one check per scenario and example row, with
 this repository's `test/no_manifests.sh`, real git and bash in a scratch
-repository. The end-to-end procedure is `../../qa/manifest_guard.md`.
+repository. `test/no_manifests_test.sh` also exercises the guard directly.
 
 ## Decisions
 
@@ -40,7 +40,7 @@ small PRs. On that basis:
 
 Per `AGENTS.md`, configuration and document text is not pinned by tests. QA
 reads by hand that `.github/workflows/test.yml` runs the guard as described
-above (section 3 of the QA procedure). A run outside a git repository is not
+above. A run outside a git repository is not
 specified; the script may fail there as git does.
 
 ## Placeholders

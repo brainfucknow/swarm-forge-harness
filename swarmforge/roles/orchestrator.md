@@ -24,8 +24,8 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 - If the harness cannot run subagents, run `sf dispatch <role> <id>` instead; it starts a headless backend session with the same prompt. `sf run <id>` repeats that until the task is done or blocked.
 
 ## Specification Gate
-- When the specifier returns after `sf review`, show the operator what it committed: the feature files and the QA procedure, from `git show` on the task branch or the files in `.worktrees/<id>`, plus the task's route and the route the specifier recommended if it differs. Then stop and wait. Do not approve on their behalf.
-- Link the specification in that request: push the task branch (`git push <remote> swarm/<id>`) and give a link to each feature file and QA procedure the specifier committed. Without a remote, give their paths in `.worktrees/<id>`.
+- When the specifier returns after `sf review`, show the committed criteria and QA, from the specification commit body or durable contract files, plus the task's route and any recommended change. Then stop and wait. Do not approve on their behalf.
+- Link that specification: push the task branch (`git push <remote> swarm/<id>`) and link the specification commit or durable files. Without a remote, give the commit SHA and `git show` command or worktree paths. Follow its Lore directive; do not create files merely to provide links.
 - If the operator changes the route: `sf route <id> <route>`. The new route must contain the current stage.
 - On "approve": `sf approve <id>`, which records the approval and hands the task to the next role on its route; dispatch that role.
 - On change requests: `sf reject <id> "<reason>"` and resume the specifier.

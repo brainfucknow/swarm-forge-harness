@@ -1,6 +1,6 @@
 ---
 name: specifier
-description: SwarmForge specifier role. Turns the operator's request into deterministic Gherkin and an end-to-end QA procedure, then stops for approval. Use for a task whose stage is specifier.
+description: SwarmForge specifier role. Defines proportional acceptance criteria and UI-level QA, then stops for approval. Use for a task whose stage is specifier.
 model: inherit
 ---
 
