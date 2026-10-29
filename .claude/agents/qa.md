@@ -1,6 +1,6 @@
 ---
 name: qa
-description: SwarmForge qa role. Runs the QA procedure as throwaway UI-level checks, performs independent final verification, and records it as Lore trailers. Use for a task whose stage is qa.
+description: SwarmForge qa role. Independently verifies approved changes and records evidence in commits. Use for a task whose stage is qa.
 model: opus
 ---
 

@@ -28,12 +28,11 @@ procedure is `../../qa/lore_trailers.md`.
 Per `AGENTS.md`, prompt text is not pinned by tests. The task also changes
 these, and QA reads them by hand (see the QA procedure):
 
-- `swarmforge/roles/qa.md`: QA turns the specifier's QA procedure into
-  throwaway scripts under `./tmp/` (git-ignored), runs them, and commits only
-  real fixes. Its handoff commit carries `Tested:` and `Not-tested:` trailers
-  (and `Confidence:`); with no fixes, that commit is empty
-  (`git commit --allow-empty`). The QA procedure `.md` stays part of the
-  approved specification.
+- `swarmforge/roles/qa.md`: QA recovers approved criteria and QA from commits
+  or durable files, reuses current evidence, and uses ignored scratch scripts
+  only where needed. Its handoff commit carries `Tested:`, `Not-tested:` and
+  `Confidence:` trailers; with no fixes, that commit is empty
+  (`git commit --allow-empty`).
 - `swarmforge/roles/coder.md`, `cleaner.md`, `architect.md`, `hardener.md`:
   record departures from the specification and trade-offs as `Constraint:`,
   `Rejected: <alternative> | <reason>`, and `Directive:` trailers on the
