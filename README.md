@@ -21,9 +21,12 @@ cd your-project
 ../swarm-forge-harness/install.sh
 ```
 
-The installer copies `swarmforge/` and the `swarm` skill into the project,
-adds one line to `AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md`,
-generates the agent files, and installs the commit-msg hook. Commit the result.
+The installer copies the SwarmForge runtime, guidance, and `swarm` skill into
+the project, adds instructions to `AGENTS.md`, `CLAUDE.md`, and
+`.github/copilot-instructions.md`, generates the agents, and installs the
+commit-msg hook. Commit the result.
+Development assets stay in this source checkout; reinstalling does not prune
+existing project files.
 
 Then set the project language in `swarmforge/constitution/articles/project.md`.
 
@@ -128,6 +131,8 @@ it. It is off by default.
   [JavaScript/TypeScript](swarmforge/languages/javascript.md).
 
 ## Tests
+
+Run these from the source checkout; fresh consumer installs omit harness tests and fixtures.
 
 ```sh
 bash test/sf_test.sh

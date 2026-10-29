@@ -1,11 +1,11 @@
 # Metrics cache acceptance features
 
-Gherkin for task keep-mutation-manifests-on-an-2a5978d. Mutation manifests
-are a cache. They leave the tree and every PR, and live on the orphan branch
+Mutation manifests are a cache outside the tracked tree and every PR, on the
+orphan branch
 `swarmforge/metrics` (see [Sharing](../../../swarmforge/handoff-protocol.md#sharing)).
 The manifests are the clj-mutate files under `.metrics/mutate/` and the
 gherkin-mutator stamp and manifest
-block, which the wrapper now keeps in `.metrics/gherkin/<feature path>`
+block, which the wrapper keeps in `.metrics/gherkin/<feature path>`
 instead of the feature file.
 
 - `metrics_load.feature`: `sf start` copies the cache into the worktree.
@@ -18,7 +18,7 @@ the real `sf`, real git and a real `bb` in a scratch repository that holds a
 copy of `swarmforge/`. Real-mutator compatibility checks are in the
 [handoff protocol](../../../swarmforge/handoff-protocol.md#sharing).
 
-## Settled with the operator
+## Behavior
 
 - The cache is the branch `swarmforge/metrics`, an orphan with no common
   history with main. Its tree holds each manifest at its path under
@@ -28,20 +28,19 @@ copy of `swarmforge/`. Real-mutator compatibility checks are in the
 - Only clj-mutate and gherkin-mutator are covered. The footers of mutate4go
   and mutate4java stay in their source files, and Stryker keeps its files
   under `tmp/`.
-- Automatic only. `sf start` loads, `sf handoff` saves, and the wrapper moves
-  the block. There is no new sf subcommand.
-- The output of `sf start` and `sf handoff` does not change.
+- `sf start` loads, `sf handoff` saves, and the wrapper moves the block.
 - `install.sh` adds `.metrics/` to `.gitignore` once. sf does not check that
   git ignores `.metrics/`.
 - A load never overwrites a file already in the worktree. The newest save of
   a path wins. A file deleted from `.metrics/` stays in the cache. A refused
   handoff saves nothing.
 - A save moves the branch with `commit-tree` and a compare-and-swap
-  `update-ref`, so no worktree is touched.
+  `update-ref`, so no worktree is touched. If another save moves the branch
+  first, sf reads the new tip and retries once, then warns and saves nothing
+  if the retry fails.
 - sf does not push or fetch the cache. There is no squash command.
 - A manifest carries the hashes of its source, so a stale copy costs a
   re-run, never a wrong result.
-- One task: the cache branch, the install line and the block move.
 
 ## Not covered by these features
 
@@ -52,8 +51,7 @@ these by hand against the current protocol and role guidance.
   on `swarmforge/metrics`, not in tracked files. Do not commit `.metrics/` or
   a mutation block in a feature file. `sf start` loads them and `sf handoff`
   saves them. Differential mutation and "do not edit manifests by hand" stay.
-- `swarmforge/roles/hardener.md`: "Manifest edits still move forward with the
-  task" now means `sf handoff` saves them to the cache.
+- `swarmforge/roles/hardener.md`: `sf handoff` saves manifest edits to the cache.
 - `swarmforge/roles/hardener.md` and `cleaner.md`: when a split moves code to
   a new source file, keep the manifest state under `.metrics/` (for example,
   move the manifest file to the new path), and do not commit it.
@@ -62,10 +60,6 @@ these by hand against the current protocol and role guidance.
 - `swarmforge/README.md` names the cache branch.
 - clj-mutate's own README says to commit `.metrics/`. That does not apply
   here.
-
-A compare-and-swap that fails because a second handoff moved the branch at
-the same moment is not specified here. The coder picks a retry or a warning
-and records the choice as a Lore trailer.
 
 ## Placeholders
 

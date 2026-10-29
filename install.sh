@@ -17,7 +17,21 @@ copy_tree() {
   cp -R "$src/." "$dst/"
 }
 
-copy_tree "$HERE/swarmforge" "$target/swarmforge"
+mkdir -p "$target/swarmforge"
+cp "$HERE"/swarmforge/*.md "$HERE"/swarmforge/*.conf "$target/swarmforge/"
+for directory in bin constitution languages roles; do
+  copy_tree "$HERE/swarmforge/$directory" "$target/swarmforge/$directory"
+done
+for module in "$HERE"/swarmforge/tools/*; do
+  for directory in src resources; do
+    if [ -d "$module/$directory" ]; then
+      copy_tree "$module/$directory" "$target/swarmforge/tools/$(basename "$module")/$directory"
+    fi
+  done
+done
+for module in csharp javascript; do
+  cp "$HERE/swarmforge/tools/$module/bb.edn" "$target/swarmforge/tools/$module/bb.edn"
+done
 copy_tree "$HERE/.claude/skills" "$target/.claude/skills"
 copy_tree "$HERE/.agents/skills" "$target/.agents/skills"
 
