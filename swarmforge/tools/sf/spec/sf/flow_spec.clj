@@ -40,6 +40,22 @@
     (should-be-nil (flow/approval-refusal (assoc at-coder :needs "approval")))
     (should= "task is not waiting for approval" (flow/approval-refusal at-coder)))
 
+  (it "requires an operator approval to leave the specifier stage"
+    (doseq [record ["created" "review" "changes-requested" "answer"]]
+      (should= "specification requires operator approval; run sf review and sf approve"
+               (flow/handoff-refusal {:stage "specifier" :needs "none" :record record})))
+    (should-be-nil (flow/handoff-refusal {:stage "specifier" :needs "none"
+                                        :record "approval" :from "operator" :commit "c1"} "c1")))
+
+  (it "binds approval and handoff to the reviewed role commit"
+    (let [pending {:stage "specifier" :needs "approval"}
+          approved {:stage "specifier" :needs "none" :record "approval" :from "operator" :commit "c1"}]
+      (should-be-nil (flow/approval-refusal pending "c1" "c1"))
+      (should= "specification changed since review; run sf review again"
+               (flow/approval-refusal pending "c1" "c2"))
+      (should= "specification changed since approval; run sf review again"
+               (flow/handoff-refusal approved "c2"))))
+
   (it "refuses a route without the current stage, unless the task is done"
     (should-be-nil (flow/route-refusal at-coder "coder,qa"))
     (should-be-nil (flow/route-refusal {:stage "done"} "qa"))

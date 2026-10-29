@@ -80,6 +80,12 @@
   (must-in world (:repo world) "sf" "start" (id-of world name))
   world)
 
+(defn- handoff-to-done [world name]
+  (let [id (id-of world name)
+        stage (must-in world (:repo world) "sf" "stage" id)]
+    (when (not= "done" stage)
+      (must-in world (:repo world) "sf" "handoff" id "--to" "done"))))
+
 (defn- commit [world name message env]
   (run-in world (worktree world name) ["git" "commit" "-q" "--allow-empty" "-m" (unescape message)] env))
 
@@ -154,13 +160,13 @@
 
    [#"task \"(\w)\" was finished"
     (fn [world name]
-      (must-in world (:repo world) "sf" "handoff" (id-of world name) "--to" "done")
+      (handoff-to-done world name)
       (must-in world (:repo world) "sf" "finish" (id-of world name))
       world)]
 
    [#"task \"(\w)\" was handed off to done and squash-merged into main"
     (fn [world name]
-      (must-in world (:repo world) "sf" "handoff" (id-of world name) "--to" "done")
+      (handoff-to-done world name)
       (git world "merge" "--squash" (str "swarm/" (id-of world name)))
       (git world "commit" "-q" "-m" (str "Squash " name))
       world)]
@@ -231,6 +237,9 @@
    [#"the tip of the branch of task \"(\w)\" is named (T\d+)"
     (fn [world name tip-name]
       (assoc-in world [:names tip-name] (git world "rev-parse" "--short" (branch-ref world name))))]
+
+   [#"the command environment sets \"([^\"]+)\" to \"([^\"]*)\""
+    (fn [world name value] (assoc-in world [:env name] value))]
 
    ;; Given (I ran) and When (I run)
    [#"I (run|ran) \"([^\"]*)\"(?: in the worktree of task \"(\w)\")?(?: with the text \"(.*)\")?"
