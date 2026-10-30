@@ -4,7 +4,7 @@ Feature: sf task history
   prints TASK, TITLE, STATUS (open or finished), STAGE and ROUTE. Then both
   print a "---" line and these sections, separated by one blank line: the
   request (the task file below its title heading); the records, oldest first,
-  each a block of "key: value" lines as in handoff-protocol.md; and the LORE:
+  each a block of "key: value" lines; and the LORE:
   lines. In a value of several lines, each later line is indented by two
   spaces. The commit of a review or handoff record is the role's commit that
   the record was made on; files lists what changed since the commit of the
