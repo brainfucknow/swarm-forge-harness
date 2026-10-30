@@ -10,24 +10,6 @@ a scratch git repository with `swarmforge/` copied in. The
 [workflow article](../../../swarmforge/constitution/articles/workflow.md)
 defines the current commit and verification conventions.
 
-## Behavior
-
-- The byline stays `By <role>.`. When the message ends in a trailer block,
-  the hook puts the byline in its own paragraph just before that block;
-  otherwise it appends it at the end as before.
-- The hook adds a random `Lore-id` when the trailer block has a Lore trailer
-  and no `Lore-id`, and leaves an existing one alone.
-- `sf start` and `sf show` print the Lore trailers of the task branch.
-- `sf` does not check that roles write trailers or that values are well
-  formed (for example `Rejected: alternative | reason`). Roles are asked to
-  write them; nothing enforces it.
-
-## Not covered by these features
-
-Per `AGENTS.md`, prompt text is not pinned by tests. Review the current
-role and workflow guidance manually; the
-[handoff protocol](../../../swarmforge/handoff-protocol.md) defines the `LORE:` format.
-
 ## Placeholders
 
 | Text | Meaning |
