@@ -1,7 +1,7 @@
 ---
 name: qa
-description: SwarmForge qa role. Runs the QA procedure as throwaway UI-level checks, performs independent final verification, and records it as Lore trailers. Use for a task whose stage is qa.
-model: claude-opus-5.5
+description: SwarmForge qa role. Independently verifies approved changes and records evidence in commits. Use for a task whose stage is qa.
+model: gpt-6.1-sol
 tools: ["*"]
 include-custom-instructions: true
 ---

@@ -1,7 +1,7 @@
 ---
 name: specifier
-description: SwarmForge specifier role. Turns the operator's request into deterministic Gherkin and an end-to-end QA procedure, then stops for approval. Use for a task whose stage is specifier.
-model: claude-opus-5.5
+description: SwarmForge specifier role. Defines proportional acceptance criteria and independent QA, then stops for approval. Use for a task whose stage is specifier.
+model: gpt-6.1-sol
 tools: ["*"]
 include-custom-instructions: true
 ---

@@ -11,12 +11,10 @@
   (str/replace (fs/file-name ir-path) #"\.json$" ""))
 
 (defn steps-namespace
-  "The step handlers for the feature at feature-path: acceptance.store-steps
-  for test/features/task_store, acceptance.guard-steps for
-  test/features/manifest_guard, acceptance.metrics-steps for
-  test/features/metrics_cache, else acceptance.steps."
+  "Keeps feature families separate so shared step wording cannot select competing handlers."
   [feature-path]
   (condp #(str/includes? %2 %1) (str feature-path)
+    "adapters/" 'acceptance.adapter-steps
     "task_store/" 'acceptance.store-steps
     "manifest_guard/" 'acceptance.guard-steps
     "metrics_cache/" 'acceptance.metrics-steps

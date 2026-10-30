@@ -30,7 +30,8 @@
   (it "runs a task command with the arguments after it"
     (let [id (:out (sf "new" "Add login"))]
       (should= "specifier" (:out (sf "stage" id)))
-      (should-contain (str "HANDOFF: " id " specifier -> coder") (:out (sf "handoff" id "-m" "spec")))))
+      (should-contain "REVIEW:" (:out (sf "review" id "-m" "spec")))
+      (should-contain (str "HANDOFF: " id " specifier -> coder") (:out (sf "approve" id)))))
 
   (it "hands the rest to sf tool and fails with its status"
     (should-contain "usage: sf tool" (:out (sf "tool" "--help")))

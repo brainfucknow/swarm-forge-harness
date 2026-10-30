@@ -1,7 +1,7 @@
 ---
 name: hardener
-description: SwarmForge hardener role. Runs language and Gherkin mutation hardening plus the CRAP and DRY gates after the architect. Use for a task whose stage is hardener.
-model: claude-sonnet-5.5
+description: SwarmForge hardener role. Hardens applicable source and acceptance contracts with mutation and quality gates. Use for a task whose stage is hardener.
+model: gpt-6.1-terra
 tools: ["*"]
 include-custom-instructions: true
 ---

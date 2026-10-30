@@ -1,30 +1,23 @@
 # Task store acceptance features
 
-Gherkin for the task "Build the git-native task store", which built the
-local part of the design from the task "Spike: replace git-bug with
-Markdown task files and commit trailers". It takes `sf` off git-bug and
-keeps every task on its local branch: task files under `tasks/`, record
+Each task lives on a local branch: task files under `tasks/`, record
 commits with `SwarmForge-*` trailers, the `tasks/done/` archive, slug plus
 hash ids, and the hook's refusal of `SwarmForge-*` trailers on role
 commits. The test script here runs one check per scenario and example row,
 labelled with the scenario name (for example `sf task ids 3: ...`). Each
 check runs the real `sf` and real git in a scratch repository that holds a
-copy of `swarmforge/`. git-bug is never on PATH.
+copy of `swarmforge/`. The current contract is
+[the handoff protocol](../../../swarmforge/handoff-protocol.md).
 
-## Settled with the operator
+## Behavior
 
-- The spike's design and Gherkin were adopted as approved.
-- No `sf migrate`: the template had no users yet.
-- Sharing is not built: the push to `SWARMFORGE_REMOTE`, the check for
-  unseen remote records, remote-tracking task branches, the one considered
-  remote, and hex uniqueness against remote branches. Its draft Gherkin is
-  in `docs/spikes/git-task-store/features/`. Here, a task is a local
-  `swarm/<id>` branch only.
+- There is no `sf migrate` command.
+- Tasks are local `swarm/<id>` branches. Automatic remote synchronization
+  is unsupported.
 
-## Settled with the operator: sf finish resume
+## Finishing after a conflict
 
-For the task "Let sf finish resume after a merge conflict"
-(`finish_resume.feature`):
+`finish_resume.feature` covers these rules:
 
 - After a conflict the operator resolves and commits the merge, with any
   message, then runs `sf finish <id>` again. sf finish then removes the
@@ -35,12 +28,12 @@ For the task "Let sf finish resume after a merge conflict"
   finish does not commit it.
 - The conflict message is `sf: merge of swarm/<id> into <target> stopped on
   conflicts: <files>; resolve them, commit, then run: sf finish <id>`.
-- crap4clj run from the repository root is a separate task, "Run crap4clj
-  from the repository root".
 
 ## Not covered by these features
 
-Per `AGENTS.md`, prompt and document text is not pinned by tests.
+Per `AGENTS.md`, prompt and document text is not pinned by tests. QA reads
+it by hand against the protocol and role guidance. `sf --help` does not
+list `SWARMFORGE_GIT_BUG`, `migrate` or `SWARMFORGE_REMOTE`.
 
 ## Placeholders
 

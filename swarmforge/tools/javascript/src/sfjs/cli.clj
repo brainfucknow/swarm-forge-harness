@@ -160,10 +160,11 @@ manager comes from packageManager in package.json, else from the lockfile.
   [proj files root]
   (write-file oxlint/config-path (oxlint/config))
   (write-file oxlint/ignore-path "")
-  (let [{:keys [exit out]} (capture-tool proj (oxlint/args oxlint/config-path files))]
-    (when-not (oxlint/report out)
+  (let [{:keys [exit out]} (capture-tool proj (oxlint/args oxlint/config-path files))
+        parsed (oxlint/report out)]
+    (when-not parsed
       (binding [*out* *err*] (print out) (flush)))
-    (let [report (oxlint/read-report exit out)]
+    (let [report (oxlint/validate-report exit parsed)]
       (when-let [errors (seq (oxlint/analysis-errors report root))]
         (throw (outcome/usage-error (str/join "\n" errors))))
       report)))

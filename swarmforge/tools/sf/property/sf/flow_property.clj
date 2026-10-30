@@ -33,9 +33,21 @@
                        (= to (flow/next-stage s to)))))))
 
 (describe "refusals"
-  (it "refuse a handoff exactly when the task waits on the operator"
+  (it "refuse a handoff when waiting or lacking specification approval"
     (should (passes? (prop/for-all [s state]
-                       (= (flow/waiting? s) (some? (flow/handoff-refusal s)))))))
+                       (= (or (flow/waiting? s) (= "specifier" (:stage s)))
+                          (some? (flow/handoff-refusal s)))))))
+
+  (it "allow specification handoff only at the approved role commit"
+    (should (passes? (prop/for-all [n needs approved (gen/elements ["c1" "c2"]) head (gen/elements ["c1" "c2"])]
+                       (= (and (= "none" n) (= approved head))
+                          (nil? (flow/handoff-refusal {:stage "specifier" :needs n :record "approval"
+                                                      :from "operator" :commit approved} head)))))))
+
+  (it "approve only the reviewed role commit while waiting for approval"
+    (should (passes? (prop/for-all [s state reviewed (gen/elements [nil "c1" "c2"]) head (gen/elements ["c1" "c2"])]
+                       (= (and (= "approval" (:needs s)) (= reviewed head))
+                          (nil? (flow/approval-refusal s reviewed head)))))))
 
   (it "keep any route that holds the stage"
     (should (passes? (prop/for-all [s state]

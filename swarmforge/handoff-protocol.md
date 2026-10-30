@@ -92,8 +92,8 @@ answer: argon2id
 type: review
 from: specifier
 commit: 4e21d0c
-files: features/login.feature,qa/login.md
-summary: login spec and QA procedure
+files: features/login.feature
+summary: login acceptance contract; manual QA in the specification commit
 ```
 
 ```text
@@ -171,6 +171,9 @@ sf new ──► stage <first role>
   `none`. It records HEAD and moves the stage to the next role on the task's
   route, or to `done` after the last one. `--to <role>` jumps elsewhere; role
   prompts say when that is allowed.
+- The specifier leaves its stage only through `sf approve` after `sf review`.
+  Approval must match the reviewed role commit; a new specification commit
+  requires another review. Rejection or an answered question is not approval.
 - `sf route <id> <route>` changes an open task's route; the new route must
   contain the current stage. The change is recorded as `type: route`.
 - For a role flagged `audit` in `roles.conf`, the first `sf handoff` or
@@ -197,6 +200,14 @@ whose tree mirrors `.metrics/mutate/` and `.metrics/gherkin/`. `sf start`
 copies the cached files a worktree lacks, and `sf handoff` commits the new and
 changed ones without a checkout. sf does not push it: `git push origin
 swarmforge/metrics` shares the cache, and a fetch brings it back.
+
+When changing cache transport or mutator wrappers, check with real tools in
+scratch projects: clj-mutate reuses killed forms after handoff and a new task;
+gherkin-mutator reuses its manifest from both the worktree root and a feature
+subdirectory. On success and failure, keep the feature as committed, retain
+the block under `.metrics/gherkin/`, and preserve the tool's exit status.
+After handoff, verify the cached files load in a new task or a clone that
+fetches `swarmforge/metrics`. Do not commit manifests or test output.
 
 ## Audit
 

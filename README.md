@@ -6,21 +6,10 @@ There is no tmux, no daemon, and no web dashboard. Roles talk to each other
 through task branches in the project repository, and they talk to you in
 chat.
 
-## What changed from SwarmForge
-
-| SwarmForge | This harness |
-|---|---|
-| One tmux session per role, each a long-running CLI. | Roles are harness subagents. The session only orchestrates. |
-| Handoff daemon, inbox and outbox files, `roles.tsv`. | A branch per task, `swarm/<id>`: a task file, and record commits whose trailers hold the stage. |
-| Dashboard approval gate (Attention). | The specifier commits, runs `sf review`, and stops. You approve or reject in chat. |
-| Dashboard clarifications. | A role runs `sf ask`, stops, and the question reaches you in chat. `sf answer` resumes it. |
-| Per-role worktrees with back-propagation merges. | One worktree per task; roles work in sequence on the same branch, so nothing propagates backwards. |
-| `grok`, `codex`, `claude`, `copilot` backends chosen per role. | Model tiers per role: `frontier` (the session's model) for the specifier, `strong` (Opus) and `fast` (Sonnet) for the rest. |
-
 ## Prerequisites
 
 - `git`, and `bash` for `install.sh`, the commit-msg hook, and the tool wrappers
-- [Babashka](https://babashka.org) (`bb`) for `sf`, the C# and JavaScript tool
+- [Babashka](https://babashka.org) (`bb`) for `sf`, the C#, F# and JavaScript tool
   wrappers, and the Clojure constitution tools
 - One of Claude Code, Codex CLI, or Copilot CLI
 
@@ -32,9 +21,12 @@ cd your-project
 ../swarm-forge-harness/install.sh
 ```
 
-The installer copies `swarmforge/` and the `swarm` skill into the project,
-adds one line to `AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md`,
-generates the agent files, and installs the commit-msg hook. Commit the result.
+The installer copies the SwarmForge runtime, guidance, and `swarm` skill into
+the project, adds instructions to `AGENTS.md`, `CLAUDE.md`, and
+`.github/copilot-instructions.md`, generates the agents, and installs the
+commit-msg hook. Commit the result.
+Development assets stay in this source checkout; reinstalling does not prune
+existing project files.
 
 Then set the project language in `swarmforge/constitution/articles/project.md`.
 
@@ -46,14 +38,15 @@ Open the project in your harness and ask:
 /swarm Users can log in with email and password; lock the account after five failures.
 ```
 
-The session becomes the orchestrator:
+For the default `feature` route, the session becomes the orchestrator:
 
 1. The orchestrator picks a route for the request from `swarmforge/routes.conf`
    (`feature`, `bugfix`, `refactor`, `harden`, `spike`, or any subset of the
    roles in order) and `sf new --route` creates the task and its branch with
-   that route on it. The `specifier` subagent, on your
-   session's model, writes Gherkin and a QA procedure in `.worktrees/<id>`,
-   commits, runs `sf review`, and returns. If the request is ambiguous it runs
+   that route on it. The `specifier` subagent commits concise criteria and QA,
+   using durable Gherkin files when they provide a useful executable contract
+   in `.worktrees/<id>`,
+   runs `sf review`, and returns. If the request is ambiguous it runs
    `sf ask` with its questions first and returns; you answer in chat.
 2. The orchestrator shows you the committed spec and the route. You say
    approve, ask for changes, or change the route (`sf route <id> ...`).
@@ -77,7 +70,7 @@ move it).
 |---|---|---|---|
 | Claude Code | `/swarm` from `.claude/skills/swarm/` | `.claude/agents/<role>.md` | `model: opus` or `sonnet` |
 | Codex CLI | `$swarm` from `.agents/skills/swarm/` | `.codex/agents/<role>.toml` | `model_reasoning_effort` high / medium / low |
-| Copilot CLI | `/swarm` from `.agents/skills/swarm/` | `.github/agents/<role>.agent.md` | `model: claude-opus-5.5` or `claude-sonnet-5.5` |
+| Copilot CLI | `/swarm` from `.agents/skills/swarm/` | `.github/agents/<role>.agent.md` | `model: gpt-6.1-sol` or `gpt-6.1-terra` |
 
 The agent files are generated from `swarmforge/roles.conf` and
 `swarmforge/tiers.conf` by `swarmforge/bin/sf adapters`. Each one is a thin
@@ -113,77 +106,35 @@ The catalogue:
 
 | Role | Tier | Runs as |
 |---|---|---|
-| specifier | frontier | subagent (your session's model) |
+| specifier | frontier | subagent |
 | coder | strong | subagent |
 | cleaner | fast | subagent |
 | architect | strong | subagent |
 | hardener | fast | subagent |
 | qa | strong | subagent |
 
-`swarmforge/tiers.conf` maps `strong` to Opus and `fast` to Sonnet for Claude
-Code and Copilot, and to reasoning effort for Codex. Edit either file and run
-`sf adapters`. Setting a role to `session` instead of `subagent` makes the
+`swarmforge/tiers.conf` keeps Claude's frontier on the session model and maps
+`strong`/`fast` to Opus/Sonnet; Codex uses reasoning effort. Copilot defaults
+to GPT-6.1 Sol for `frontier`/`strong` and GPT-6.1 Terra for `fast`.
+Regenerate agents with `sf adapters` after editing roles or tiers.
+Setting a role to `session` instead of `subagent` makes the
 orchestrator play it in chat, which suits co-writing a specification turn by
 turn at the cost of a fuller session context. Adding `audit` to a role's line
 makes its first `sf handoff` at any commit come back with a self-review
 checklist instead of a record; the second attempt at the same commit records
 it. It is off by default.
 
-## Languages
+## Reference
 
-The constitution's tool table covers Go, Clojure, Java, C#, and
-JavaScript/TypeScript. For C#,
-`swarmforge/bin/sf-cs` wraps the tools so each role runs one command:
-
-| Command | Tool |
-|---|---|
-| `sf-cs test`, `sf-cs property` | `dotnet test`, split by the `Property` trait |
-| `sf-cs coverage` | coverlet Cobertura under `tmp/coverage/` |
-| `sf-cs crap` | CRAP per changed method from coverlet's complexity and coverage |
-| `sf-cs dry` | jscpd clones touching changed lines |
-| `sf-cs mutate` | Stryker.NET on changed files, survivors listed |
-
-Each exits 0 when clean, 1 on a finding, 2 on a usage error. See
-`swarmforge/languages/csharp.md` for the output formats. The report readers are
-Babashka, like the rest of the SwarmForge family; jscpd itself still runs on
-Node.
-
-For JavaScript and TypeScript, `swarmforge/bin/sf-js` offers the same commands
-with the same exit codes: `sf-js test` and `sf-js property` (Vitest or Jest,
-with `tsc --noEmit` first when there is a `tsconfig.json`, property tests named
-`*.property.test.*`), `sf-js coverage` (Istanbul JSON), `sf-js crap` (oxlint
-or ESLint complexity joined with coverage), `sf-js dry` (jscpd), and `sf-js mutate`
-(StrykerJS on changed files, incremental). It runs project tools through the
-package manager that `packageManager` or the lockfile names. See
-`swarmforge/languages/javascript.md`.
-
-## Layout
-
-```text
-install.sh                       copy SwarmForge into a project
-swarmforge/
-  bin/sf  tools/sf/              task helper over git branches (Babashka)
-  bin/sf-tool  tools.conf        constitution tool installer and catalogue (sf tool ...)
-  bin/sf-cs  tools/csharp/       C# tool wrapper and its report readers (Babashka)
-  languages/csharp.md            what each sf-cs command runs and prints
-  bin/sf-js  tools/javascript/   JavaScript/TypeScript tool wrapper, its features and acceptance runtime
-  languages/javascript.md        what each sf-js command runs and prints
-  tools/core/                    changed-line, CRAP, jscpd and Stryker readers shared by the tool wrappers
-  roles.conf  routes.conf  tiers.conf   catalogue, routes, models
-  constitution.md  constitution/articles/
-  roles/                         specifier, coder, cleaner, architect, hardener, qa, orchestrator
-  handoff-protocol.md            task branch, records, lifecycle
-.claude/agents  .codex/agents  .github/agents     generated role agents
-.claude/skills/swarm  .agents/skills/swarm        the /swarm entry point
-swarmforge/tools/sf/spec/        Speclj unit specs for sf
-swarmforge/tools/sf/property/    test.check property tests for sf (run on their own)
-test/sf_test.sh                  behavioral tests for sf
-test/features/                   Gherkin acceptance features
-test/acceptance.sh  test/acceptance/   acceptance pipeline: generator, runtime, step handlers
-tasks/                           task files of open tasks; tasks/done/ for finished ones
-```
+- [Installed guide](swarmforge/README.md): commands and configuration.
+- [Handoff protocol](swarmforge/handoff-protocol.md): task branches and records.
+- Language tools: [Clojure](swarmforge/languages/clojure.md),
+  [C#](swarmforge/languages/csharp.md), [F#](swarmforge/languages/fsharp.md),
+  [JavaScript/TypeScript](swarmforge/languages/javascript.md).
 
 ## Tests
+
+Run these from the source checkout; fresh consumer installs omit harness tests and fixtures.
 
 ```sh
 bash test/sf_test.sh
@@ -198,14 +149,5 @@ bb --config swarmforge/tools/javascript/bb.edn property
 bb --config swarmforge/tools/javascript/bb.edn acceptance
 ```
 
-The first drives `sf` and real git in a scratch repository, the
-second drives `sf tool` against a local tool source and a fake `bb`, the third
-runs the Speclj unit specs of `sf`, the fourth runs its test.check property
-tests (kept out of the unit specs), the fifth installs `gherkin-parser`,
-the sixth runs the Gherkin features in `test/features/` through
-`gherkin-parser` and the generated acceptance tests, the seventh drives `sf-cs`
-against fixture reports and a fake `dotnet`, together with the shared
-`tools/core/` readers, and the last three test `sf-js`: unit tests against
-fixture reports (with dependency rules for `tools/`), test.check properties of
-`sf-js` and the shared core, then its Gherkin features through the Acceptance
-Pipeline with fake Node tools on PATH. None pins prompt wording.
+These suites exercise the CLI with scratch Git repositories and test the
+language wrappers against fixture reports and fake external tools.

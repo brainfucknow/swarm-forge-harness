@@ -156,7 +156,9 @@
         status (binding [shell/*dir* *repo* *out* out *err* err]
                  (with-redefs [shell/run (fake-run env)
                                shell/available? (complement missing)]
-                   (try (cli/main (vec args))
+                   (try (if (= "fsharp" (get env "LANGUAGE"))
+                          (cli/main :fsharp (vec args))
+                          (cli/main (vec args)))
                         (catch Exception e
                           (binding [*out* err] (println (str "sf-cs: " (ex-message e))))
                           2))))]
@@ -165,7 +167,7 @@
 (defn- sfcs-process [env & args]
   (let [result (apply p/shell {:dir *repo* :out :string :err :string :continue true
                                :extra-env (merge {"PATH" (str *bin* fs/path-separator (System/getenv "PATH"))} env)}
-                      "bash" (str (fs/path here ".." ".." "bin" "sf-cs")) args)]
+                      "bash" (str (fs/path here ".." ".." "bin" (if (= "fsharp" (get env "LANGUAGE")) "sf-fs" "sf-cs"))) args)]
     {:status (:exit result) :lines (vec (str/split-lines (str/trimr (:out result)))) :err (:err result)}))
 
 (defn- seed-repo [f]
@@ -175,6 +177,7 @@
     (spit (str (fs/path bin "dotnet"))
           (str "#!/usr/bin/env bash\n"
                "[ -n \"$FAKE_DOTNET_LOG\" ] && printf '%s\\n' \"$@\" > \"$FAKE_DOTNET_LOG\"\n"
+               "if [ \"$1 $2\" = \"$FAKE_FAIL_STEP\" ]; then exit 7; fi\n"
                "if [ \"$1\" = test ] && [ -n \"$FAKE_COVERAGE\" ]; then mkdir -p tmp/coverage/run && cp \"$FAKE_COVERAGE\" tmp/coverage/run/coverage.cobertura.xml; fi\n"
                "if [ \"$1\" = stryker ] && [ -n \"$FAKE_REPORT\" ]; then mkdir -p tmp/stryker/reports && cp \"$FAKE_REPORT\" tmp/stryker/reports/mutation-report.json; fi\n"
                "if [ \"$1\" = new ]; then mkdir -p .config && echo '{\"tools\":{}}' > .config/dotnet-tools.json; fi\n"
@@ -376,3 +379,132 @@
   (let [{:keys [status lines]} (sfcs {} "test" "--help")]
     (is (= 0 status))
     (is (str/starts-with? (first lines) "usage: sf-cs"))))
+
+(deftest tools-stop-at-the-first-failed-step
+  (doseq [[step manifest calls] [["new tool-manifest" nil 1]
+                               ["tool install" "{\"tools\":{}}" 1]
+                               ["tool restore" "{\"tools\":{\"dotnet-stryker\":{}}}" 1]]]
+    (fs/delete-tree (fs/path *repo* ".config"))
+    (when manifest
+      (fs/create-dirs (fs/path *repo* ".config"))
+      (spit (str (fs/path *repo* ".config" "dotnet-tools.json")) manifest))
+    (let [{:keys [status lines err]} (sfcs {"FAKE_FAIL_STEP" step} "tools")]
+      (is (= 2 status) step)
+      (is (= calls (count lines)) step)
+      (is (str/includes? err "exited 7") err)))
+  (fs/delete-tree (fs/path *repo* ".config")))
+
+(deftest fresh-report-required-after-running-a-tool
+  (doseq [[command report] [["dry" "tmp/jscpd/jscpd-report.json"]
+                            ["mutate" "tmp/stryker/reports/mutation-report.json"]]
+          exit ["0" "5"]]
+    (let [path (fs/path *repo* report)]
+      (fs/create-dirs (fs/parent path))
+      (spit (str path) (if (= command "dry") "{\"duplicates\":[]}" "{\"files\":{}}"))
+      (let [{:keys [status lines err]} (sfcs {"FAKE_EXIT" exit} command "--all")]
+        (is (= (if (= "0" exit) 2 5) status) (str command " exit " exit))
+        (is (not (fs/exists? path)))
+        (is (= 1 (count lines)))
+        (when (= "0" exit) (is (str/includes? err "not found")))))))
+
+(defn- sffs [env & args]
+  (apply sfcs (assoc env "LANGUAGE" "fsharp") args))
+
+(deftest help-describes-the-language-capabilities
+  (let [{:keys [status lines]} (sfcs {} "help")
+        help (str/join "\n" lines)]
+    (is (= 0 status))
+    (is (str/includes? help "install dotnet-stryker locally"))
+    (is (str/includes? help "Stryker on changed files")))
+  (let [{:keys [status lines]} (sffs {} "help")
+        help (str/join "\n" lines)]
+    (is (= 0 status))
+    (is (str/includes? help "check dotnet, node, npx and prepare jscpd"))
+    (is (str/includes? help "unsupported for F#; exit 2"))))
+
+(deftest fsharp-tool-boundary
+  (let [{:keys [status lines err]} (sffs {} "tools")]
+    (is (= 0 status) err)
+    (is (= ["$ npx --yes jscpd@4 --version"] lines)))
+  (is (= 2 (:status (sffs {"MISSING" "dotnet"} "tools"))))
+  (let [{:keys [status lines err]} (sffs {} "mutate" "--all" "--report-only")]
+    (is (= 2 status))
+    (is (every? str/blank? lines))
+    (is (str/includes? err "F# mutation is unsupported"))))
+
+(deftest fsharp-test-selection-and-failure
+  (let [log (str (fs/path *repo* "fsharp-dotnet.log"))]
+    (doseq [[command category] [["test" "Category!=Property"] ["property" "Category=Property"]]]
+      (is (= 7 (:status (sffs {"FAKE_DOTNET_LOG" log "FAKE_EXIT" "7"} command "--no-build"))))
+      (is (= ["test" "--filter" category "--no-build"] (str/split-lines (slurp log)))))))
+
+(deftest fsharp-compiled-methods-use-report-spans
+  (let [dir (fs/path *repo* "fsharp-coverage")
+        report (fs/path dir "coverage.cobertura.xml")
+        xml (cobertura-xml [] "Bank/Account.fs")]
+    (fs/create-dirs dir)
+    (spit (str (fs/path *repo* "Bank" "Account.fs")) "module Bank.Account\nlet calculate value =\n    value + 1\n")
+    (spit (str report) xml)
+    (let [{:keys [status lines err]} (sffs {} "crap" "--base" "main" "--report" (str dir))]
+      (is (= 0 status) err)
+      (is (str/includes? (first lines) "Bank/Account.fs:3 B.M")))
+    (spit (str report) (str/replace xml "</classes>"
+                                   "<class name=\"Other\" filename=\"Other.cs\"><methods><method name=\"Ignored\"/></methods></class></classes>"))
+    (is (= 0 (:status (sffs {} "crap" "--all" "--report" (str dir)))))
+    (spit (str report) (str/replace xml "complexity=\"2\"" "complexity=\"0\""))
+    (is (= 0 (:status (sffs {} "crap" "--all" "--report" (str dir)))))
+    (doseq [invalid [(str/replace xml " complexity=\"2\"" "")
+                     (str/replace xml " line-rate=\"1\"" "")
+                     (str/replace xml "number=\"3\"" "number=\"0\"")
+                     (str/replace xml "<line number=\"3\" hits=\"1\"/>"
+                                  "<line number=\"3\" hits=\"1\"/><line number=\"0\" hits=\"0\"/>")
+                     (str/replace xml "<line number=\"3\" hits=\"1\"/>" "")
+                     (str/replace xml "line-rate=\"1\"" "line-rate=\"2\"")
+                     (str/replace xml "complexity=\"2\"" "complexity=\"NaN\"")
+                     (cobertura-xml [] "Bank/Account.cs")]]
+      (spit (str report) invalid)
+      (is (= 2 (:status (sffs {} "crap" "--all" "--report" (str dir)))) invalid))
+    (spit (str report) (-> xml (str/replace "complexity=\"2\"" "complexity=\"4\"")
+                           (str/replace "line-rate=\"1\"" "line-rate=\"0.25\"")))
+    (is (= 1 (:status (sffs {} "crap" "--all" "--report" (str dir)))))))
+
+(deftest fsharp-dry-format-and-freshness
+  (let [report (str (fs/path fixtures "jscpd-report.json"))
+        path (fs/path *repo* "tmp" "jscpd" "jscpd-report.json")]
+    (let [{:keys [status lines]} (sffs {"FAKE_JSCPD_REPORT" report} "dry" "--all")]
+      (is (= 1 status))
+      (is (str/includes? (first lines) "--format fsharp")))
+    (is (= 1 (:status (sffs {} "dry" "--all" "--report-only"))))
+    (is (= 5 (:status (sffs {"FAKE_EXIT" "5"} "dry" "--all"))))
+    (is (not (fs/exists? path)))))
+
+(deftest fsharp-scope-does-not-expand-into-signatures
+  (let [file (fs/path *repo* "Bank" "Unchanged.fs")
+        dir (fs/path *repo* "fsharp-scope")
+        source "module Bank.Unchanged\nlet calculate value =\n    value + 1\n"]
+    (spit (str file) source)
+    (git "add" "Bank/Unchanged.fs")
+    (git "commit" "--quiet" "-m" "compiled method baseline")
+    (let [base (str/trim (:out (git "rev-parse" "HEAD")))]
+      (spit (str file) (str/replace source "value =" "value = // signature-only edit"))
+      (fs/create-dirs dir)
+      (spit (str (fs/path dir "coverage.cobertura.xml")) (cobertura-xml [] "Bank/Unchanged.fs"))
+      (let [{:keys [status lines err]} (sffs {} "crap" "--base" base "--report" (str dir))]
+        (is (= 0 status) err)
+        (is (= ["0 changed method(s), 0 over CRAP 10"] lines))))))
+
+(deftest fsharp-coverage-requires-fresh-output
+  (let [path (fs/path *repo* "tmp" "coverage" "stale" "coverage.cobertura.xml")]
+    (fs/create-dirs (fs/parent path))
+    (spit (str path) (cobertura-xml [] "Bank/Account.fs"))
+    (is (= 7 (:status (sffs {"FAKE_EXIT" "7"} "coverage"))))
+    (is (not (fs/exists? path)))
+    (is (= 2 (:status (sffs {} "coverage"))))
+    (is (= 0 (:status (sffs {"FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))}
+                          "coverage"))))))
+
+(deftest fsharp-wrapper-dispatches-its-profile
+  (let [{:keys [status lines]} (sfcs-process {"LANGUAGE" "fsharp"} "help")]
+    (is (= 0 status))
+    (is (str/starts-with? (first lines) "usage: sf-fs")))
+  (is (= 2 (:status (sfcs-process {"LANGUAGE" "fsharp"} "nope")))))
