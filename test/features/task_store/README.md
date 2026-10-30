@@ -9,12 +9,6 @@ check runs the real `sf` and real git in a scratch repository that holds a
 copy of `swarmforge/`. The current contract is
 [the handoff protocol](../../../swarmforge/handoff-protocol.md).
 
-## Behavior
-
-- There is no `sf migrate` command.
-- Tasks are local `swarm/<id>` branches. Automatic remote synchronization
-  is unsupported.
-
 ## Finishing after a conflict
 
 `finish_resume.feature` covers these rules:
@@ -28,12 +22,6 @@ copy of `swarmforge/`. The current contract is
   finish does not commit it.
 - The conflict message is `sf: merge of swarm/<id> into <target> stopped on
   conflicts: <files>; resolve them, commit, then run: sf finish <id>`.
-
-## Not covered by these features
-
-Per `AGENTS.md`, prompt and document text is not pinned by tests. QA reads
-it by hand against the protocol and role guidance. `sf --help` does not
-list `SWARMFORGE_GIT_BUG`, `migrate` or `SWARMFORGE_REMOTE`.
 
 ## Placeholders
 

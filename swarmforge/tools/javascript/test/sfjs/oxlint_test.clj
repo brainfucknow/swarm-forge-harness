@@ -62,24 +62,27 @@
   (is (nil? (oxlint/report "Failed to parse oxlint configuration file.")))
   (is (nil? (oxlint/report ""))))
 
+(defn- validated [status text]
+  (oxlint/validate-report status (oxlint/report text)))
+
 (deftest reading-the-report
   (testing "the JSON oxlint prints on stdout"
     (is (= {"diagnostics" [] "number_of_rules" 1}
-           (oxlint/read-report 0 (json/generate-string {"diagnostics" [] "number_of_rules" 1}))))
-    (is (= [] (get (oxlint/read-report 1 "{\"diagnostics\": [], \"number_of_rules\": 1}") "diagnostics"))
+           (validated 0 (json/generate-string {"diagnostics" [] "number_of_rules" 1}))))
+    (is (= [] (get (validated 1 "{\"diagnostics\": [], \"number_of_rules\": 1}") "diagnostics"))
         "an exit status other than 0 still gives the report"))
   (testing "no report"
     (is (= "oxlint exited 1 without a report; sf-js needs oxlint 1.62.0 or later"
-           (message-of #(oxlint/read-report 1 "Failed to parse oxlint configuration file.\n"))))
+           (message-of #(validated 1 "Failed to parse oxlint configuration file.\n"))))
     (is (= "oxlint exited 127 without a report; sf-js needs oxlint 1.62.0 or later"
-           (message-of #(oxlint/read-report 127 ""))))
+           (message-of #(validated 127 ""))))
     (is (= "oxlint exited 0 without a report; sf-js needs oxlint 1.62.0 or later"
-           (message-of #(oxlint/read-report 0 "[1, 2]")))))
+           (message-of #(validated 0 "[1, 2]")))))
   (testing "a report from an oxlint without the complexity rule"
     (is (= "oxlint ran no complexity rule; sf-js needs oxlint 1.62.0 or later"
-           (message-of #(oxlint/read-report 0 "{\"diagnostics\": [], \"number_of_rules\": 0}"))))
+           (message-of #(validated 0 "{\"diagnostics\": [], \"number_of_rules\": 0}"))))
     (is (= "oxlint ran no complexity rule; sf-js needs oxlint 1.62.0 or later"
-           (message-of #(oxlint/read-report 0 "{\"diagnostics\": []}"))))))
+           (message-of #(validated 0 "{\"diagnostics\": []}"))))))
 
 (defn- source [& lines]
   (apply str (map #(str % "\n") lines)))

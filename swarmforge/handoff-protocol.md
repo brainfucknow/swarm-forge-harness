@@ -201,14 +201,6 @@ copies the cached files a worktree lacks, and `sf handoff` commits the new and
 changed ones without a checkout. sf does not push it: `git push origin
 swarmforge/metrics` shares the cache, and a fetch brings it back.
 
-When changing cache transport or mutator wrappers, check with real tools in
-scratch projects: clj-mutate reuses killed forms after handoff and a new task;
-gherkin-mutator reuses its manifest from both the worktree root and a feature
-subdirectory. On success and failure, keep the feature as committed, retain
-the block under `.metrics/gherkin/`, and preserve the tool's exit status.
-After handoff, verify the cached files load in a new task or a clone that
-fetches `swarmforge/metrics`. Do not commit manifests or test output.
-
 ## Audit
 
 `sf show <id>` prints the complete history: request, every question and
