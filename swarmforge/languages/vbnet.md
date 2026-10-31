@@ -20,12 +20,12 @@ since the merge base with `--base` (default: `SWARMFORGE_BASE`, `main`, then
 `master`). `--all` examines every reported method or clone.
 
 CRAP scores what the compiler emitted, not source procedures. It uses the
-reported compiled-method span without C# signature expansion, so editing only a
-`Function` or `Sub` declaration line does not select the method. Lambdas,
-`Async` methods and `Iterator` methods compile into separate generated methods
-and state machines, so one source procedure can appear as several rows, or under
-a generated name. Use the CRAP `cc` column as a complexity hint when reviewing
-module boundaries.
+reported compiled-method span without C# signature expansion; VB marks the
+`Function` or `Sub` line as coverable, so that span starts at the declaration.
+`Async` and `Iterator` methods compile into state machines, scored as
+`VB$StateMachine_*.MoveNext` rows. Coverlet reports no methods for VB lambda
+closures, so a lambda's branches count toward no row. Use the CRAP `cc` column
+as a complexity hint when reviewing module boundaries.
 
 jscpd's `visual-basic` grammar reads VB.NET syntax; its older `vbnet` grammar
 treats text after `!` as a comment and is not used.

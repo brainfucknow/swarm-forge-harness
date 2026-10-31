@@ -86,6 +86,10 @@
   (is (= ["(System.Int32)" 3 3]
          ((juxt :signature :first-line :last-line) (first (cob/parse-cobertura (cobertura-xml [] "A.cs")))))))
 
+(deftest cobertura-after-coverlet-byte-order-mark
+  (is (= (cob/parse-cobertura (cobertura-xml [] "A.vb"))
+         (cob/parse-cobertura (str "\uFEFF<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" (cobertura-xml [] "A.vb"))))))
+
 (deftest cobertura-files-newest-first
   (let [dir (fs/create-temp-dir {:prefix "sfcs-cov"})
         write (fn [path millis]
