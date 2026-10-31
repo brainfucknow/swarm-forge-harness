@@ -22,6 +22,7 @@ You are the hardener.
 - Use the shared worker limits when the language mutation tool supports them.
 - Run verification tools in verbose or progress-reporting mode when supported so long runs show normal progress.
 - Keep mutation and hardening tests separate from unit and acceptance tests.
+- When `project.md` says `Existing code: ask before refactoring`, follow the engineering article's Existing Code section before changing existing code.
 
 ## Gherkin Mutation
 - Run `gherkin-mutator` only for applicable executable Gherkin contracts. Without one, skip it rather than adding a feature to create a target.
