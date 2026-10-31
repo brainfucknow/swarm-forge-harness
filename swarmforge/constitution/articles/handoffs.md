@@ -8,7 +8,7 @@ records; `swarmforge/handoff-protocol.md` describes the task branch.
 
 ## Receiving Work
 - `sf next <role>` prints the ids of tasks waiting at `stage:<role>`, or `NO_TASK`. If it prints `NO_TASK`, stop; there is nothing for your role.
-- `sf start <id>` prints the task: title, stage, branch, `DIR:`, the request body, every record so far, and then one `LORE:` line per Lore trailer on the task branch's commits. The latest `type: handoff` record is the work you received, and its `files:` header names what that role changed; the `answer` records settle earlier questions; the `LORE:` lines carry the earlier roles' constraints, rejected alternatives, directives, and verification. Read them with the request and the records, and follow a `Directive:`. Use only that printed information as the task.
+- `sf start <id>` prints the task: title, stage, branch, `DIR:`, the request body, the last 10 records, and then one `LORE:` line per Lore decision trailer on the task branch's commits, leaving out evidence trailers and superseded commits. The latest `type: handoff` record is the work you received, and its `files:` header names what that role changed; the `answer` records settle earlier questions; the `LORE:` lines carry the earlier roles' constraints, rejected alternatives, and directives that still apply. Read them with the request and the records, and follow a `Directive:`. Use only that printed information as the task. A `RECORDS:` or `LORE-OMITTED:` line says what was left out; `sf show <id>` prints the whole history whenever you need it.
 - Work in the printed `DIR:`. The branch already carries every earlier role's commits.
 - If you were given a task id in your prompt, start that task. Do not take another.
 

@@ -5,7 +5,8 @@ Feature: sf task history
   print a "---" line and these sections, separated by one blank line: the
   request (the task file below its title heading); the records, oldest first,
   each a block of "key: value" lines; and the LORE:
-  lines. In a value of several lines, each later line is indented by two
+  lines. sf start bounds the records and leaves out some LORE: lines, as
+  start_brief.feature specifies; sf show prints them all. In a value of several lines, each later line is indented by two
   spaces. The commit of a review or handoff record is the role's commit that
   the record was made on; files lists what changed since the commit of the
   previous created, review or handoff record, or "-".
@@ -36,12 +37,12 @@ Feature: sf task history
     When I run "sf <command> $A"
     Then the exit status is 0
     And the output has the lines "<header>" before the line "---"
-    And the output after the line "---" is "Users log in.\nWith email.\n\ntype: created\nfrom: operator\nbranch: swarm/$A\ncommit: $A:created\nroute: specifier,coder\n\ntype: question\nfrom: specifier\nquestion: Which hash?\n\ntype: answer\nfrom: operator\nanswer: argon2id\n\ntype: review\nfrom: specifier\ncommit: C1\nfiles: features/a.feature\nsummary: spec ready\n\nLORE: C1 specifier Lore-id: L1\nLORE: C1 specifier Constraint: keep it short"
+    And the output after the line "---" is "Users log in.\nWith email.\n\ntype: created\nfrom: operator\nbranch: swarm/$A\ncommit: $A:created\nroute: specifier,coder\n\ntype: question\nfrom: specifier\nquestion: Which hash?\n\ntype: answer\nfrom: operator\nanswer: argon2id\n\ntype: review\nfrom: specifier\ncommit: C1\nfiles: features/a.feature\nsummary: spec ready\n\n<lore>\nLORE: C1 specifier Constraint: keep it short"
 
     Examples:
-      | command | header                                                                                                  |
-      | start   | TASK: $A\nTITLE: Add login\nSTAGE: specifier\nROUTE: specifier,coder\nBRANCH: swarm/$A\nDIR: ROOT/.worktrees/$A |
-      | show    | TASK: $A\nTITLE: Add login\nSTATUS: open\nSTAGE: specifier\nROUTE: specifier,coder                          |
+      | command | header                                                                                                          | lore                                                                 |
+      | start   | TASK: $A\nTITLE: Add login\nSTAGE: specifier\nROUTE: specifier,coder\nBRANCH: swarm/$A\nDIR: ROOT/.worktrees/$A | LORE-OMITTED: 1 superseded or evidence lines; sf show $A prints them |
+      | show    | TASK: $A\nTITLE: Add login\nSTATUS: open\nSTAGE: specifier\nROUTE: specifier,coder                              | LORE: C1 specifier Lore-id: L1                                       |
 
   # sf task history 2
   Scenario: sf task history 2: a value of several lines goes on indented lines
