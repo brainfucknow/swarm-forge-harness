@@ -296,6 +296,17 @@
       (should-not (fs/exists? dir))
       (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
 
+  (it "stops with git's error when the merge candidate cannot be built, and changes nothing"
+    (let [id (done-task)
+          unrelated (git *dir* "commit-tree" "4b825dc642cb6eb9a060e54bf8d69288fbee4904" "-m" "Unrelated")
+          _ (git *dir* "branch" "unrelated" unrelated)
+          before (snapshot id)
+          {:keys [status err]} (captured #(task/finish [id "--into" "unrelated"]))]
+      (should= 128 status)
+      (should-contain "unrelated histories" err)
+      (should= before (snapshot id))
+      (should= "" (git (worktree id) "status" "--porcelain"))))
+
   (it "finishes a task that has no worktree"
     (let [id (new-id "Quick" "--route" "coder")]
       (task/handoff [id "--to" "done"] {:audit-passed? true})
