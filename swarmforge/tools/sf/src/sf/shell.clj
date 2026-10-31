@@ -74,13 +74,19 @@
   []
   (chomp (must {} "git" "rev-parse" "--show-toplevel")))
 
+(defn conf-lines
+  "The trimmed lines of the text of a swarmforge/*.conf file, in order,
+  without blank lines and lines whose first non-blank character is #."
+  [text]
+  (->> (str/split-lines (or text ""))
+       (map str/trim)
+       (remove #(or (str/blank? %) (str/starts-with? % "#")))))
+
 (defn conf-rows
   "The whitespace-separated fields of each line, without blank and comment lines."
   [file]
   (when (fs/exists? file)
-    (->> (str/split-lines (slurp (str file)))
-         (remove #(re-find #"^\s*(#|$)" %))
-         (map #(str/split (str/trim %) #"\s+")))))
+    (map #(str/split % #"\s+") (conf-lines (slurp (str file))))))
 
 (defn template [name]
   (slurp (io/resource (str "sf/" name))))

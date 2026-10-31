@@ -2,17 +2,13 @@
   "The project's verification: the commands in swarmforge/verify.conf of a
   checkout, each run with bash -c from the root of that checkout."
   (:require [babashka.fs :as fs]
-            [clojure.string :as str]
             [sf.shell :as shell]))
 
 (defn commands
-  "The commands in the text of verify.conf, one per line, in file order,
-  without blank lines and lines whose first non-blank character is #."
+  "The commands in the text of verify.conf: its lines as every
+  swarmforge/*.conf file has them, one command per line."
   [text]
-  (->> (str/split-lines (or text ""))
-       (map str/trim)
-       (remove #(or (str/blank? %) (str/starts-with? % "#")))
-       vec))
+  (vec (shell/conf-lines text)))
 
 (defn- run-command
   "The exit status of command, run from dir with its output on stderr."
