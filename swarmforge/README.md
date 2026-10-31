@@ -61,3 +61,12 @@ prompts; `sf init` and `sf adapters` run it first and refuse a broken setup.
 Adapter ownership is recorded in ignored `.swarmforge/adapters.edn` in the
 main checkout. Regeneration preserves unrelated agents and
 refuses conflicting or locally edited adapters before changing agent files.
+
+Optional reviewers are enabled by explicitly including them in a route. Use
+`--route coder,hardener,security-reviewer,qa` for authentication, authorization,
+secrets, untrusted input, or external execution changes. The Security reviewer
+traces concrete enforcement paths and records findings and focused regression
+evidence in commits; the hardener retains mutation testing and quality gates.
+Named routes and the fallback route omit it unless explicitly enabled (including
+through `SWARMFORGE_ROUTE`). Catalogue entries can use the `optional` flag,
+combined with `audit` when needed, so other optional reviewers share this mechanism.

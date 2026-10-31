@@ -40,6 +40,19 @@
       (should= "project-owned bytes\n" (slurp file)))
     (should= 12 (count (snapshot))))
 
+  (it "generates optional reviewers through the same provider tier mappings"
+    (write-conf! *dir* "roles.conf" "coder strong subagent\nsecurity-reviewer strong subagent optional\n")
+    (write-conf! *dir* "routes.conf" "feature coder\n")
+    (write-agent "swarmforge/roles/security-reviewer.md" "# Fixture\n\nReview fixture.\n")
+    (adapters/adapters [])
+    (doseq [[path model] [[".claude/agents/security-reviewer.md" "model: opus"]
+                          [".github/agents/security-reviewer.agent.md" "model: gpt-5"]
+                          [".codex/agents/security-reviewer.toml" "model_reasoning_effort = \"medium\""]]]
+      (should-contain model (slurp (str (fs/path *dir* path)))))
+    (let [before (snapshot)]
+      (adapters/adapters [])
+      (should= before (snapshot))))
+
   (it "refuses an unowned collision before writing any harness"
     (write-agent ".codex/agents/coder.toml" "project-owned")
     (let [before (snapshot)

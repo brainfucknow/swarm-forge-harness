@@ -61,6 +61,50 @@
       (conf "routes.conf" "")
       (should= "specifier,coder,qa" (config/default-route))))
 
+  (context "optional roles"
+    (it "requires explicit selection while preserving named and fallback routes"
+      (conf "roles.conf" "specifier strong session\ncoder strong subagent audit\narchitecture-design-reviewer strong subagent optional\nhardener fast subagent\nsecurity-reviewer strong subagent optional audit\nqa fast subagent\n")
+      (should= ["specifier" "coder" "architecture-design-reviewer" "hardener" "security-reviewer" "qa"] (config/pipeline))
+      (should= "specifier,coder,qa" (config/default-route))
+      (conf "routes.conf" "review coder,architecture-design-reviewer,hardener,security-reviewer,qa\n")
+      (should= "coder,architecture-design-reviewer,hardener,security-reviewer,qa" (config/resolve-route "review"))
+      (conf "routes.conf" "")
+      (should= "specifier,coder,hardener,qa" (config/default-route))
+      (should (config/role-audits? "security-reviewer"))
+      (should= "coder,architecture-design-reviewer,hardener,security-reviewer,qa"
+               (config/resolve-route "coder,architecture-design-reviewer,hardener,security-reviewer,qa"))
+      (binding [*env* {"SWARMFORGE_ROUTE" "coder,security-reviewer,qa"}]
+        (should= "coder,security-reviewer,qa" (config/default-route)))
+      (should-throw clojure.lang.ExceptionInfo (config/resolve-route "security-reviewer,hardener,qa")))
+
+    (it "does not expand a fallback that collides with a named route"
+      (conf "roles.conf" "coder strong subagent\nsecurity-reviewer strong subagent optional\n")
+      (conf "routes.conf" "coder coder,security-reviewer\n")
+      (should= "coder" (config/default-route))
+      (should= "coder,security-reviewer" (config/resolve-route "coder")))
+
+    (it "refuses an empty fallback rather than enabling optional reviewers"
+      (conf "roles.conf" "security-reviewer strong subagent optional\n")
+      (conf "routes.conf" "")
+      (should-throw clojure.lang.ExceptionInfo "empty route" (config/default-route)))
+
+    (it "accepts optional and audit flags in either order and rejects duplicate or unknown flags"
+      (doseq [role ["architecture-design-reviewer" "security-reviewer"]]
+        (spit (str (fs/path *dir* "swarmforge/roles" (str role ".md"))) "fixture"))
+      (doseq [flags ["optional" "optional audit" "audit optional"]]
+        (conf "roles.conf" (str "coder strong subagent\nsecurity-reviewer strong subagent " flags "\nqa fast subagent\n"))
+        (conf "routes.conf" "feature coder,qa\n")
+        (should= 0 (first (check)))
+        (should= (not= flags "optional") (config/role-audits? "security-reviewer")))
+      (conf "routes.conf" "feature coder\n")
+      (doseq [[flags problem] [["optional optional" "repeats flag 'optional'"]
+                                ["audit audit" "repeats flag 'audit'"]
+                                ["optional loud" "unknown flag 'loud'"]]]
+        (conf "roles.conf" (str "coder strong subagent " flags "\n"))
+        (let [[status _ errors] (check)]
+          (should= 1 status)
+          (should (some #(str/includes? % problem) errors))))))
+
   (context "check"
     (it "accepts a valid catalogue, the bbmain kind and the coverage rewrite"
       (should= [0 "CHECK: ok (3 roles, 2 routes)\n" [""]] (check)))
@@ -88,8 +132,8 @@
                 "CHECK: roles.conf: role 'specifier' listed twice"
                 "CHECK: roles.conf: 'coder' uses unknown tier 'weak' (see tiers.conf)"
                 "CHECK: roles.conf: 'coder' runs-as must be subagent or session, not 'robot'"
-                "CHECK: roles.conf: 'qa' has unknown flag 'flag' (only audit)"
-                "CHECK: roles.conf: 'x' needs <role> <tier> <runs-as> [audit]"
+                "CHECK: roles.conf: 'qa' has unknown flag 'flag' (only audit, optional)"
+                "CHECK: roles.conf: 'x' needs <role> <tier> <runs-as> [audit] [optional]"
                 "CHECK: routes.conf: route 'feature' listed twice"
                 "CHECK: routes.conf: feature: route 'qa,specifier' is out of order; follow swarmforge/roles.conf: specifier,Bad,done,specifier,coder,qa,x"
                 "CHECK: routes.conf: 'lonely' needs exactly <name> <role,role,...>"

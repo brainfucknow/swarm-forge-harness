@@ -95,6 +95,15 @@
         (should= [dir] (map :dir (dispatched "coder" id backend)))
         (should= (str "swarm/" id) (branch-of dir)))))
 
+  (it "dispatches an explicitly selected optional reviewer with the existing strong tier on every backend"
+    (support/write-conf! *dir* "roles.conf" "coder strong subagent\nsecurity-reviewer strong subagent optional\ncleaner fast subagent\n")
+    (doseq [backend dispatch/backends]
+      (let [id (new-id (str "Review " backend) "--route" "coder,security-reviewer,cleaner")
+            [{:keys [cmd dir]}] (dispatched "security-reviewer" id backend)
+            expected (vec (command-for backend "coder" (if (= "copilot" backend) (nth cmd 2) (last cmd))))]
+        (should= expected cmd)
+        (should= (str *dir* "/.worktrees/" id) dir))))
+
   (it "reuses the task worktree with uncommitted changes in it"
     (let [id (new-id "Add login")
           dir (str *dir* "/.worktrees/" id)]

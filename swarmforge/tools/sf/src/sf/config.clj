@@ -32,8 +32,11 @@
   (when-not (some #{role} (pipeline))
     (shell/die "unknown role '" role "' (see swarmforge/roles.conf)")))
 
+(defn- role-flags [role]
+  (drop 3 (some #(when (= role (first %)) %) (rows "roles.conf"))))
+
 (defn role-audits? [role]
-  (= "audit" (role-field role 4)))
+  (boolean (some #{"audit"} (role-flags role))))
 
 (defn named-routes []
   (rows "routes.conf"))
@@ -63,7 +66,9 @@
   (let [route (shell/env "SWARMFORGE_ROUTE" nil)]
     (cond route (resolve-route route)
           (field (named-routes) "feature" 2) (resolve-route "feature")
-          :else (catalogue-route))))
+          :else (let [roles (remove #(some #{"optional"} (role-flags %)) (pipeline))]
+                  (when (empty? roles) (shell/die "empty route"))
+                  (str/join "," roles)))))
 
 ;; sf check
 
@@ -86,11 +91,17 @@
               (not= 4 (count row)) (conj (str "tiers.conf: '" tier "' needs exactly <tier> <claude-model> <codex-effort> <copilot-model>"))
               (seen tier) (conj (str "tiers.conf: tier '" tier "' listed twice")))))))
 
-(defn- check-role [[role tier runs flag :as row] seen]
-  (if-not (<= 3 (count row) 4)
-    [(str "roles.conf: '" role "' needs <role> <tier> <runs-as> [audit]")]
-    (cond-> []
-      (not (contains? #{nil "audit"} flag)) (conj (str "roles.conf: '" role "' has unknown flag '" flag "' (only audit)"))
+(defn- flag-problems [role flags]
+  (concat
+    (for [flag (distinct flags) :when (not (#{"audit" "optional"} flag))]
+      (str "roles.conf: '" role "' has unknown flag '" flag "' (only audit, optional)"))
+    (for [[flag n] (frequencies flags) :when (> n 1)]
+      (str "roles.conf: '" role "' repeats flag '" flag "'"))))
+
+(defn- check-role [[role tier runs & flags :as row] seen]
+  (if-not (<= 3 (count row) 5)
+    [(str "roles.conf: '" role "' needs <role> <tier> <runs-as> [audit] [optional]")]
+    (cond-> (vec (flag-problems role flags))
       (not (re-matches #"[a-z][a-z0-9-]*" role)) (conj (str "roles.conf: role name '" role "' must be lowercase letters, digits, and hyphens"))
       (#{"done" "operator"} role) (conj (str "roles.conf: '" role "' is reserved"))
       (seen role) (conj (str "roles.conf: role '" role "' listed twice"))
