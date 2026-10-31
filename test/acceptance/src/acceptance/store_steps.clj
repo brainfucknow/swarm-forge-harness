@@ -183,7 +183,13 @@
         (when path
           (write-file dir path "x\n")
           (must-in world dir "git" "add" path))
-        (require-ok (commit world name message {"SWARMFORGE_ROLE" role}) "git commit")
+        (require-ok (commit world name (expected world message) {"SWARMFORGE_ROLE" role}) "git commit")
+        (name-commit world dir commit-name)))]
+
+   [#"\"([^\"]*)\" was committed in the worktree of task \"(\w)\" with the hook skipped as (C\d+)"
+    (fn [world message name commit-name]
+      (let [dir (worktree world name)]
+        (must-in world dir "git" "commit" "-q" "--allow-empty" "--no-verify" "-m" (expected world message))
         (name-commit world dir commit-name)))]
 
    [#"the worktree of task \"(\w)\" has the staged new file \"([^\"]+)\" and the unstaged change \"([^\"]+)\""
@@ -244,6 +250,21 @@
    [#"the tip of the branch of task \"(\w)\" is named (T\d+)"
     (fn [world name tip-name]
       (assoc-in world [:names tip-name] (git world "rev-parse" "--short" (branch-ref world name))))]
+
+   [#"the operator asked and answered (\d+) questions on task \"(\w)\""
+    (fn [world n name]
+      (let [operator (update world :env dissoc "SWARMFORGE_ROLE")
+            id (id-of world name)]
+        (doseq [i (range 1 (inc (parse-long n)))]
+          (must-in operator (:repo world) "sf" "ask" id (str "q" i))
+          (must-in operator (:repo world) "sf" "answer" id (str "a" i)))
+        world))]
+
+   [#"the route of task \"(\w)\" was set to \"([^\"]+)\" (\d+) times"
+    (fn [world name route n]
+      (dotimes [_ (parse-long n)]
+        (must-in world (:repo world) "sf" "route" (id-of world name) route))
+      world)]
 
    [#"the command environment sets \"([^\"]+)\" to \"([^\"]*)\""
     (fn [world name value] (assoc-in world [:env name] value))]
@@ -310,6 +331,12 @@
       (let [actual (lines (:out world))
             after (str/join "\n" (rest (drop-while #(not= line %) actual)))]
         (check (= (expected world text) after) (str "output after " line " was " (pr-str after)))
+        world))]
+
+   [#"the output has (\d+) lines starting with \"(.*)\""
+    (fn [world n text]
+      (let [found (count (filter #(str/starts-with? % (expected world text)) (lines (:out world))))]
+        (check (= (parse-long n) found) (str found " lines start with " (pr-str text)))
         world))]
 
    [#"the output ends with the lines \"(.*)\""

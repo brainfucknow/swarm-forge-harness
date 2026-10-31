@@ -197,3 +197,24 @@
   (it "is true for created, review and handoff records"
     (should= [true true true false false]
              (map #(record/milestone? {:record %}) ["created" "review" "handoff" "question" "approval"]))))
+
+(defn- records [& kinds]
+  (map-indexed (fn [i kind] {:record kind :text (str i)}) kinds))
+
+(describe "brief"
+  (it "keeps every record when there are at most limit other records"
+    (let [all (records "created" "question" "answer" "route")]
+      (should= {:records all :omitted 0} (record/brief all 2))))
+
+  (it "leaves out the earliest other records beyond limit, in record order"
+    (let [all (records "created" "route" "review" "handoff")]
+      (should= {:records (drop 2 all) :omitted 2} (record/brief all 2))))
+
+  (it "keeps every question, answer and changes-requested record"
+    (let [all (vec (records "created" "question" "answer" "review" "changes-requested" "route" "handoff"))]
+      (should= {:records [(all 1) (all 2) (all 4) (all 5) (all 6)] :omitted 2}
+               (record/brief all 2))))
+
+  (it "tells equal records apart by position"
+    (let [route {:record "route" :route "a,b"}]
+      (should= {:records [route] :omitted 2} (record/brief [route route route] 1)))))
