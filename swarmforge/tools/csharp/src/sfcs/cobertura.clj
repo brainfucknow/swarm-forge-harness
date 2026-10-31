@@ -56,7 +56,7 @@
   complexity, line coverage, and the span of coverable lines."
   ([xml-text] (parse-cobertura xml-text nil))
   ([xml-text {:keys [extension strict?]}]
-   (let [doc (xml/parse-str (str/replace xml-text #"<!DOCTYPE[^>]*>" ""))
+   (let [doc (xml/parse-str (-> xml-text (str/replace #"^\uFEFF" "") (str/replace #"<!DOCTYPE[^>]*>" "")))
          sources (map text (elements :source doc))]
      (vec (for [class (elements :class doc)
                 :let [class-name (:name (:attrs class))

@@ -32,6 +32,7 @@ Feature: sf finish resume
     And the tip of the branch of task "A" is named T1
     When I run "sf finish $A --into <target>"
     Then the exit status is 1
+    And the output is ""
     And the error output has the line "sf: merge of swarm/$A into <target> stopped on conflicts: <files>; resolve them, commit, then run: sf finish $A"
     And the main checkout is on the branch "<target>" merging T1 with the conflicted files "<files>"
     And the branch "swarm/$A" exists
@@ -50,9 +51,11 @@ Feature: sf finish resume
     And I ran "sf finish $A"
     And the operator resolved the conflicts and staged them
     And the tip of the branch of task "A" is named T1
+    And the HEAD of the main checkout is named M1
     When I run "sf finish $A"
     Then the exit status is 1
     And the error output has the line "sf: a merge is in progress; commit the merge first"
+    And the HEAD of the main checkout is M1
     And the main checkout is on the branch "main" merging T1 with no conflicted file
     And the branch "swarm/$A" exists
     And the worktree of task "A" exists

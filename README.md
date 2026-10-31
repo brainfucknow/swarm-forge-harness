@@ -9,8 +9,8 @@ chat.
 ## Prerequisites
 
 - `git`, and `bash` for `install.sh`, the commit-msg hook, and the tool wrappers
-- [Babashka](https://babashka.org) (`bb`) for `sf`, the C#, F# and JavaScript tool
-  wrappers, and the Clojure constitution tools
+- [Babashka](https://babashka.org) (`bb`) for `sf`, the C#, F#, VB.NET and JavaScript
+  tool wrappers, and the Clojure constitution tools
 - One of Claude Code, Codex CLI, or Copilot CLI
 
 ## Install into a project
@@ -82,10 +82,15 @@ offer the roles, enable it in `~/.codex/config.toml` per the Codex subagents
 documentation, or fall back to `sf run <id>` below.
 
 If a harness cannot delegate, `sf dispatch <role> <id>` runs the role in a
-headless `claude -p`, `codex exec`, or `copilot -p` session, and
-`sf run <id>` loops through the stages until the task is done or waiting on
-you. Headless runs need tool permissions you grant yourself; pass them in
-`SWARMFORGE_CLAUDE_ARGS`, `SWARMFORGE_CODEX_ARGS`, or `SWARMFORGE_COPILOT_ARGS`.
+headless `claude -p`, `codex exec`, or `copilot -p` session started in the
+task worktree `.worktrees/<id>` (created when missing, refused when it is on
+another branch), and `sf run <id>` loops through the stages until the task
+is done or waiting on you. Headless runs need tool permissions you grant
+yourself; pass them in `SWARMFORGE_CLAUDE_ARGS`, `SWARMFORGE_CODEX_ARGS`, or
+`SWARMFORGE_COPILOT_ARGS`. Claude runs with `--permission-mode acceptEdits`
+and Codex with `--full-auto`; sf grants Copilot no tool permissions on its
+own, so set them there, for example
+`SWARMFORGE_COPILOT_ARGS="--allow-all-tools"`.
 
 ## Roles, routes, and model tiers
 
@@ -130,6 +135,7 @@ it. It is off by default.
 - [Handoff protocol](swarmforge/handoff-protocol.md): task branches and records.
 - Language tools: [Clojure](swarmforge/languages/clojure.md),
   [C#](swarmforge/languages/csharp.md), [F#](swarmforge/languages/fsharp.md),
+  [VB.NET](swarmforge/languages/vbnet.md),
   [JavaScript/TypeScript](swarmforge/languages/javascript.md).
 
 ## Tests

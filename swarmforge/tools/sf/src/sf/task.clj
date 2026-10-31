@@ -44,6 +44,24 @@
                      (let [state (last records)]
                        (flow/follow state type (if (fn? from) (from state) from) (change state))))))
 
+(defn- require-task-branch [dir id]
+  (let [branch (git dir "rev-parse" "--abbrev-ref" "HEAD")]
+    (when (not= branch (record/branch id))
+      (shell/die "worktree is on '" branch "', expected '" (record/branch id) "'"))))
+
+(defn- add-worktree
+  "The task worktree, added on the task branch when missing."
+  [id]
+  (let [dir (worktree-of id)]
+    (when-not (fs/directory? dir)
+      (git (shell/repo-root) "worktree" "add" "--quiet" dir (record/branch id)))
+    dir))
+
+(defn worktree!
+  "The task worktree, added when missing; stops when it is on another branch."
+  [id]
+  (doto (add-worktree id) (require-task-branch id)))
+
 (defn- check-worktree!
   "Stops unless the task's worktree, when it has one, is on the task branch
   with no uncommitted changes."
@@ -52,17 +70,7 @@
     (when (fs/directory? dir)
       (when (seq (git dir "status" "--porcelain"))
         (shell/die "uncommitted changes in " dir "; commit first"))
-      (let [branch (git dir "rev-parse" "--abbrev-ref" "HEAD")]
-        (when (not= branch (record/branch id))
-          (shell/die "worktree is on '" branch "', expected '" (record/branch id) "'"))))))
-
-(defn- add-worktree!
-  "The task's worktree, added at the task branch when it is missing."
-  [id]
-  (let [dir (worktree-of id)]
-    (when-not (fs/directory? dir)
-      (git (shell/repo-root) "worktree" "add" "--quiet" dir (record/branch id)))
-    dir))
+      (require-task-branch dir id))))
 
 (defn- role-head
   "The role's commit at the tip of the task branch, below any records. When
@@ -142,9 +150,8 @@
 
 (defn start [[id-arg]]
   (let [id (open-task id-arg)
-        dir (add-worktree! id)
-        root (shell/repo-root)]
-    (hook/install root)
+        dir (add-worktree id)]
+    (hook/install (shell/repo-root))
     (metrics/load! dir)
     (let [{:keys [file state] :as view} (history/view id)]
       (println (str "TASK: " id))
@@ -246,7 +253,7 @@
   worktree without a commit, then returns the worktree to the branch tip. A
   candidate with conflicts is not verified; the merge into target reports them."
   [id target]
-  (let [dir (add-worktree! id)
+  (let [dir (add-worktree id)
         commit (or (plumbing/rev target) (shell/die "no branch " target))
         merged (shell/run {:dir dir :env (plumbing/author-env)} "git" "merge" "--no-ff" "--no-commit" "--quiet" commit)]
     (try
