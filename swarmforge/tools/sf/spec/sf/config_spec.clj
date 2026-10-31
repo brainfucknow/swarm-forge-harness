@@ -61,6 +61,32 @@
       (conf "routes.conf" "")
       (should= "specifier,coder,qa" (config/default-route))))
 
+  (context "optional roles"
+    (it "excludes optional roles only from the implicit catalogue fallback"
+      (conf "roles.conf" "specifier strong session\ncoder strong subagent optional audit\nqa fast subagent\n")
+      (should= ["specifier" "coder" "qa"] (config/pipeline))
+      (should (config/role-audits? "coder"))
+      (should= 0 (first (check)))
+      (should= "specifier,coder,qa" (config/default-route))
+      (conf "routes.conf" "")
+      (should= "specifier,qa" (config/default-route))
+      (should= "specifier,coder,qa" (config/resolve-route "specifier,coder,qa"))
+      (binding [*env* {"SWARMFORGE_ROUTE" "coder,qa"}]
+        (should= "coder,qa" (config/default-route))))
+
+    (it "refuses an empty fallback when every role is optional"
+      (conf "roles.conf" "coder strong subagent optional\n")
+      (conf "routes.conf" "")
+      (should-throw clojure.lang.ExceptionInfo "empty route" (config/default-route)))
+
+    (it "accepts either flag order and rejects duplicate flags"
+      (conf "roles.conf" "coder strong subagent audit optional\n")
+      (conf "routes.conf" "")
+      (should= 0 (first (check)))
+      (should (config/role-audits? "coder"))
+      (conf "roles.conf" "coder strong subagent optional optional\n")
+      (should= 1 (first (check)))))
+
   (context "check"
     (it "accepts a valid catalogue, the bbmain kind and the coverage rewrite"
       (should= [0 "CHECK: ok (3 roles, 2 routes)\n" [""]] (check)))
@@ -88,8 +114,8 @@
                 "CHECK: roles.conf: role 'specifier' listed twice"
                 "CHECK: roles.conf: 'coder' uses unknown tier 'weak' (see tiers.conf)"
                 "CHECK: roles.conf: 'coder' runs-as must be subagent or session, not 'robot'"
-                "CHECK: roles.conf: 'qa' has unknown flag 'flag' (only audit)"
-                "CHECK: roles.conf: 'x' needs <role> <tier> <runs-as> [audit]"
+                "CHECK: roles.conf: 'qa' has unknown flag 'flag' (only audit, optional)"
+                "CHECK: roles.conf: 'x' needs <role> <tier> <runs-as> [audit] [optional]"
                 "CHECK: routes.conf: route 'feature' listed twice"
                 "CHECK: routes.conf: feature: route 'qa,specifier' is out of order; follow swarmforge/roles.conf: specifier,Bad,done,specifier,coder,qa,x"
                 "CHECK: routes.conf: 'lonely' needs exactly <name> <role,role,...>"

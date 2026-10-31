@@ -40,6 +40,17 @@
       (should= "project-owned bytes\n" (slurp file)))
     (should= 12 (count (snapshot))))
 
+  (it "generates optional subagent adapters with unchanged tier settings"
+    (write-conf! *dir* "roles.conf" "specifier frontier subagent\ncoder strong subagent optional\ncleaner fast subagent\n")
+    (adapters/adapters [])
+    (doseq [path paths] (should (fs/regular-file? (fs/path *dir* path))))
+    (should-contain "model: opus\n" (slurp (str (fs/path *dir* (first paths)))))
+    (should-contain "model: gpt-5\n" (slurp (str (fs/path *dir* (second paths)))))
+    (should-contain "model_reasoning_effort = \"medium\"" (slurp (str (fs/path *dir* (last paths)))))
+    (let [before (snapshot)]
+      (adapters/adapters [])
+      (should= before (snapshot))))
+
   (it "refuses an unowned collision before writing any harness"
     (write-agent ".codex/agents/coder.toml" "project-owned")
     (let [before (snapshot)

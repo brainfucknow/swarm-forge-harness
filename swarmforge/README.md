@@ -61,3 +61,16 @@ prompts; `sf init` and `sf adapters` run it first and refuse a broken setup.
 Adapter ownership is recorded in ignored `.swarmforge/adapters.edn` in the
 main checkout. Regeneration preserves unrelated agents and
 refuses conflicting or locally edited adapters before changing agent files.
+
+For migrations, public API changes or major dependency changes, opt into
+**Architecture design reviewer** with an explicit route, for example:
+
+```sh
+sf new "Migrate public API" -m "..." --route specifier,architecture-design-reviewer,coder,architect,qa
+```
+
+The reviewer examines the design after specification approval and before coding;
+`architect` still reviews structure after implementation. Existing named routes
+are unchanged. The catalogue's `optional` flag excludes a role only from the
+implicit fallback when no `feature` route exists; explicit lists, named routes
+and `SWARMFORGE_ROUTE` can include it. It can be combined with `audit`.
