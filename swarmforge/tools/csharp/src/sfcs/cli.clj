@@ -20,9 +20,7 @@
 (def property-filter "Category!=Property")
 
 (def languages
-  "Each .NET language profile. A :compiled-methods? language is scored from
-  Coverlet's method spans alone, without C# signature widening; :no-mutation
-  says why Stryker.NET cannot mutate the language."
+  "Per-language profiles; :compiled-methods? skips C# signature widening, :no-mutation gives why Stryker.NET cannot mutate."
   {:csharp {:name "sf-cs" :label "C#" :extension ".cs" :jscpd ["--format" "csharp"]}
    :fsharp {:name "sf-fs" :label "F#" :extension ".fs" :jscpd ["--format" "fsharp"]
             :compiled-methods? true :no-mutation "Stryker.NET supports C# only"}

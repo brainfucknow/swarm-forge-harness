@@ -410,8 +410,7 @@
         (when (= "0" exit) (is (str/includes? err "not found")))))))
 
 (def compiled-languages
-  "The .NET languages whose CRAP comes from Coverlet's compiled methods and
-  which Stryker.NET cannot mutate."
+  "Languages scored from compiled methods and not mutable by Stryker.NET."
   [{:language "fsharp" :label "F#" :extension "fs"
     :jscpd "--format fsharp --min-tokens"
     :source "module Bank.Account\nlet calculate value =\n    value + 1\n"
