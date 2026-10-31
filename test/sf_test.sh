@@ -47,7 +47,7 @@ export PATH="$repo/swarmforge/bin:$PATH"
 # init
 out="$(sf init)"
 assert_match "init prints the identity of record commits" "$out" "identity: tester <tester@example.com>"
-assert_match "init reports the catalogue" "$out" "roles: specifier coder cleaner architect hardener security-reviewer qa"
+assert_match "init reports the catalogue" "$out" "roles: specifier architecture-design-reviewer coder cleaner architect hardener security-reviewer qa"
 assert_match "init reports the routes" "$out" "routes: feature bugfix refactor harden spike"
 assert_eq "init is idempotent" "$(sf init | head -n 1)" "identity: tester <tester@example.com>"
 assert_eq "init writes no git-bug data" "$(git for-each-ref refs/bugs refs/identities)" ""
@@ -192,6 +192,29 @@ id3="$(sf new "Tidy" -m "x" --route "cleaner,architect")"
 assert_eq "explicit route starts at its first role" "$(sf stage "$id3")" "cleaner"
 assert_eq "SWARMFORGE_ROUTE sets the default" "$(SWARMFORGE_ROUTE=spike sf new "Idea" -m x | xargs sf route)" "specifier"
 
+# optional roles are selected through existing routes and lifecycle
+review_route="specifier,architecture-design-reviewer,coder,architect,qa"
+idr="$(sf new "Migrate interface" -m x --route "$review_route")"
+assert_eq "explicit opt-in route is recorded" "$(sf route "$idr")" "$review_route"
+sf start "$idr" >/dev/null
+git -C ".worktrees/$idr" commit -q --allow-empty -m "Approve migration criteria"
+sf review "$idr" >/dev/null
+assert_match "approval sends an opted-in task to design review" "$(sf approve "$idr")" "specifier -> architecture-design-reviewer"
+assert_fails "design review cannot be placed after coder" sf new Bad -m x --route "coder,architecture-design-reviewer,qa"
+sf ask "$idr" "Which compatibility window?" >/dev/null
+assert_fails "reviewer cannot hand off a blocker" sf handoff "$idr"
+sf answer "$idr" "Keep both interfaces for one release" >/dev/null
+assert_match "reviewer uses ordinary handoff without approval" "$(sf handoff "$idr")" "architecture-design-reviewer -> coder"
+assert_match "coder still hands off to existing architect" "$(sf handoff "$idr")" "coder -> architect"
+assert_match "existing architect still hands off to QA" "$(sf handoff "$idr")" "architect -> qa"
+assert_eq "environment route can opt in" "$(SWARMFORGE_ROUTE=architecture-design-reviewer,coder sf new "Review migration" -m x | xargs sf route)" "architecture-design-reviewer,coder"
+cp swarmforge/routes.conf "$scratch/routes.conf"
+rm swarmforge/routes.conf
+assert_eq "implicit catalogue fallback skips optional reviewer" "$(sf new "Legacy fallback" -m x | xargs sf route)" "$full"
+printf 'quick coder\n' > swarmforge/routes.conf
+assert_eq "fallback without feature also skips optional reviewer" "$(sf new "Missing feature fallback" -m x | xargs sf route)" "$full"
+mv "$scratch/routes.conf" swarmforge/routes.conf
+
 # Optional review uses the existing route and handoff machinery.
 review_id="$(sf new "Review execution boundary" -m x --route coder,hardener,security-reviewer,qa)"
 assert_eq "optional security review is explicit" "$(sf route "$review_id")" "coder,hardener,security-reviewer,qa"
@@ -281,7 +304,7 @@ cp -R "$HERE/.claude" "$HERE/.github" "$HERE/.codex" "$work/" && copy_swarmforge
 
 # configuration check
 copy_swarmforge .
-assert_match "check passes on the shipped configuration" "$(sf check)" "^CHECK: ok \(7 roles, 5 routes\)$"
+assert_match "check passes on the shipped configuration" "$(sf check)" "^CHECK: ok \(8 roles, 5 routes\)$"
 check_fails() {
   local name="$1" expected="$2" out
   out="$(sf check 2>&1 || true)"

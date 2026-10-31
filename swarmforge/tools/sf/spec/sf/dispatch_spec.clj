@@ -95,6 +95,16 @@
         (should= [dir] (map :dir (dispatched "coder" id backend)))
         (should= (str "swarm/" id) (branch-of dir)))))
 
+  (it "dispatches an optional reviewer with the existing strong tier on every backend"
+    (support/write-conf! *dir* "roles.conf"
+                         "specifier frontier subagent\narchitecture-design-reviewer strong subagent optional\ncoder strong subagent\ncleaner fast subagent\n")
+    (doseq [backend dispatch/backends]
+      (let [id (new-id (str "Design " backend) "--route" "architecture-design-reviewer,coder")
+            [{:keys [cmd dir]}] (dispatched "architecture-design-reviewer" id backend)
+            prompt (case backend "copilot" (nth cmd 2) (last cmd))]
+        (should= (str *dir* "/.worktrees/" id) dir)
+        (should= (vec (command-for backend "coder" prompt)) cmd))))
+
   (it "dispatches an explicitly selected optional reviewer with the existing strong tier on every backend"
     (support/write-conf! *dir* "roles.conf" "coder strong subagent\nsecurity-reviewer strong subagent optional\ncleaner fast subagent\n")
     (doseq [backend dispatch/backends]

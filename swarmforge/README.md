@@ -62,6 +62,16 @@ Adapter ownership is recorded in ignored `.swarmforge/adapters.edn` in the
 main checkout. Regeneration preserves unrelated agents and
 refuses conflicting or locally edited adapters before changing agent files.
 
+For migrations, public API changes or major dependency changes, opt into
+**Architecture design reviewer** with an explicit route, for example:
+
+```sh
+sf new "Migrate public API" -m "..." --route specifier,architecture-design-reviewer,coder,architect,qa
+```
+
+The reviewer examines the design after specification approval and before coding;
+`architect` still reviews structure after implementation.
+
 Optional reviewers are enabled by explicitly including them in a route. Use
 `--route coder,hardener,security-reviewer,qa` for authentication, authorization,
 secrets, untrusted input, or external execution changes. The Security reviewer
