@@ -20,9 +20,11 @@ Feature: sf finish verify
   nothing.
 
   On a first finish, sf builds the merge candidate in the task worktree
-  before it touches the target: it merges the target into the task branch
-  there without committing (when the branch already contains the target, the
-  candidate is the branch tip) and verifies that checkout. Then it returns
+  before it touches the target: it detaches the worktree at the target and
+  merges the task branch there without committing, with the target as the
+  current side as in the real merge (when the branch already contains the
+  target, the candidate has the tree of the branch tip), and verifies that
+  checkout. Then it returns
   the worktree to the tip of the task branch with no uncommitted change,
   discarding what the commands created or changed there (ignored files may
   stay). Only when verification passed does sf merge into the target as

@@ -249,20 +249,24 @@
                command " exited " exit)))
 
 (defn- verify-candidate!
-  "Verifies the merge of target into the task branch, built in the task's
-  worktree without a commit, then returns the worktree to the branch tip. A
-  candidate with conflicts is not verified; the merge into target reports them."
+  "Verifies the merge of the task branch into target, built without a commit in
+  the task's worktree detached at target, so target is the current side as in
+  the real merge. Then returns the worktree to the branch tip. A candidate with
+  conflicts is not verified; the merge into target reports them."
   [id target]
   (let [dir (add-worktree id)
         commit (or (plumbing/rev target) (shell/die "no branch " target))
-        merged (shell/run {:dir dir :env (plumbing/author-env)} "git" "merge" "--no-ff" "--no-commit" "--quiet" commit)]
+        _ (git dir "checkout" "--quiet" "--detach" commit)
+        merged (shell/run {:dir dir :env (plumbing/author-env)}
+                          "git" "merge" "--no-ff" "--no-commit" "--quiet" (record/branch id))]
     (try
       (cond (shell/ok? merged) (verified! id target dir)
             (seq (shell/lines (git dir "diff" "--name-only" "--diff-filter=U"))) nil
             :else (shell/fail (:exit merged) (shell/chomp (:err merged))))
       (finally
         (git dir "reset" "--quiet" "--hard")
-        (git dir "clean" "--quiet" "-d" "--force")))))
+        (git dir "clean" "--quiet" "-d" "--force")
+        (git dir "checkout" "--quiet" (record/branch id))))))
 
 (defn- merge-task!
   "Merges the task into target, or stops with the conflicted files."

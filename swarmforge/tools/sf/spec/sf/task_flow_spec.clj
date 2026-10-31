@@ -296,6 +296,22 @@
       (should-not (fs/exists? dir))
       (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
 
+  (it "verifies the merge as the target sees it, with the target as the current side"
+    (git *dir* "config" "merge.keep-current.driver" "true")
+    (commit-on-main ".gitattributes" "a merge=keep-current\n")
+    (let [id (new-id "Quick" "--route" "coder")
+          dir (worktree id)]
+      (out task/start [id])
+      (commit-on-main "swarmforge/verify.conf" "grep -qx main a\n")
+      (commit-on-main "a" "main\n")
+      (spit (str dir "/a") "task\n")
+      (git dir "add" "a")
+      (git dir "commit" "-q" "--no-verify" "-m" "Task")
+      (task/handoff [id] {:audit-passed? true})
+      (should= (str "VERIFY: passed: grep -qx main a\nFINISHED: " id " merged into main")
+               (out task/finish [id]))
+      (should= "main\n" (slurp (str *dir* "/a")))))
+
   (it "stops with git's error when the merge candidate cannot be built, and changes nothing"
     (let [id (done-task)
           unrelated (git *dir* "commit-tree" "4b825dc642cb6eb9a060e54bf8d69288fbee4904" "-m" "Unrelated")

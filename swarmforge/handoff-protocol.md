@@ -108,8 +108,9 @@ sf new ──► stage <first role>
 - `sf next <role>` lists open tasks at that stage that need nothing, so a
   blocked task is invisible to the role until the operator acts.
 - `sf finish` refuses a task worktree with uncommitted changes (staged,
-  unstaged or untracked) and changes nothing. It then merges the base branch
-  into the task branch in the worktree without committing, runs the commands
+  unstaged or untracked) and changes nothing. It then detaches the worktree at
+  the base branch and merges `swarm/<id>` there without committing, as the
+  real merge will, runs the commands
   of that checkout's `swarmforge/verify.conf` with `bash -c` from its root,
   printing `VERIFY: passed: <command>` for each (or `VERIFY: none
   configured`), and returns the worktree to the branch tip. A failing command
