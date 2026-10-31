@@ -1,6 +1,8 @@
 ---
 id: add-optional-architecture-83d14d7
 created: 2026-10-31
+stage: done
+route: coder,architect,qa
 ---
 
 # Add optional architecture design reviewer
@@ -32,3 +34,43 @@ Verification:
 Keep code and documentation lean. Record rationale and verification in commit bodies; add no separate review reports or QA Markdown. Exclude completed-task archives from the final PR.
 Use Codex <codex@openai.com> as author and committer through per-command settings; preserve human/global Git configuration.
 Use team route coder → architect → QA. User requested a focused PR, not a merge to the upstream base.
+
+## Records
+
+```text
+type: created
+from: operator
+branch: swarm/add-optional-architecture-83d14d7
+commit: 2ec5bc5
+route: coder,architect,qa
+```
+
+```text
+type: handoff
+from: coder
+to: architect
+branch: swarm/add-optional-architecture-83d14d7
+commit: 6f45f7b
+files: .claude/agents/architecture-design-reviewer.md,.codex/agents/architecture-design-reviewer.toml,.github/agents/architecture-design-reviewer.agent.md,swarmforge/README.md,swarmforge/handoff-protocol.md,swarmforge/roles.conf,swarmforge/roles/architecture-design-reviewer.md,swarmforge/tools/sf/spec/sf/adapters_spec.clj,swarmforge/tools/sf/spec/sf/config_spec.clj,swarmforge/tools/sf/spec/sf/dispatch_spec.clj,swarmforge/tools/sf/src/sf/cli.clj,swarmforge/tools/sf/src/sf/config.clj,test/sf_test.sh
+summary: Optional design reviewer implemented with preserved defaults and passing behavioral checks
+```
+
+```text
+type: handoff
+from: architect
+to: qa
+branch: swarm/add-optional-architecture-83d14d7
+commit: 97c55c2
+files: swarmforge/tools/sf/property/sf/flow_property.clj
+summary: Structural review and optional-route property checks passed
+```
+
+```text
+type: handoff
+from: qa
+to: done
+branch: swarm/add-optional-architecture-83d14d7
+commit: 5448fe8
+files: -
+summary: Independent QA confirmed optional routing and preserved workflows
+```
