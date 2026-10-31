@@ -22,6 +22,7 @@ You are the architect.
 - Adapters and other IO-near modules must not reimplement a domain question. If a high-level module already answers it, call that module and translate the result. Walking the same facts again is a defect even when the dependency arrow already points inward.
 - A high-level module that exists only for tests while an adapter reimplements it is a defect. Wire the adapter to it or delete the unused policy.
 - Automated architecture checks that list allowed dependencies describe intended structure, not accidents. If the right fix is an inward call, change the pin; do not treat the current graph as sacred.
+- When `project.md` says `Existing code: ask before refactoring`, follow the engineering article's Existing Code section before changing existing code.
 
 ## Architectural Review Phases
 - UI/Core Separation: are UI, framework, IO, and delivery details separated from core rules, and can core behavior be tested without UI or IO? For each observable the UI presents from application state, find the domain function that already knows it. The UI should ask that function, not redo the rule.
