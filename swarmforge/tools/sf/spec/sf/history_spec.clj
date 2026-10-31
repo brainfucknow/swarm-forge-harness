@@ -4,7 +4,8 @@
             [speclj.core :refer [describe it should= should-be-nil around]]
             [sf.shell :as shell]
             [sf.history :as history]
-            [sf.lore]))
+            [sf.lore]
+            [sf.store :as store]))
 
 (def ^:dynamic *dir* nil)
 
@@ -45,6 +46,29 @@
 
   (it "is nil when there is no created record"
     (should-be-nil (lore-lines "HEAD" [{:record "question"}]))))
+
+(def ^:private finished-history @#'sf.history/finished-history)
+
+(describe "finished-history"
+  (around [it] (with-repo it))
+
+  (it "takes the archive's blocks and no commits when the branch is gone"
+    (with-redefs [store/records-at (constantly [])
+                  store/has-branch? (constantly false)
+                  store/ref-of (fn [_] (throw (ex-info "no branch" {})))]
+      (should= {:blocks ["b"] :commits nil} (finished-history "t-1" {:blocks ["b"]}))))
+
+  (it "adds the commits of the branch while it exists"
+    (let [base (git *dir* "rev-parse" "--short" "HEAD")
+          _ (git *dir* "commit" "-q" "--allow-empty" "-m" "Code\n\nBy coder.\n\nConstraint: keep it\n")
+          head (git *dir* "rev-parse" "--short" "HEAD")]
+      (with-redefs [store/records-at (constantly [{:record "created" :commit base}])
+                    store/with-files identity
+                    store/has-branch? (constantly true)
+                    store/ref-of (constantly "HEAD")]
+        (should= ["b"] (:blocks (finished-history "t-1" {:blocks ["b"]})))
+        (should= [(str "LORE: " head " coder Constraint: keep it")]
+                 (sf.lore/lines (:commits (finished-history "t-1" {:blocks ["b"]}))))))))
 
 (defn- view [records & commits]
   {:file {:request "Users log in."} :records records :commits commits})
