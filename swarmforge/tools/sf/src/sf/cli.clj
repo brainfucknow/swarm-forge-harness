@@ -50,7 +50,7 @@ Hook commands
   commit-msg <role> <file>        add the byline and a Lore-id to a commit message (the commit-msg hook runs this)
 
 Environment
-  SWARMFORGE_ROUTE     default route for `new` (default: feature, else every role)
+  SWARMFORGE_ROUTE     default route for `new` (default: feature, else every non-optional role)
   SWARMFORGE_ROLE      role name used for `from:` (default: the task's stage)
   SWARMFORGE_BACKEND   default backend for dispatch/run
   SWARMFORGE_USER, SWARMFORGE_EMAIL

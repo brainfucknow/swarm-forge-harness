@@ -88,7 +88,7 @@ sf new ──► stage <first role>
 ```
 
 - `sf new` records the route (`--route`, else `SWARMFORGE_ROUTE`, else
-  `feature` from `swarmforge/routes.conf`, else every role) and sets the stage
+  `feature` from `swarmforge/routes.conf`, else every non-optional role) and sets the stage
   to its first role. A route is any subset of `swarmforge/roles.conf` in that
   file's order.
 - `sf handoff` requires a clean worktree on the task branch and needs
