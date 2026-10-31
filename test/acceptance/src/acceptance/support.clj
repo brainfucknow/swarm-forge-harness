@@ -1,8 +1,9 @@
 (ns acceptance.support
   "Scratch repositories for the step handlers. Each execution works in a fresh
-  copy of a scratch git repository that holds this checkout's swarmforge/ and a
-  .gitignore. The real sf and git run there, with git-bug off PATH. Scratch
-  files go under ./tmp/acceptance/ and are removed when the process exits."
+  copy of a scratch git repository that holds this checkout's swarmforge/,
+  without its verify.conf, and a .gitignore. The real sf and git run there,
+  with git-bug off PATH. Scratch files go under ./tmp/acceptance/ and are
+  removed when the process exits."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [clojure.string :as str]))
@@ -69,6 +70,7 @@
                  (str "[user]\n\tname = tester\n\temail = tester@example.com\n" gitconfig))
            (must repo "git" "init" "-q" ".")
            (fs/copy-tree (fs/path checkout "swarmforge") (fs/path repo "swarmforge"))
+           (fs/delete-if-exists (fs/path repo "swarmforge" "verify.conf"))
            (spit (str (fs/path repo ".gitignore")) ".worktrees/\n.swarmforge/\ntmp/\n")
            (must repo "git" "add" "-A")
            (must repo "git" "commit" "-q" "-m" "seed")

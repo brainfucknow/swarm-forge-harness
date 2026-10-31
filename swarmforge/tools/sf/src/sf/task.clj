@@ -12,7 +12,8 @@
             [sf.options :as options]
             [sf.record :as record]
             [sf.shell :as shell]
-            [sf.store :as store]))
+            [sf.store :as store]
+            [sf.verify :as verify]))
 
 (defn- git [dir & args]
   (shell/chomp (apply shell/must {:dir dir} "git" args)))
@@ -61,18 +62,24 @@
   [id]
   (doto (add-worktree id) (require-task-branch id)))
 
-(defn- role-head
-  "The role's commit at the tip of the task branch, below any records. When
-  the task has a worktree, it must be on the task branch and have no
-  uncommitted changes."
+(defn- check-worktree!
+  "Stops unless the task's worktree, when it has one, is on the task branch
+  with no uncommitted changes."
   [id]
   (let [dir (worktree-of id)]
     (when (fs/directory? dir)
       (when (seq (git dir "status" "--porcelain"))
         (shell/die "uncommitted changes in " dir "; commit first"))
-      (require-task-branch dir id))
-    (flow/role-commit (git (shell/repo-root) "rev-parse" "--short" (store/ref-of id))
-                      (last (store/records-at (store/ref-of id) id)))))
+      (require-task-branch dir id))))
+
+(defn- role-head
+  "The role's commit at the tip of the task branch, below any records. When
+  the task has a worktree, it must be on the task branch and have no
+  uncommitted changes."
+  [id]
+  (check-worktree! id)
+  (flow/role-commit (git (shell/repo-root) "rev-parse" "--short" (store/ref-of id))
+                    (last (store/records-at (store/ref-of id) id))))
 
 (defn init [_]
   (shell/quietly config/check)
@@ -234,6 +241,29 @@
 (defn- finished-message [id state target]
   (record/message (assoc (flow/finished state target) :task id)))
 
+(defn- verified!
+  "Stops when the verification of the checkout at dir fails."
+  [id target dir]
+  (when-let [{:keys [command exit]} (verify/check! dir)]
+    (shell/die "verification failed on the merge of " (record/branch id) " into " target ": "
+               command " exited " exit)))
+
+(defn- verify-candidate!
+  "Verifies the merge of target into the task branch, built in the task's
+  worktree without a commit, then returns the worktree to the branch tip. A
+  candidate with conflicts is not verified; the merge into target reports them."
+  [id target]
+  (let [dir (add-worktree id)
+        commit (or (plumbing/rev target) (shell/die "no branch " target))
+        merged (shell/run {:dir dir :env (plumbing/author-env)} "git" "merge" "--no-ff" "--no-commit" "--quiet" commit)]
+    (try
+      (cond (shell/ok? merged) (verified! id target dir)
+            (seq (shell/lines (git dir "diff" "--name-only" "--diff-filter=U"))) nil
+            :else (shell/fail (:exit merged) (shell/chomp (:err merged))))
+      (finally
+        (git dir "reset" "--quiet" "--hard")
+        (git dir "clean" "--quiet" "-d" "--force")))))
+
 (defn- merge-task!
   "Merges the task into target, or stops with the conflicted files."
   [id state target]
@@ -243,32 +273,39 @@
                "; resolve them, commit, then run: sf finish " id)))
 
 (defn- resume!
-  "Gives the merge the operator committed into target the finished record when
-  it lacks it, or stops when the task is finished."
+  "Verifies the merge the operator committed into target and gives it the
+  finished record when it lacks it, or stops when the task is finished."
   [id state target]
-  (case (let [tip (store/tip id)]
-          (flow/resume-action (some? (flow/finished-record (store/records-at "HEAD" id)))
-                              tip (store/head-parents) (boolean (and tip (store/in-head? tip)))))
-    :keep nil
-    :unmerged (shell/die (record/branch id) " has commits that HEAD does not contain; merge them, then run: sf finish " id)
-    :reword (store/reword-head! (finished-message id state target))
-    (shell/die "task " id " is finished")))
+  (let [tip (store/tip id)
+        action (flow/resume-action (some? (flow/finished-record (store/records-at "HEAD" id)))
+                                   tip (store/head-parents) (boolean (and tip (store/in-head? tip))))]
+    (case action
+      (:keep :reword) (verified! id target (shell/repo-root))
+      :unmerged (shell/die (record/branch id) " has commits that HEAD does not contain; merge them, then run: sf finish " id)
+      (shell/die "task " id " is finished"))
+    (when (= :reword action)
+      (store/reword-head! (finished-message id state target)))))
 
 (defn finish
-  "Merges a done task into its target and removes its worktree and branch.
-  Run again after the operator commits a conflicting merge, it completes it."
+  "Verifies the merge of a done task into its target, merges it, and removes
+  its worktree and branch. Refuses a worktree with uncommitted changes. Run
+  again after the operator commits a conflicting merge, it completes it."
   [[id-arg & args]]
   (let [id (store/resolve-id id-arg)
         {:keys [target]} (options/parse "finish" args {"--into" :target} {})
         _ (when (store/merging?) (shell/die "a merge is in progress; commit the merge first"))
         state (store/state id)
         _ (when (not= "done" (:stage state)) (shell/die "task is at stage:" (:stage state) ", not done"))
+        _ (check-worktree! id)
         root (shell/repo-root)
         dir (worktree-of id)
         current (git root "rev-parse" "--abbrev-ref" "HEAD")
         resuming? (store/finished? id)
         target (if resuming? current (or (not-empty target) current))]
-    (if resuming? (resume! id state target) (merge-task! id state target))
-    (when (fs/directory? dir) (git root "worktree" "remove" "--force" dir))
+    (if resuming?
+      (resume! id state target)
+      (do (verify-candidate! id target)
+          (merge-task! id state target)))
+    (when (fs/directory? dir) (git root "worktree" "remove" dir))
     (git root "branch" "-D" (record/branch id))
     (println (str "FINISHED: " id " merged into " target))))

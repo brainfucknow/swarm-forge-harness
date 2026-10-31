@@ -20,7 +20,7 @@ git config --global user.email tester@example.com
 repo="$scratch/project"
 mkdir -p "$repo" && cd "$repo"
 git init -q .
-cp -R "$HERE/swarmforge" swarmforge
+cp -R "$HERE/swarmforge" swarmforge && rm -f swarmforge/verify.conf
 git add -A && git commit -q -m seed
 
 fake="$scratch/fakebin"; mkdir -p "$fake"
@@ -72,6 +72,7 @@ done
 development="$(find "$consumer/swarmforge/tools" -type d \( -name spec -o -name test -o -name property -o -name fixtures -o -name features -o -name acceptance \))"
 assert_eq "fresh install excludes development asset directories" "$development" ""
 assert_fails "fresh install excludes the developer-only sf task config" test -e "$consumer/swarmforge/tools/sf/bb.edn"
+assert_fails "fresh install excludes this repository's verify.conf" test -e "$consumer/swarmforge/verify.conf"
 test -f "$HERE/swarmforge/tools/sf/bb.edn" && test -d "$HERE/swarmforge/tools/javascript/fixtures" \
   && pass "installation leaves source development assets in place" || fail "source development assets changed"
 mkdir -p "$consumer/tmp/jscpd"

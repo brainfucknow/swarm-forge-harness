@@ -37,6 +37,29 @@
     (out task/handoff [id] {:audit-passed? true})
     id))
 
+(defn- worktree [id]
+  (str *dir* "/.worktrees/" id))
+
+(defn- done-task
+  "A started task at done with the file a committed in its worktree."
+  []
+  (let [id (new-id "Quick" "--route" "coder")]
+    (out task/start [id])
+    (commit-in-worktree id "a")
+    (task/handoff [id] {:audit-passed? true})
+    id))
+
+(defn- commit-on-main [path text]
+  (fs/create-dirs (fs/parent (fs/path *dir* path)))
+  (spit (str *dir* "/" path) text)
+  (git *dir* "add" path)
+  (git *dir* "commit" "-q" "--no-verify" "-m" (str "Add " path)))
+
+(defn- snapshot
+  "The main checkout's HEAD, the tip of the task branch and whether the worktree exists."
+  [id]
+  [(git *dir* "rev-parse" "HEAD") (git *dir* "rev-parse" (str "swarm/" id)) (fs/exists? (worktree id))])
+
 (defn- resolve-conflicts []
   (doseq [file ["a" "b"]] (spit (str *dir* "/" file) "resolved"))
   (git *dir* "add" "a" "b"))
@@ -188,7 +211,7 @@
       (should= tip (git *dir* "rev-parse" "MERGE_HEAD"))
       (git *dir* "commit" "-q" "--no-verify" "-m" "Resolve")
       (let [resolved (git *dir* "log" "-1" "--format=%P %T")]
-        (should= (str "FINISHED: " id " merged into main") (out task/finish [id]))
+        (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id]))
         (should= resolved (git *dir* "log" "-1" "--format=%P %T")))
       (should= (str "sf finished: " id) (git *dir* "log" "-1" "--format=%s"))
       (should-contain "SwarmForge-Merged-Into: main" (git *dir* "log" "-1" "--format=%B"))
@@ -203,7 +226,7 @@
       (resolve-conflicts)
       (git *dir* "commit" "-q" "--no-verify" "--no-edit")
       (let [merge (git *dir* "rev-parse" "HEAD")]
-        (should= (str "FINISHED: " id " merged into main") (out task/finish [id]))
+        (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id]))
         (should= merge (git *dir* "rev-parse" "HEAD")))
       (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
 
@@ -227,6 +250,88 @@
       (git *dir* "commit" "-q" "--no-verify" "-m" "Squash")
       (should= {:status 1 :err (str "task " id " is finished")}
                (select-keys (captured #(task/finish [id])) [:status :err]))))
+
+  (it "refuses to finish while the worktree has uncommitted changes, and keeps them"
+    (let [id (done-task)
+          dir (worktree id)
+          before (snapshot id)]
+      (spit (str dir "/notes") "draft")
+      (should= {:status 1 :err (str "uncommitted changes in " dir "; commit first")}
+               (select-keys (captured #(task/finish [id])) [:status :err]))
+      (should= "draft" (slurp (str dir "/notes")))
+      (git dir "add" "notes")
+      (should= {:status 1 :err (str "uncommitted changes in " dir "; commit first")}
+               (select-keys (captured #(task/finish [id])) [:status :err]))
+      (should= "A  notes" (git dir "status" "--porcelain"))
+      (should= before (snapshot id))))
+
+  (it "does not finish a merge that fails verification, and leaves everything as it was"
+    (let [id (done-task)
+          dir (worktree id)
+          _ (commit-on-main "swarmforge/verify.conf" "true\ntest ! -e a\ntouch never\n")
+          before (snapshot id)]
+      (should= {:status 1 :out "VERIFY: passed: true"
+                :err (str "verification failed on the merge of swarm/" id " into main: test ! -e a exited 1")}
+               (select-keys (captured #(task/finish [id])) [:status :out :err]))
+      (should= before (snapshot id))
+      (should= "" (git dir "status" "--porcelain" "--ignored"))
+      (should= (git *dir* "rev-parse" (str "swarm/" id)) (git dir "rev-parse" "HEAD"))
+      (should-not (fs/exists? (str *dir* "/a")))))
+
+  (it "verifies the merge candidate, discards what the commands left and merges"
+    (let [id (new-id "Quick" "--route" "coder")
+          dir (worktree id)]
+      (out task/start [id])
+      (commit-on-main "c" "from main")
+      (spit (str dir "/a") "x")
+      (write-conf! dir "verify.conf" "touch made\ntest -e a\ntest -e c\n")
+      (git dir "add" "a" "swarmforge/verify.conf")
+      (git dir "commit" "-q" "--no-verify" "-m" "Verify")
+      (task/handoff [id] {:audit-passed? true})
+      (should= (str "VERIFY: passed: touch made\nVERIFY: passed: test -e a\nVERIFY: passed: test -e c\n"
+                    "FINISHED: " id " merged into main")
+               (out task/finish [id]))
+      (should (fs/exists? (str *dir* "/a")))
+      (should-not (fs/exists? (str *dir* "/made")))
+      (should-not (fs/exists? dir))
+      (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
+
+  (it "stops with git's error when the merge candidate cannot be built, and changes nothing"
+    (let [id (done-task)
+          unrelated (git *dir* "commit-tree" "4b825dc642cb6eb9a060e54bf8d69288fbee4904" "-m" "Unrelated")
+          _ (git *dir* "branch" "unrelated" unrelated)
+          before (snapshot id)
+          {:keys [status err]} (captured #(task/finish [id "--into" "unrelated"]))]
+      (should= 128 status)
+      (should-contain "unrelated histories" err)
+      (should= before (snapshot id))
+      (should= "" (git (worktree id) "status" "--porcelain"))))
+
+  (it "finishes a task that has no worktree"
+    (let [id (new-id "Quick" "--route" "coder")]
+      (task/handoff [id "--to" "done"] {:audit-passed? true})
+      (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id]))
+      (should-not (fs/exists? (worktree id)))
+      (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
+
+  (it "verifies the committed conflict resolution before it rewords HEAD or removes anything"
+    (commit-on-main "swarmforge/verify.conf" "grep -qv resolved a\n")
+    (let [id (conflicting-task)
+          dir (worktree id)]
+      (captured #(task/finish [id]))
+      (should= "" (git dir "status" "--porcelain"))
+      (resolve-conflicts)
+      (git *dir* "commit" "-q" "--no-verify" "-m" "Resolve")
+      (let [before (snapshot id)]
+        (should= {:status 1 :err (str "verification failed on the merge of swarm/" id " into main: grep -qv resolved a exited 1")}
+                 (select-keys (captured #(task/finish [id])) [:status :err]))
+        (should= before (snapshot id))
+        (should (fs/exists? dir)))
+      (spit (str *dir* "/a") "fixed\n")
+      (git *dir* "commit" "-q" "--no-verify" "--amend" "-a" "-m" "Resolve")
+      (should= (str "VERIFY: passed: grep -qv resolved a\nFINISHED: " id " merged into main") (out task/finish [id]))
+      (should= (str "sf finished: " id) (git *dir* "log" "-1" "--format=%s"))
+      (should-not (fs/exists? dir))))
 
   (it "hands a non-specifier task to done and refuses to finish an unfinished one"
     (let [id (new-id "Add login" "--route" "coder")]

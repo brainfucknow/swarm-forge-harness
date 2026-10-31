@@ -27,11 +27,12 @@
     (if (str/blank? value) default value)))
 
 (defn run
-  "Runs a command and captures its output. env holds extra environment
-  variables. A program that cannot start exits 127."
-  [{:keys [dir in err env] :or {err :string}} & cmd]
+  "Runs a command and captures its output, unless out or err name another
+  destination. env holds extra environment variables. A program that cannot
+  start exits 127."
+  [{:keys [dir in out err env] :or {out :string err :string}} & cmd]
   (try
-    (p/shell (cond-> {:cmd (vec cmd) :out :string :err err :continue true :dir (some-> dir str)}
+    (p/shell (cond-> {:cmd (vec cmd) :out out :err err :continue true :dir (some-> dir str)}
                in (assoc :in in)
                env (assoc :extra-env env)))
     (catch java.io.IOException e
@@ -73,13 +74,19 @@
   []
   (chomp (must {} "git" "rev-parse" "--show-toplevel")))
 
+(defn conf-lines
+  "The trimmed lines of the text of a swarmforge/*.conf file, in order,
+  without blank lines and lines whose first non-blank character is #."
+  [text]
+  (->> (str/split-lines (or text ""))
+       (map str/trim)
+       (remove #(or (str/blank? %) (str/starts-with? % "#")))))
+
 (defn conf-rows
   "The whitespace-separated fields of each line, without blank and comment lines."
   [file]
   (when (fs/exists? file)
-    (->> (str/split-lines (slurp (str file)))
-         (remove #(re-find #"^\s*(#|$)" %))
-         (map #(str/split (str/trim %) #"\s+")))))
+    (map #(str/split % #"\s+") (conf-lines (slurp (str file))))))
 
 (defn template [name]
   (slurp (io/resource (str "sf/" name))))
