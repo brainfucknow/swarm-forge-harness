@@ -70,12 +70,11 @@
 
 (defn print-brief
   "print-body for sf start of task id: only the records that record/brief
-  keeps and the lore/brief-lines, each section led by a line that counts what
-  it left out."
+  keeps and the lines that lore/brief keeps, each section led by a line that
+  counts what it left out."
   [id {:keys [file records commits]}]
   (let [{shown :records omitted :omitted} (record/brief records brief-records)
-        lore (lore/brief-lines commits)
-        lore-omitted (- (count (lore/lines commits)) (count lore))]
+        {lore :lines lore-omitted :omitted} (lore/brief commits)]
     (print-sections (:request file)
                     (omitted-line "RECORDS" omitted "earlier records omitted" id)
                     (str/join "\n\n" (map record/block shown))

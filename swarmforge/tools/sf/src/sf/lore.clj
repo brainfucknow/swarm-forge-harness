@@ -112,18 +112,21 @@
 (defn- values-of [key trailers]
   (for [trailer trailers :when (= key (:key trailer))] (str/trim (:value trailer))))
 
-(defn brief-lines
-  "The lines of commits without the evidence trailers (Tested, Not-tested,
-  Confidence, Lore-id) and without any trailer of a commit whose Lore-id a
-  Supersedes trailer of the commits names."
+(defn brief
+  "The LORE: lines of commits that sf start prints, as :lines, and how many of
+  the lines that sf show prints it leaves out, as :omitted. It leaves out the
+  evidence trailers (Tested, Not-tested, Confidence, Lore-id) and every trailer
+  of a commit whose Lore-id a Supersedes trailer of the commits names."
   [commits]
   (let [by-commit (map commit-trailers commits)
-        superseded (set (mapcat #(values-of "Supersedes" %) by-commit))]
-    (for [trailers by-commit
-          :when (not-any? superseded (values-of "Lore-id" trailers))
-          trailer trailers
-          :when (not (evidence-keys (:key trailer)))]
-      (line trailer))))
+        superseded (set (mapcat #(values-of "Supersedes" %) by-commit))
+        kept (for [trailers by-commit
+                   :when (not-any? superseded (values-of "Lore-id" trailers))
+                   trailer trailers
+                   :when (not (evidence-keys (:key trailer)))]
+               trailer)]
+    {:lines (map line kept)
+     :omitted (- (count (apply concat by-commit)) (count kept))}))
 
 (def log-format
   "The git log --format that read-log reads."
