@@ -121,7 +121,9 @@ sf new ──► stage <first role>
   every record.
 - When that merge stops on conflicts, the operator resolves and commits them
   in the main checkout and runs `sf finish` again, which verifies the
-  committed merge there before it records it and cleans up.
+  committed merge there before it records it and cleans up. If that
+  verification fails, fix the merge with `git commit --amend` and run
+  `sf finish` again; a new commit on top of the merge is refused as finished.
 
 ## Sharing
 
