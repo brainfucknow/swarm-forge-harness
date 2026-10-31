@@ -158,3 +158,42 @@
 
   (it "reads no commits from empty output"
     (should= [] (lore/read-log ""))))
+
+(defn- commit [sha role & trailers]
+  {:sha sha :message (str "M\n\nBy " role ".\n") :trailers (vec trailers)})
+
+(describe "brief-lines"
+  (it "keeps the decision trailers in order"
+    (should= ["LORE: c1 qa Constraint: a" "LORE: c1 qa Rejected: b | c" "LORE: c1 qa Directive: d"
+              "LORE: c1 qa Scope-risk: e" "LORE: c1 qa Reversibility: f" "LORE: c1 qa Supersedes: g"
+              "LORE: c1 qa Depends-on: h" "LORE: c1 qa Related: i"]
+             (lore/brief-lines [(commit "c1" "qa" "Constraint: a" "Rejected: b | c" "Directive: d" "Scope-risk: e"
+                                        "Reversibility: f" "Supersedes: g" "Depends-on: h" "Related: i")])))
+
+  (it "leaves out the evidence trailers"
+    (should= ["LORE: c1 qa Directive: d"]
+             (lore/brief-lines [(commit "c1" "qa" "Lore-id: 1" "Tested: a" "Directive: d" "Not-tested: b" "Confidence: c")])))
+
+  (it "leaves out every line of a commit whose Lore-id a later commit supersedes"
+    (should= ["LORE: c2 coder Directive: two" "LORE: c2 coder Supersedes: 0000000a"]
+             (lore/brief-lines [(commit "c1" "qa" "Lore-id: 0000000a" "Directive: one" "Constraint: x")
+                                (commit "c2" "coder" "Lore-id: 0000000b" "Directive: two" "Supersedes: 0000000a")])))
+
+  (it "follows chains of superseding commits"
+    (should= ["LORE: c3 qa Supersedes: b"]
+             (lore/brief-lines [(commit "c1" "qa" "Lore-id: a" "Directive: one")
+                                (commit "c2" "qa" "Lore-id: b" "Supersedes: a")
+                                (commit "c3" "qa" "Lore-id: c" "Supersedes: b")])))
+
+  (it "matches the Supersedes value without surrounding blanks"
+    (should= ["LORE: c2 qa Supersedes: a "]
+             (lore/brief-lines [(commit "c1" "qa" "Lore-id: a" "Directive: one")
+                                (commit "c2" "qa" "Supersedes: a ")])))
+
+  (it "removes nothing for a value that matches no commit, nor a commit without a Lore-id"
+    (should= ["LORE: c1 qa Directive: one" "LORE: c2 qa Supersedes: zz"]
+             (lore/brief-lines [(commit "c1" "qa" "Directive: one")
+                                (commit "c2" "qa" "Supersedes: zz")])))
+
+  (it "leaves out trailers that are not Lore trailers"
+    (should= [] (lore/brief-lines [(commit "c1" "qa" "Co-Authored-By: A <a@b>")]))))

@@ -160,7 +160,7 @@
       (println (str "ROUTE: " (:route state)))
       (println (str "BRANCH: " (record/branch id)))
       (println (str "DIR: " dir))
-      (history/print-body view))))
+      (history/print-brief id view))))
 
 (defn- archive
   "The task file moved to done, with every record and the handoff rec."

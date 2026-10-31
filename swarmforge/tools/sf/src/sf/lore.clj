@@ -89,15 +89,41 @@
   [message]
   (or (last (keep byline-role (str/split-lines message))) "-"))
 
+(defn- commit-trailers
+  "The Lore trailers of commit as maps of :sha, :role, :key and :value."
+  [{:keys [sha message trailers]}]
+  (for [trailer trailers
+        :let [key (trailer-key trailer)]
+        :when (lore-key? key)]
+    {:sha sha :role (role-of message) :key key :value (str/triml (subs trailer (inc (count key))))}))
+
+(defn- line [{:keys [sha role key value]}]
+  (str "LORE: " sha " " role " " key ": " value))
+
 (defn lines
   "One `LORE: <sha> <role> <Key>: <value>` line per Lore trailer. commits are
   maps of :sha, :message, and :trailers (the unfolded trailer lines git reads)."
   [commits]
-  (for [{:keys [sha message trailers]} commits
-        trailer trailers
-        :let [key (trailer-key trailer)]
-        :when (lore-key? key)]
-    (str "LORE: " sha " " (role-of message) " " key ": " (str/triml (subs trailer (inc (count key)))))))
+  (map line (mapcat commit-trailers commits)))
+
+(def ^:private evidence-keys
+  #{"Tested" "Not-tested" "Confidence" "Lore-id"})
+
+(defn- values-of [key trailers]
+  (for [trailer trailers :when (= key (:key trailer))] (str/trim (:value trailer))))
+
+(defn brief-lines
+  "The lines of commits without the evidence trailers (Tested, Not-tested,
+  Confidence, Lore-id) and without any trailer of a commit whose Lore-id a
+  Supersedes trailer of the commits names."
+  [commits]
+  (let [by-commit (map commit-trailers commits)
+        superseded (set (mapcat #(values-of "Supersedes" %) by-commit))]
+    (for [trailers by-commit
+          :when (not-any? superseded (values-of "Lore-id" trailers))
+          trailer trailers
+          :when (not (evidence-keys (:key trailer)))]
+      (line trailer))))
 
 (def log-format
   "The git log --format that read-log reads."

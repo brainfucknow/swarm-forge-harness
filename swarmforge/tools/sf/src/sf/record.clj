@@ -123,6 +123,25 @@
                  [[] nil]
                  records)))
 
+(def ^:private brief-kept
+  "The records that a brief always keeps."
+  #{"question" "answer" "changes-requested"})
+
+(defn brief
+  "The records with all but the last limit of the records that are not
+  question, answer or changes-requested left out, in order, as :records, and
+  the number left out as :omitted."
+  [records limit]
+  (let [other? #(not (brief-kept (:record %)))
+        omitted (max 0 (- (count (filter other? records)) limit))]
+    {:records (first (reduce (fn [[kept left] rec]
+                               (if (and (pos? left) (other? rec))
+                                 [kept (dec left)]
+                                 [(conj kept rec) left]))
+                             [[] omitted]
+                             records))
+     :omitted omitted}))
+
 (defn- fields [{:keys [task record from text stage route commit files merged-into]}]
   (concat
    [["type" record] ["from" from]]
