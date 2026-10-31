@@ -81,6 +81,7 @@ copy of `swarmforge/`. The current contract is
 | `I ran "C"` / `I ran "C" in the worktree of task "A"` | Runs `C` (placeholders filled in, split on spaces) in the main checkout or that worktree. Output and status are not checked. |
 | `I ran "C" with the text "X"` | The same, with `X` (newlines expanded) added as one last argument. |
 | `the operator asked and answered N questions on task "A"` | For I = 1 to N: `sf ask $A qI`, then `sf answer $A aI`, in the main checkout with `SWARMFORGE_ROLE` unset. Adds 2N records. |
+| `the route of task "A" was set to "R" N times` | `sf route $A R` N times in the main checkout. Adds N `route` records. |
 | `I run …` | The same forms. This is the step under test, whose output and status the `Then` steps check. |
 | `I run sf new with the title "T"` | `sf new "T"` in the main checkout. |
 | `I run sf new with the title "T", the request "Q" and the route "R"` | `sf new "T" -m "Q" --route R`, with `\n` in Q expanded. |

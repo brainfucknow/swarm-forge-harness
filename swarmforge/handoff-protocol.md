@@ -76,9 +76,12 @@ a host squash merge, it prints the records from `tasks/done/<id>.md`, and
 `sf show` prints every record and every `LORE:` line. `sf start` gives a role
 a shorter brief:
 
-- Only the last 10 records. When there are more, the line
+- Every `question`, `answer` and `changes-requested` record, and only the
+  last 10 of the other records, oldest first. When it leaves out other
+  records, the line
   `RECORDS: <k> earlier records omitted; sf show <id> prints them` comes after
-  the request, before the first printed record.
+  the request, before the first printed record; `<k>` counts the records it
+  left out.
 - No evidence lines: `Tested`, `Not-tested`, `Confidence` and `Lore-id`.
 - No lines of a superseded commit. A `Supersedes: <Lore-id>` trailer on any
   commit of the branch removes every line of the commit with that `Lore-id`;

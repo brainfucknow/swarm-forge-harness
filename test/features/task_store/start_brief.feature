@@ -3,11 +3,14 @@ Feature: sf start brief
   sf start gives a role a bounded brief; sf show keeps printing the whole
   history, every record and every LORE: line.
 
-  Records: sf start prints only the last 10 records. When the task has more,
-  the line "RECORDS: <k> earlier records omitted; sf show <id> prints them"
-  comes after the request, as its own section, before the first printed
-  record; <k> is the number of records left out and <id> is the full task id.
-  With 10 records or fewer, sf start prints them all and no RECORDS: line.
+  Records: sf start always prints every question, answer and
+  changes-requested record. Of the other records it prints only the last 10.
+  It prints them all oldest first, as sf show does. When it leaves out other
+  records, the line
+  "RECORDS: <k> earlier records omitted; sf show <id> prints them" comes
+  after the request, as its own section, before the first printed record;
+  <k> is the number of records left out and <id> is the full task id. With 10
+  other records or fewer, sf start prints every record and no RECORDS: line.
 
   LORE: lines: sf start leaves out two kinds of LORE: lines.
   - Evidence keys: Tested, Not-tested, Confidence and Lore-id.
@@ -30,36 +33,44 @@ Feature: sf start brief
     And task "A" titled "Add login" with the request "Users log in." was started on route "specifier,coder,qa"
 
   # sf start brief 1
-  Scenario Outline: sf start brief 1: sf start prints only the last 10 records
-    Given the operator asked and answered <questions> questions on task "A"
+  Scenario Outline: sf start brief 1: sf start keeps every question, answer and changes-requested record and the last 10 others
+    Given role "specifier" committed "Spec" in the worktree of task "A" as C1
+    And I ran "sf review $A"
+    And I ran "sf reject $A revise"
+    And the operator asked and answered 2 questions on task "A"
+    And the route of task "A" was set to "specifier,coder,qa" <routes> times
     When I run "sf start $A"
     Then the exit status is 0
-    And the output has 10 lines starting with "type: "
-    And the output has the lines "Users log in.\n\nRECORDS: <omitted> earlier records omitted; sf show $A prints them\n\ntype: question\nfrom: specifier\nquestion: q<first>"
-    And the output has the line "answer: a<questions>"
+    And the output has the lines "Users log in.\n\nRECORDS: <omitted> earlier records omitted; sf show $A prints them\n\ntype: <first>"
+    And the output has 15 lines starting with "type: "
+    And the output has <shown> lines starting with "type: route"
+    And the output has the lines "type: changes-requested\nfrom: operator\nreason: revise"
+    And the output has the lines "type: question\nfrom: specifier\nquestion: q1\n\ntype: answer\nfrom: operator\nanswer: a1"
+    And the output has the line "answer: a2"
     And the output has no line containing "type: created"
 
     Examples:
-      | questions | omitted | first |
-      | 5         | 1       | 1     |
-      | 6         | 3       | 2     |
+      | routes | omitted | first             | shown |
+      | 9      | 1       | review            | 9     |
+      | 11     | 3       | changes-requested | 10    |
 
   # sf start brief 2
-  Scenario: sf start brief 2: with 10 records sf start prints them all and no RECORDS line
-    Given the operator asked and answered 4 questions on task "A"
-    And I ran "sf ask $A q5"
+  Scenario: sf start brief 2: with 10 other records sf start prints every record and no RECORDS line
+    Given the operator asked and answered 2 questions on task "A"
+    And the route of task "A" was set to "specifier,coder,qa" 9 times
     When I run "sf start $A"
     Then the exit status is 0
-    And the output has 10 lines starting with "type: "
+    And the output has 14 lines starting with "type: "
     And the output has the lines "Users log in.\n\ntype: created"
     And the output has no line containing "RECORDS:"
 
   # sf start brief 3
   Scenario: sf start brief 3: sf show prints every record
-    Given the operator asked and answered 6 questions on task "A"
+    Given the operator asked and answered 2 questions on task "A"
+    And the route of task "A" was set to "specifier,coder,qa" 11 times
     When I run "sf show $A"
     Then the exit status is 0
-    And the output has 13 lines starting with "type: "
+    And the output has 16 lines starting with "type: "
     And the output has the lines "Users log in.\n\ntype: created"
     And the output has no line containing "RECORDS:"
 
