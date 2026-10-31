@@ -133,13 +133,9 @@
   the number left out as :omitted."
   [records limit]
   (let [other? #(not (brief-kept (:record %)))
-        omitted (max 0 (- (count (filter other? records)) limit))]
-    {:records (first (reduce (fn [[kept left] rec]
-                               (if (and (pos? left) (other? rec))
-                                 [kept (dec left)]
-                                 [(conj kept rec) left]))
-                             [[] omitted]
-                             records))
+        omitted (max 0 (- (count (filter other? records)) limit))
+        dropped (set (take omitted (keep-indexed #(when (other? %2) %1) records)))]
+    {:records (keep-indexed #(when-not (dropped %1) %2) records)
      :omitted omitted}))
 
 (defn- fields [{:keys [task record from text stage route commit files merged-into]}]
