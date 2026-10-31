@@ -20,14 +20,19 @@
 (def property-filter "Category!=Property")
 
 (def languages
-  {:csharp {:name "sf-cs" :extension ".cs" :format "csharp" :mutation? true :signature? true}
-   :fsharp {:name "sf-fs" :extension ".fs" :format "fsharp" :mutation? false :signature? false}})
+  "Per-language profiles; :compiled-methods? skips C# signature widening, :no-mutation gives why Stryker.NET cannot mutate."
+  {:csharp {:name "sf-cs" :label "C#" :extension ".cs" :jscpd ["--format" "csharp"]}
+   :fsharp {:name "sf-fs" :label "F#" :extension ".fs" :jscpd ["--format" "fsharp"]
+            :compiled-methods? true :no-mutation "Stryker.NET supports C# only"}
+   :vbnet {:name "sf-vb" :label "VB.NET" :extension ".vb"
+           :jscpd ["--format" "visual-basic" "--formats-exts" "visual-basic:vb"]
+           :compiled-methods? true :no-mutation "Stryker.NET loads only C# and F# projects"}})
 (def ^:dynamic *language* (:csharp languages))
 
 (defn- usage []
   (str "usage: " (:name *language*) " <command> [options]
 
-  tools                       " (if (:mutation? *language*) "install dotnet-stryker locally and check node, npx, dotnet" "check dotnet, node, npx and prepare jscpd") "
+  tools                       " (if (:no-mutation *language*) "check dotnet, node, npx and prepare jscpd" "install dotnet-stryker locally and check node, npx, dotnet") "
   test [dotnet test args]     unit and acceptance tests (Category!=Property)
   property                    property tests only (Category=Property)
   coverage [dotnet test args] tests with coverlet; cobertura files under " coverage-dir "/
@@ -35,7 +40,7 @@
   dry [--all] [--base REF] [--min-tokens N]
                               jscpd clones touching changed lines; exit 1 if any
   mutate [--base REF] [--all] [--report-only] [-- stryker args]
-                              " (if (:mutation? *language*) "Stryker on changed files (--since); exit 1 on survivors" "unsupported for F#; exit 2") "
+                              " (if (:no-mutation *language*) (str "unsupported for " (:label *language*) "; exit 2") "Stryker on changed files (--since); exit 1 on survivors") "
 
 Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, main, or master."))
 
@@ -62,7 +67,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
   (let [missing (remove shell/available? ["dotnet" "node" "npx"])]
     (when (seq missing)
       (throw (outcome/usage-error (str "missing on PATH: " (str/join ", " missing))))))
-  (when (:mutation? *language*)
+  (when-not (:no-mutation *language*)
     (let [manifest (str (fs/path ".config" "dotnet-tools.json"))]
       (when-not (exists? manifest)
         (require-tool-run "dotnet" ["new" "tool-manifest"]))
@@ -99,7 +104,8 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
   "Keeps the best-covered entry when several test runs cover the same method."
   [files]
   (->> files
-       (mapcat #(cob/parse-cobertura (slurp %) (when (= ".fs" (:extension *language*)) {:extension ".fs" :strict? true})))
+       (mapcat #(cob/parse-cobertura (slurp %) (when (:compiled-methods? *language*)
+                                                  {:extension (:extension *language*) :strict? true})))
        (reduce (fn [best method]
                  (let [key ((juxt :file :class-name :name :signature) method)
                        seen (get best key)]
@@ -122,7 +128,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
                  (str (fs/relativize root reported))
                  reported))]
     (when file
-      (let [source (when (:signature? *language*) (read-source file))
+      (let [source (when-not (:compiled-methods? *language*) (read-source file))
             signature-line (if source
                              (cob/signature-start source (:first-line method))
                              (:first-line method))]
@@ -138,8 +144,8 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
           changed (changed-for opts)
           read-source (memoize (partial source-lines root))
           methods (merge-methods files)
-          _ (when (and (= ".fs" (:extension *language*)) (empty? methods))
-              (throw (outcome/usage-error "no usable compiled .fs method data in coverage report")))
+          _ (when (and (:compiled-methods? *language*) (empty? methods))
+              (throw (outcome/usage-error (str "no usable compiled " (:extension *language*) " method data in coverage report"))))
           selected (->> methods
                         (keep (partial select-method root changed read-source))
                         (sort-by (juxt (comp - :crap) :file :first-line)))]
@@ -151,11 +157,12 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
                  outcome/exit-ok
                  (do (fs/create-dirs (shell/in-dir jscpd-dir))
                      (fs/delete-if-exists (shell/in-dir report-path))
-                     (shell/run "npx" ["--yes" "jscpd@4" "--format" (:format *language*)
-                                       "--min-tokens" (str (or (:min-tokens opts) 50))
-                                       "--reporters" "json" "--output" jscpd-dir
-                                       "--ignore" "**/bin/**,**/obj/**,**/*.g.cs,**/*.Designer.cs,**/Migrations/**,**/tmp/**"
-                                       "."])))]
+                     (shell/run "npx" (-> ["--yes" "jscpd@4"]
+                                         (into (:jscpd *language*))
+                                         (into ["--min-tokens" (str (or (:min-tokens opts) 50))
+                                                "--reporters" "json" "--output" jscpd-dir
+                                                "--ignore" "**/bin/**,**/obj/**,**/*.g.cs,**/*.Designer.cs,**/*.Designer.vb,**/Migrations/**,**/tmp/**"
+                                                "."])))))]
     (cond
       (and (not (zero? status)) (not (exists? report-path))) status
       (not (exists? report-path)) (throw (outcome/usage-error (str report-path " not found")))
@@ -164,8 +171,8 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
               (shell/emit (jscpd/review clones changed (when changed (git/repo-root))))))))
 
 (defn- cmd-mutate [{:keys [opts extra]}]
-  (when-not (:mutation? *language*)
-    (throw (outcome/usage-error "F# mutation is unsupported; Stryker.NET supports C# only")))
+  (when-let [reason (:no-mutation *language*)]
+    (throw (outcome/usage-error (str (:label *language*) " mutation is unsupported; " reason))))
   (let [report-path (str (fs/path stryker-dir "reports" "mutation-report.json"))
         status (if (:report-only opts)
                  outcome/exit-ok
