@@ -66,7 +66,9 @@
   (let [route (shell/env "SWARMFORGE_ROUTE" nil)]
     (cond route (resolve-route route)
           (field (named-routes) "feature" 2) (resolve-route "feature")
-          :else (resolve-route (str/join "," (remove #(some #{"optional"} (role-flags %)) (pipeline)))))))
+          :else (let [roles (remove #(some #{"optional"} (role-flags %)) (pipeline))]
+                  (when (empty? roles) (shell/die "empty route"))
+                  (str/join "," roles)))))
 
 ;; sf check
 

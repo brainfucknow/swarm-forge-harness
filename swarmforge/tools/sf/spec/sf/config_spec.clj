@@ -77,6 +77,12 @@
         (should= "coder,security-reviewer,qa" (config/default-route)))
       (should-throw clojure.lang.ExceptionInfo (config/resolve-route "security-reviewer,hardener,qa")))
 
+    (it "does not expand a fallback that collides with a named route"
+      (conf "roles.conf" "coder strong subagent\nsecurity-reviewer strong subagent optional\n")
+      (conf "routes.conf" "coder coder,security-reviewer\n")
+      (should= "coder" (config/default-route))
+      (should= "coder,security-reviewer" (config/resolve-route "coder")))
+
     (it "refuses an empty fallback rather than enabling optional reviewers"
       (conf "roles.conf" "security-reviewer strong subagent optional\n")
       (conf "routes.conf" "")

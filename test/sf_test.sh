@@ -249,6 +249,17 @@ id4="$(sf new "Tidy" -m "x")"
 assert_eq "new uses the first catalogue role" "$(sf stage "$id4")" "coder"
 assert_eq "default route is the catalogue" "$(sf route "$id4")" "coder,cleaner"
 
+# A computed fallback is a literal role list, never a named-route lookup.
+printf 'coder strong subagent\nsecurity-reviewer strong subagent optional\n' > swarmforge/roles.conf
+printf 'coder coder,security-reviewer\n' > swarmforge/routes.conf
+assert_match "check permits a named route sharing the fallback name" "$(sf check)" "^CHECK: ok"
+fallback_id="$(sf new "Literal fallback" -m x)"
+assert_eq "fallback collision cannot opt in security review" "$(sf route "$fallback_id")" "coder"
+explicit_id="$(sf new "Explicit named review" -m x --route coder)"
+assert_eq "explicit colliding named route remains available" "$(sf route "$explicit_id")" "coder,security-reviewer"
+
+rm swarmforge/routes.conf
+
 # adapters
 printf 'specifier frontier session\ncoder frontier subagent\ncleaner fast subagent\n' > swarmforge/roles.conf
 out="$(sf adapters)"

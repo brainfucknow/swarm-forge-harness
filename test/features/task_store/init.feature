@@ -12,7 +12,7 @@ Feature: sf init without git-bug
     When I run "sf init"
     Then the exit status is 0
     And the output has the line "identity: <printed>"
-    And the output has the line "roles: specifier coder cleaner architect hardener qa"
+    And the output has the line "roles: specifier coder cleaner architect hardener security-reviewer qa"
 
     Examples:
       | identity                    | printed                     |
@@ -25,4 +25,4 @@ Feature: sf init without git-bug
     When I run "sf init"
     Then the exit status is 0
     And the output has the line "identity: operator <operator@swarmforge.local>"
-    And the output has the line "roles: specifier coder cleaner architect hardener qa"
+    And the output has the line "roles: specifier coder cleaner architect hardener security-reviewer qa"
