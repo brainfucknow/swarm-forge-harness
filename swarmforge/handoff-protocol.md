@@ -71,6 +71,28 @@ After `sf finish`, `sf show` reads them from the merge's second parent. After
 a host squash merge, it prints the records from `tasks/done/<id>.md`, and
 `LORE:` lines only while the task branch still exists.
 
+## What sf start leaves out
+
+`sf show` prints every record and every `LORE:` line. `sf start` gives a role
+a shorter brief:
+
+- Every `question`, `answer` and `changes-requested` record, and only the
+  last 10 of the other records, oldest first. When it leaves out other
+  records, the line
+  `RECORDS: <k> earlier records omitted; sf show <id> prints them` comes after
+  the request, before the first printed record; `<k>` counts the records it
+  left out.
+- No evidence lines: `Tested`, `Not-tested`, `Confidence` and `Lore-id`.
+- No lines of a superseded commit. A `Supersedes: <Lore-id>` trailer on any
+  commit of the branch removes every line of the commit with that `Lore-id`;
+  the `Supersedes` line stays unless its own commit is superseded, and a value
+  that matches no commit removes nothing.
+- When it leaves out any `LORE:` line, the line
+  `LORE-OMITTED: <k> superseded or evidence lines; sf show <id> prints them`
+  comes before the printed `LORE:` lines.
+
+`test/features/task_store/start_brief.feature` specifies this.
+
 ## Lifecycle
 
 ```text
