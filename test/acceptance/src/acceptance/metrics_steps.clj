@@ -170,6 +170,21 @@
       (check (= (get-in world [:before branch]) (tip world)) "the metrics branch moved")
       world)]
 
+   [#"the main checkout is on the branch \"([^\"]+)\""
+    (fn [world name]
+      (let [actual (git world "branch" "--show-current")]
+        (check (= name actual) (str "on the branch " (pr-str actual)))
+        world))]
+
+   [#"the only worktrees are the main checkout and the worktree of task \"(\w)\""
+    (fn [world name]
+      (let [actual (->> (str/split-lines (git world "worktree" "list" "--porcelain"))
+                        (keep #(second (re-matches #"worktree (.*)" %)))
+                        (map (comp str fs/canonicalize)))
+            want (map (comp str fs/canonicalize) [(:repo world) (worktree world name)])]
+        (check (= (sort want) (sort actual)) (str "worktrees: " (pr-str actual)))
+        world))]
+
    [#"the .gitignore of the repository has the line \"([^\"]+)\" exactly once"
     (fn [world line]
       (let [found (filter #{line} (str/split-lines (slurp (str (fs/path (:repo world) ".gitignore")))))]
