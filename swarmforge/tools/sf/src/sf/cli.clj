@@ -24,7 +24,9 @@ Operator commands
   answer <id> <text>              answer a role's question and clear needs operator
   approve <id>                    accept the specification and hand it to the next role
   reject <id> <text>              send the specification back to the specifier
-  finish <id> [--into BRANCH]     merge the task branch into BRANCH (default: current), remove it
+  finish <id> [--into BRANCH]     refuse uncommitted work in the worktree, run swarmforge/verify.conf
+                                  on the merge, then merge the task branch into BRANCH
+                                  (default: current) and remove it
 
 Role commands
   next <role>                     print ids of tasks waiting at stage <role>, or NO_TASK

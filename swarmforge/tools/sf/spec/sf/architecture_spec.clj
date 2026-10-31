@@ -41,6 +41,7 @@
     sf.git #{sf.shell}
     sf.store #{sf.git sf.record sf.shell}
     sf.metrics #{sf.git sf.shell}
+    sf.verify #{sf.shell}
     sf.feature-block #{}
     sf.gherkin-cache #{sf.feature-block sf.shell}
     sf.coverage-args #{}
@@ -50,7 +51,7 @@
     sf.audit #{sf.config sf.flow sf.shell sf.store}
     sf.history #{sf.flow sf.lore sf.record sf.shell sf.store}
     sf.dispatch #{sf.config sf.flow sf.shell sf.store}
-    sf.task #{sf.audit sf.config sf.flow sf.git sf.history sf.hook sf.metrics sf.options sf.record sf.shell sf.store}
+    sf.task #{sf.audit sf.config sf.flow sf.git sf.history sf.hook sf.metrics sf.options sf.record sf.shell sf.store sf.verify}
     sf.cli #{sf.adapters sf.config sf.dispatch sf.hook sf.shell sf.task sf.tool}})
 
 (defn- source-namespaces []

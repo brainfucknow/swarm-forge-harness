@@ -27,6 +27,7 @@ operator ──► session: orchestrator ──► subagents on the task's route
 | `bin/sf-js`, `languages/javascript.md` | JavaScript and TypeScript tool wrapper: the same commands for Vitest or Jest, oxlint or ESLint complexity with Istanbul coverage, jscpd, and StrykerJS. |
 | `tools/core/` | Report readers shared by the language tool wrappers: changed lines, CRAP, jscpd, Stryker. |
 | `handoff-protocol.md` | The task branch, task file, record commits, and lifecycle. |
+| `verify.conf` | Optional, written by the project: one shell command per line that `sf finish` runs on the merge before it merges, for example `make test`. |
 
 Mutation manifests are a cache on the orphan branch `swarmforge/metrics`, out
 of the tree and of every PR. `sf start` copies them into the worktree's
@@ -44,7 +45,7 @@ sf review <id>     # specifier stops for approval
 sf route <id> specifier,coder,qa   # operator narrows the route at the gate
 sf approve <id>    # operator; moves the task to the next role on the route
 sf ls              # id, stage, needs, route, title
-sf finish <id>     # at stage done: merge, remove the branch
+sf finish <id>     # at stage done: verify the merge, merge, remove the branch
 ```
 
 Without harness subagents, `sf run <id>` dispatches each stage to a headless
