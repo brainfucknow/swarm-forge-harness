@@ -47,7 +47,7 @@ export PATH="$repo/swarmforge/bin:$PATH"
 # init
 out="$(sf init)"
 assert_match "init prints the identity of record commits" "$out" "identity: tester <tester@example.com>"
-assert_match "init reports the catalogue" "$out" "roles: specifier coder cleaner architect hardener qa"
+assert_match "init reports the catalogue" "$out" "roles: specifier coder cleaner architect hardener security-reviewer qa"
 assert_match "init reports the routes" "$out" "routes: feature bugfix refactor harden spike"
 assert_eq "init is idempotent" "$(sf init | head -n 1)" "identity: tester <tester@example.com>"
 assert_eq "init writes no git-bug data" "$(git for-each-ref refs/bugs refs/identities)" ""
@@ -192,6 +192,21 @@ id3="$(sf new "Tidy" -m "x" --route "cleaner,architect")"
 assert_eq "explicit route starts at its first role" "$(sf stage "$id3")" "cleaner"
 assert_eq "SWARMFORGE_ROUTE sets the default" "$(SWARMFORGE_ROUTE=spike sf new "Idea" -m x | xargs sf route)" "specifier"
 
+# Optional review uses the existing route and handoff machinery.
+review_id="$(sf new "Review execution boundary" -m x --route coder,hardener,security-reviewer,qa)"
+assert_eq "optional security review is explicit" "$(sf route "$review_id")" "coder,hardener,security-reviewer,qa"
+sf start "$review_id" >/dev/null
+sf handoff "$review_id" >/dev/null
+assert_eq "hardener still precedes optional security review" "$(sf stage "$review_id")" "hardener"
+sf handoff "$review_id" >/dev/null
+assert_eq "security review follows hardener" "$(sf stage "$review_id")" "security-reviewer"
+sf ask "$review_id" "Confirmed defect needs a scoped correction" >/dev/null
+assert_fails "blocking security findings prevent handoff" sf handoff "$review_id"
+sf answer "$review_id" "Correction authorized" >/dev/null
+sf handoff "$review_id" >/dev/null
+assert_eq "QA follows optional security review" "$(sf stage "$review_id")" "qa"
+assert_fails "security review cannot precede hardener" sf new "Wrong review order" --route security-reviewer,hardener,qa
+
 # audit gate
 sed -i 's/^coder     strong   subagent$/coder strong subagent audit/' swarmforge/roles.conf
 assert_match "check accepts the audit flag" "$(sf check)" "^CHECK: ok"
@@ -255,7 +270,7 @@ cp -R "$HERE/.claude" "$HERE/.github" "$HERE/.codex" "$work/" && copy_swarmforge
 
 # configuration check
 copy_swarmforge .
-assert_match "check passes on the shipped configuration" "$(sf check)" "^CHECK: ok \(6 roles, 5 routes\)$"
+assert_match "check passes on the shipped configuration" "$(sf check)" "^CHECK: ok \(7 roles, 5 routes\)$"
 check_fails() {
   local name="$1" expected="$2" out
   out="$(sf check 2>&1 || true)"
