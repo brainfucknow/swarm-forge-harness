@@ -1,7 +1,8 @@
 (ns sfjs.architecture-test
   "Dependency rules for the sf-* wrappers, read from the ns forms under
   swarmforge/tools: policy namespaces stay free of IO, shared core never
-  reaches into a language, and only the F# entrypoint delegates to the .NET CLI."
+  reaches into a language, and only the F# and VB.NET entrypoints delegate to
+  the .NET CLI."
   (:require [babashka.fs :as fs]
             [clojure.set :as set]
             [clojure.string :as str]
@@ -34,10 +35,15 @@
 
 (def adapters
   "The namespaces that may touch processes, files, git, or the console."
-  '#{sfcore.shell sfcore.git sfjs.cli sfcs.cli sfcs.cobertura sffs.cli})
+  '#{sfcore.shell sfcore.git sfjs.cli sfcs.cli sfcs.cobertura sffs.cli sfvb.cli})
+
+(def dotnet-entrypoints '#{sffs.cli sfvb.cli})
 
 (defn- in? [prefix sym]
   (str/starts-with? (str sym) prefix))
+
+(defn- dotnet? [sym]
+  (some #(in? % sym) ["sfcs." "sffs." "sfvb."]))
 
 (defn- violations [pred]
   (into (sorted-map) (keep (fn [[from deps]] (when-let [bad (seq (filter #(pred from %) deps))] [from (vec (sort bad))])))
@@ -58,13 +64,13 @@
 
 (deftest languages-stay-apart
   (is (= {} (violations (fn [from dep]
-                          (or (and (in? "sfjs." from) (in? "sfcs." dep))
-                              (and (in? "sfcs." from) (in? "sfjs." dep))))))))
+                          (or (and (in? "sfjs." from) (dotnet? dep))
+                              (and (dotnet? from) (in? "sfjs." dep))))))))
 
 (deftest command-line-dependencies-are-limited-to-the-dotnet-entrypoint
   (is (= {} (violations (fn [from dep]
-                          (or (and (#{'sfjs.cli 'sfcs.cli 'sffs.cli} dep)
-                                   (not= ['sffs.cli 'sfcs.cli] [from dep]))
+                          (or (and (or (#{'sfjs.cli 'sfcs.cli} dep) (dotnet-entrypoints dep))
+                                   (not (and (dotnet-entrypoints from) (= 'sfcs.cli dep))))
                               (and (not (in? "sfjs.acceptance." from)) (in? "sfjs.acceptance." dep))))))))
 
 (def complexity-sources

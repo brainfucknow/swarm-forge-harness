@@ -3,7 +3,7 @@
             [babashka.process :as p]
             [speclj.core :refer [around describe it should-contain should=]]
             [sf.dispatch :as dispatch]
-            [sf.repo-support :as support :refer [with-repo]]
+            [sf.repo-support :as support :refer [*dir* git with-repo]]
             [sf.shell :as shell]
             [sf.task :as task]))
 
@@ -38,8 +38,18 @@
                (vec (command-for "claude" "coder" "prompt")))
       (should= ["codex" "exec" "--full-auto" "-c" "model_reasoning_effort=\"medium\"" "--y" "prompt"]
                (vec (command-for "codex" "coder" "prompt")))
-      (should= ["copilot" "-p" "prompt" "--model" "gpt-5" "--allow-all-tools" "--z"]
+      (should= ["copilot" "-p" "prompt" "--model" "gpt-5" "--z"]
                (vec (command-for "copilot" "coder" "prompt")))))
+
+  (it "grants copilot no tool permissions beyond SWARMFORGE_COPILOT_ARGS"
+    (should= ["copilot" "-p" "prompt" "--model" "gpt-5"]
+             (vec (command-for "copilot" "coder" "prompt")))
+    (with-redefs [shell/env (env-of {"SWARMFORGE_COPILOT_ARGS" "--allow-all-tools"})]
+      (should= ["--model" "gpt-5" "--allow-all-tools"]
+               (take-last 3 (command-for "copilot" "coder" "prompt"))))
+    (with-redefs [shell/env (env-of {"SWARMFORGE_COPILOT_ARGS" "--allow-tool shell(git:*)"})]
+      (should= ["--model" "gpt-5" "--allow-tool" "shell(git:*)"]
+               (take-last 4 (command-for "copilot" "coder" "prompt")))))
 
   (it "refuses an unknown backend"
     (should-contain "unknown backend 'nope'" (:err (support/captured #(command-for "nope" "coder" "p"))))))
@@ -57,17 +67,53 @@
     (with-redefs [fs/which (constantly nil)]
       (should-contain "no backend found" (:err (support/captured detect-backend))))))
 
+(defn- dispatched
+  "The options of each backend run that dispatching role on id with backend starts."
+  [role id backend]
+  (let [ran (atom [])]
+    (with-redefs [p/shell (backend-shell (fn [opts] (swap! ran conj opts) {:exit 0}))]
+      (dispatch/dispatch [role id backend]))
+    @ran))
+
+(defn- branch-of [dir]
+  (git dir "rev-parse" "--abbrev-ref" "HEAD"))
+
 (describe "dispatch"
   (around [it] (with-repo it))
 
-  (it "runs the backend command in the repository"
-    (let [ran (atom nil)
-          id (new-id "Add login")]
-      (with-redefs [p/shell (backend-shell (fn [opts] (reset! ran opts) {:exit 0}))]
-        (dispatch/dispatch ["coder" id "claude"]))
+  (it "runs the backend command"
+    (let [id (new-id "Add login")
+          [{:keys [cmd]}] (dispatched "coder" id "claude")]
       (should= ["claude" "-p" "--permission-mode" "acceptEdits" "--model" "opus"]
-               (take 6 (:cmd @ran)))
-      (should-contain (str "do your role's work for task " id) (last (:cmd @ran)))))
+               (take 6 cmd))
+      (should-contain (str "do your role's work for task " id) (last cmd))))
+
+  (it "runs every backend in the task worktree, created on the task branch when missing"
+    (doseq [backend dispatch/backends]
+      (let [id (new-id (str "Add " backend))
+            dir (str *dir* "/.worktrees/" id)]
+        (should= [dir] (map :dir (dispatched "coder" id backend)))
+        (should= (str "swarm/" id) (branch-of dir)))))
+
+  (it "reuses the task worktree with uncommitted changes in it"
+    (let [id (new-id "Add login")
+          dir (str *dir* "/.worktrees/" id)]
+      (dispatched "specifier" id "codex")
+      (spit (str dir "/work-in-progress") "x")
+      (should= [dir] (map :dir (dispatched "coder" id "codex")))
+      (should= "x" (slurp (str dir "/work-in-progress")))))
+
+  (it "refuses a task worktree on another branch without starting the backend"
+    (let [id (new-id "Add login")
+          dir (str *dir* "/.worktrees/" id)]
+      (dispatched "coder" id "claude")
+      (git dir "checkout" "-q" "-b" "other")
+      (let [ran (atom [])
+            result (with-redefs [p/shell (backend-shell (fn [opts] (swap! ran conj opts) {:exit 0}))]
+                     (support/captured #(dispatch/dispatch ["coder" id "claude"])))]
+        (should= 1 (:status result))
+        (should= (str "worktree is on 'other', expected 'swarm/" id "'") (:err result))
+        (should= [] @ran))))
 
   (it "fails with the exit status of the backend"
     (let [id (new-id "Add login")]

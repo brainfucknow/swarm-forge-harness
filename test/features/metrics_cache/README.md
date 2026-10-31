@@ -15,51 +15,7 @@ instead of the feature file.
 
 `test/acceptance.sh` runs them, one check per scenario and example row, with
 the real `sf`, real git and a real `bb` in a scratch repository that holds a
-copy of `swarmforge/`. Real-mutator compatibility checks are in the
-[handoff protocol](../../../swarmforge/handoff-protocol.md#sharing).
-
-## Behavior
-
-- The cache is the branch `swarmforge/metrics`, an orphan with no common
-  history with main. Its tree holds each manifest at its path under
-  `.metrics/`. It is not under `swarm/`, so sf never takes it for a task.
-- Only `.metrics/mutate/` and `.metrics/gherkin/` are cached.
-  `.metrics/crap.edn` and other reports are per-run output.
-- Only clj-mutate and gherkin-mutator are covered. The footers of mutate4go
-  and mutate4java stay in their source files, and Stryker keeps its files
-  under `tmp/`.
-- `sf start` loads, `sf handoff` saves, and the wrapper moves the block.
-- `install.sh` adds `.metrics/` to `.gitignore` once. sf does not check that
-  git ignores `.metrics/`.
-- A load never overwrites a file already in the worktree. The newest save of
-  a path wins. A file deleted from `.metrics/` stays in the cache. A refused
-  handoff saves nothing.
-- A save moves the branch with `commit-tree` and a compare-and-swap
-  `update-ref`, so no worktree is touched. If another save moves the branch
-  first, sf reads the new tip and retries once, then warns and saves nothing
-  if the retry fails.
-- sf does not push or fetch the cache. There is no squash command.
-- A manifest carries the hashes of its source, so a stale copy costs a
-  re-run, never a wrong result.
-
-## Not covered by these features
-
-Per `AGENTS.md`, prompt and document text is not pinned by tests. QA reads
-these by hand against the current protocol and role guidance.
-
-- `swarmforge/constitution/articles/engineering.md`: mutation manifests live
-  on `swarmforge/metrics`, not in tracked files. Do not commit `.metrics/` or
-  a mutation block in a feature file. `sf start` loads them and `sf handoff`
-  saves them. Differential mutation and "do not edit manifests by hand" stay.
-- `swarmforge/roles/hardener.md`: `sf handoff` saves manifest edits to the cache.
-- `swarmforge/roles/hardener.md` and `cleaner.md`: when a split moves code to
-  a new source file, keep the manifest state under `.metrics/` (for example,
-  move the manifest file to the new path), and do not commit it.
-- `swarmforge/handoff-protocol.md`, Sharing: `git push origin
-  swarmforge/metrics` shares the cache, and a fetch brings it back.
-- `swarmforge/README.md` names the cache branch.
-- clj-mutate's own README says to commit `.metrics/`. That does not apply
-  here.
+copy of `swarmforge/`.
 
 ## Placeholders
 

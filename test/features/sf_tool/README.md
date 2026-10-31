@@ -9,36 +9,6 @@ in. The wrappers `sf tool ensure` writes run a fake `bb`. Real upstream
 compatibility checks are in the
 [Clojure guide](../../../swarmforge/languages/clojure.md#tool-compatibility-checks).
 
-## Behavior
-
-- `tools.conf` names the upstream entry points: clj-mutate's task `mutate`,
-  crap4clj's task `crap`, and dry4clj through kind `bbmain`
-  (`bb -cp <clone>/src -m dry4clj.core`), which `sf check` accepts.
-- `ensure` fails clearly when the source lacks the entry point: exit 1, an
-  error naming the tool and the entry point, and no wrapper written. It does
-  not try to install the Go and Java tools another way; that needs a human.
-- A failing `ensure` leaves a wrapper from an earlier install byte-for-byte
-  unchanged, and `require` keeps reporting it OK. Before it writes anything
-  (wrapper, clone, coverage config), `ensure` checks the kind and rewrite of
-  the tool and its whole needs chain. It does not compare a task worktree's
-  catalogue line with the main checkout's.
-- `ensure crap4clj` also sets up a Babashka coverage path: a
-  `crap4clj-coverage/bb.edn` outside the clone, Cloverage pinned to a git sha,
-  speclj pinned at 3.12.2. The wrapper adds `--coverage-command` when `clj` or
-  `deps.edn` is missing, unless the caller settled coverage.
-- `list`, `require` and `ensure` read `tools.conf` of the checkout they run
-  in. Clones and wrappers stay shared. A `local` wrapper prefers the caller's
-  checkout copy of its script.
-- The crap4clj wrapper runs crap4clj in the directory that holds the first
-  source root, with the source roots made relative to it, so the result,
-  `target/` and `.metrics/` are exactly as when run from that directory.
-  Every other argument (`--lcov`, `--coverage-command`, module filters) is
-  passed unchanged, as when run from that directory. When that directory
-  does not exist the wrapper exits 1 without running crap4clj.
-- Existing source clones are reused.
-- The APS `gherkin-parser` drops data tables attached to steps, so no step
-  here uses one.
-
 ## Placeholders
 
 | Text | Meaning |

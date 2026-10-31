@@ -43,6 +43,24 @@
                      (let [state (last records)]
                        (flow/follow state type (if (fn? from) (from state) from) (change state))))))
 
+(defn- require-task-branch [dir id]
+  (let [branch (git dir "rev-parse" "--abbrev-ref" "HEAD")]
+    (when (not= branch (record/branch id))
+      (shell/die "worktree is on '" branch "', expected '" (record/branch id) "'"))))
+
+(defn- add-worktree
+  "The task worktree, added on the task branch when missing."
+  [id]
+  (let [dir (worktree-of id)]
+    (when-not (fs/directory? dir)
+      (git (shell/repo-root) "worktree" "add" "--quiet" dir (record/branch id)))
+    dir))
+
+(defn worktree!
+  "The task worktree, added when missing; stops when it is on another branch."
+  [id]
+  (doto (add-worktree id) (require-task-branch id)))
+
 (defn- role-head
   "The role's commit at the tip of the task branch, below any records. When
   the task has a worktree, it must be on the task branch and have no
@@ -52,9 +70,7 @@
     (when (fs/directory? dir)
       (when (seq (git dir "status" "--porcelain"))
         (shell/die "uncommitted changes in " dir "; commit first"))
-      (let [branch (git dir "rev-parse" "--abbrev-ref" "HEAD")]
-        (when (not= branch (record/branch id))
-          (shell/die "worktree is on '" branch "', expected '" (record/branch id) "'"))))
+      (require-task-branch dir id))
     (flow/role-commit (git (shell/repo-root) "rev-parse" "--short" (store/ref-of id))
                       (last (store/records-at (store/ref-of id) id)))))
 
@@ -127,11 +143,8 @@
 
 (defn start [[id-arg]]
   (let [id (open-task id-arg)
-        dir (worktree-of id)
-        root (shell/repo-root)]
-    (when-not (fs/directory? dir)
-      (git root "worktree" "add" "--quiet" dir (record/branch id)))
-    (hook/install root)
+        dir (add-worktree id)]
+    (hook/install (shell/repo-root))
     (metrics/load! dir)
     (let [{:keys [file state] :as view} (history/view id)]
       (println (str "TASK: " id))

@@ -61,11 +61,6 @@
     (throw (outcome/usage-error (str "oxlint ran no complexity rule; " version-requirement)))
     :else parsed))
 
-(defn read-report
-  "The JSON report oxlint printed, rejecting missing output or no rule."
-  [status text]
-  (validate-report status (report text)))
-
 (defn parse-report
   "Every eslint(complexity) diagnostic in an oxlint report, with the file
   relative to `root`; a function ends on the line it starts."
