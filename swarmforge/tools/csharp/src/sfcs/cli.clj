@@ -11,19 +11,20 @@
             [sfcore.outcome :as outcome]
             [sfcore.shell :as shell]
             [sfcore.stryker :as stryker]
-            [sfcs.cobertura :as cob]))
+            [sfcs.cobertura :as cob]
+            [sfcs.project :as project]))
 
 (def tmp "tmp")
 (def coverage-dir (str (fs/path tmp "coverage")))
 (def jscpd-dir (str (fs/path tmp "jscpd")))
 (def stryker-dir (str (fs/path tmp "stryker")))
-(def property-filter "Category!=Property")
 
 (def languages
-  "Per-language profiles; :compiled-methods? skips C# signature widening, :no-mutation gives why Stryker.NET cannot mutate."
+  "Per-language profiles; :compiled-methods? skips C# signature widening, :no-mutation gives why Stryker.NET cannot mutate,
+  :expecto? selects properties in Expecto test projects by their declared list."
   {:csharp {:name "sf-cs" :label "C#" :extension ".cs" :jscpd ["--format" "csharp"]}
    :fsharp {:name "sf-fs" :label "F#" :extension ".fs" :jscpd ["--format" "fsharp"]
-            :compiled-methods? true :no-mutation "Stryker.NET supports C# only"}
+            :compiled-methods? true :no-mutation "Stryker.NET supports C# only" :expecto? true}
    :vbnet {:name "sf-vb" :label "VB.NET" :extension ".vb"
            :jscpd ["--format" "visual-basic" "--formats-exts" "visual-basic:vb"]
            :compiled-methods? true :no-mutation "Stryker.NET loads only C# and F# projects"}})
@@ -33,8 +34,8 @@
   (str "usage: " (:name *language*) " <command> [options]
 
   tools                       " (if (:no-mutation *language*) "check dotnet, node, npx and prepare jscpd" "install dotnet-stryker locally and check node, npx, dotnet") "
-  test [dotnet test args]     unit and acceptance tests (Category!=Property)
-  property                    property tests only (Category=Property)
+  test [dotnet test args]     unit and acceptance tests (Category!=Property" (when (:expecto? *language*) "; Expecto: outside the SwarmForgePropertyTestList list") ")
+  property                    property tests only (Category=Property" (when (:expecto? *language*) "; Expecto: the SwarmForgePropertyTestList list") ")
   coverage [dotnet test args] tests with coverlet; cobertura files under " coverage-dir "/
   crap [--all] [--base REF]   CRAP per changed method from " coverage-dir "/; exit 1 over " crap/crap-limit "
   dry [--all] [--base REF] [--min-tokens N]
@@ -76,29 +77,94 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
       (require-tool-run "dotnet" ["tool" "restore"])))
   (shell/run "npx" ["--yes" "jscpd@4" "--version"]))
 
+(def ^:private skipped-dir-names #{"bin" "obj" "tmp" "node_modules"})
+(def ^:private project-extensions #{"fsproj" "csproj" "vbproj"})
+(def ^:private property-list-element project/property-list-element)
+
+(defn- skipped-dir? [path]
+  (let [name (fs/file-name path)]
+    (or (contains? skipped-dir-names name) (str/starts-with? name "."))))
+
+(defn- project-paths
+  "Project files under `dir`, outside build output, scratch and hidden directories."
+  [dir]
+  (mapcat (fn [path]
+            (cond
+              (fs/directory? path {:nofollow-links true}) (when-not (skipped-dir? path) (project-paths path))
+              (contains? project-extensions (fs/extension path)) [path]))
+          (fs/list-dir dir)))
+
+(defn- read-test-project
+  "The test project at `path`, or nil when it is not one."
+  [root path]
+  (when-let [project (project/test-project (slurp (str path)) (= "fsproj" (fs/extension path)))]
+    (assoc project :path (str (fs/relativize root path)))))
+
+(defn- test-projects [root]
+  (->> (project-paths root)
+       (keep (partial read-test-project root))
+       (sort-by :path)))
+
+(defn- require-property-lists [projects]
+  (when-let [undeclared (seq (filter #(and (:expecto? %) (nil? (:property-list %))) projects))]
+    (throw (outcome/usage-error
+            (str (str/join ", " (map :path undeclared))
+                 ": Expecto test project without " property-list-element "; add <" property-list-element
+                 ">NAME</" property-list-element "> naming the testList that holds its property tests")))))
+
+(defn- filter-literal
+  "`text` escaped so a vstest filter matches it literally."
+  [text]
+  (str/replace text #"[\\()&|=!~]" #(str "\\" %)))
+
+(defn- category-filter [property?]
+  (if property? "Category=Property" "Category!=Property"))
+
+(defn- project-filter [{:keys [expecto? property-list]} property?]
+  (if expecto?
+    (str "FullyQualifiedName" (if property? "~" "!~") (filter-literal property-list) ".")
+    (category-filter property?)))
+
+(defn- test-runs
+  "The `dotnet test` arguments of each run: one per test project once the tree
+  holds an Expecto test project, since Expecto has no traits; else one run
+  selecting by the Category trait."
+  [property?]
+  (let [projects (when (:expecto? *language*)
+                   (test-projects (fs/normalize (fs/absolutize (shell/in-dir ".")))))]
+    (if (some :expecto? projects)
+      (do (require-property-lists projects)
+          (mapv (fn [project] ["test" (:path project) "--filter" (project-filter project property?)]) projects))
+      [["test" "--filter" (category-filter property?)]])))
+
+(defn- run-tests
+  "Runs every run with `args`; the first failing status in run order, else 0."
+  [runs args]
+  (let [statuses (mapv #(shell/run "dotnet" (into % args)) runs)]
+    (or (first (remove zero? statuses)) outcome/exit-ok)))
+
 (defn- cmd-test [{:keys [args]}]
-  (shell/run "dotnet" (into ["test" "--filter" property-filter] args)))
+  (run-tests (test-runs false) args))
 
 (defn- cmd-property [{:keys [args]}]
-  (shell/run "dotnet" (into ["test" "--filter" "Category=Property"] args)))
+  (run-tests (test-runs true) args))
 
 (defn- cmd-coverage [{:keys [args]}]
-  (fs/create-dirs (shell/in-dir coverage-dir))
-  (doseq [stale (cob/find-cobertura-files (shell/in-dir coverage-dir))]
-    (fs/delete-tree (fs/parent stale)))
-  (let [status (shell/run "dotnet" (-> ["test" "--filter" property-filter
-                                        "--collect" "XPlat Code Coverage"
-                                        "--results-directory" coverage-dir]
-                                       (into args)
-                                       (conj "--" "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura")))]
-    (if-not (zero? status)
-      status
-      (let [files (cob/find-cobertura-files (shell/in-dir coverage-dir))]
-        (when (empty? files)
-          (throw (ex-info (str "no coverage.cobertura.xml under " coverage-dir
-                               "; is coverlet.collector referenced by the test projects?") {})))
-        (println (count files) "coverage file(s) under" coverage-dir)
-        outcome/exit-ok))))
+  (let [runs (test-runs false)]
+    (fs/create-dirs (shell/in-dir coverage-dir))
+    (doseq [stale (cob/find-cobertura-files (shell/in-dir coverage-dir))]
+      (fs/delete-tree (fs/parent stale)))
+    (let [status (run-tests runs (-> ["--collect" "XPlat Code Coverage" "--results-directory" coverage-dir]
+                                     (into args)
+                                     (conj "--" "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura")))]
+      (if-not (zero? status)
+        status
+        (let [files (cob/find-cobertura-files (shell/in-dir coverage-dir))]
+          (when (empty? files)
+            (throw (ex-info (str "no coverage.cobertura.xml under " coverage-dir
+                                 "; is coverlet.collector referenced by the test projects?") {})))
+          (println (count files) "coverage file(s) under" coverage-dir)
+          outcome/exit-ok)))))
 
 (defn- merge-methods
   "Keeps the best-covered entry when several test runs cover the same method."

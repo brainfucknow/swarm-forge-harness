@@ -185,6 +185,7 @@
                "[ -n \"$FAKE_DOTNET_LOG\" ] && printf '%s\\n' \"$@\" > \"$FAKE_DOTNET_LOG\"\n"
                "if [ \"$1 $2\" = \"$FAKE_FAIL_STEP\" ]; then exit 7; fi\n"
                "if [ \"$1\" = test ] && [ -n \"$FAKE_COVERAGE\" ]; then mkdir -p tmp/coverage/run && cp \"$FAKE_COVERAGE\" tmp/coverage/run/coverage.cobertura.xml; fi\n"
+               "for pair in ${FAKE_PROJECT_EXITS//,/ }; do if [ \"$2\" = \"${pair%%=*}\" ]; then exit \"${pair#*=}\"; fi; done\n"
                "if [ \"$1\" = stryker ] && [ -n \"$FAKE_REPORT\" ]; then mkdir -p tmp/stryker/reports && cp \"$FAKE_REPORT\" tmp/stryker/reports/mutation-report.json; fi\n"
                "if [ \"$1\" = new ]; then mkdir -p .config && echo '{\"tools\":{}}' > .config/dotnet-tools.json; fi\n"
                "exit ${FAKE_EXIT:-0}\n"))
@@ -538,3 +539,188 @@
       (is (= 0 status))
       (is (str/starts-with? (first lines) (str "usage: " (wrappers language)))))
     (is (= 2 (:status (sfcs-process {"LANGUAGE" language} "nope"))))))
+
+;; Expecto test projects: sf-fs selects properties by each project's declared list.
+
+(def xunit-fsproj
+  "<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup>
+    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.12.0\" />
+    <PackageReference Include=\"xunit\" Version=\"2.9.2\" />
+  </ItemGroup></Project>")
+
+(defn- expecto-fsproj [declaration]
+  (str "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup>" declaration "</PropertyGroup><ItemGroup>
+    <PackageReference Include=\"Expecto\" Version=\"10.2.1\" />
+    <PackageReference Include=\"YoloDev.Expecto.TestSdk\" Version=\"0.15.3\" />
+  </ItemGroup></Project>"))
+
+(defn- declared [list-name]
+  (expecto-fsproj (str "<SwarmForgePropertyTestList>" list-name "</SwarmForgePropertyTestList>")))
+
+(defn- in-tree
+  "Calls `f` with *repo* bound to a fresh directory holding `files` (path -> text)."
+  [files f]
+  (let [dir (str (fs/create-temp-dir {:prefix "sffs-tree"}))]
+    (try
+      (doseq [[path text] files]
+        (fs/create-dirs (fs/parent (fs/path dir path)))
+        (spit (str (fs/path dir path)) text))
+      (binding [*repo* dir] (f))
+      (finally (fs/delete-tree dir)))))
+
+(defn- dotnet-lines [lines]
+  (filterv #(str/starts-with? % "$ dotnet") lines))
+
+(def mixed-tree
+  {"src/Domain/Domain.fsproj" "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>"
+   "tests/Unit/Unit.fsproj" xunit-fsproj
+   "tests/Laws/Laws.fsproj" (declared "  Laws  ")
+   "tests/Csharp/Csharp.csproj" "<Project><PropertyGroup><IsTestProject>true</IsTestProject></PropertyGroup></Project>"
+   "bin/Old/Old.fsproj" (declared "Old")
+   "obj/Gen/Gen.fsproj" (declared "Gen")
+   "tmp/Copy/Copy.fsproj" (declared "Copy")
+   "node_modules/pkg/Pkg.fsproj" (declared "Pkg")
+   ".worktrees/other/Other.fsproj" (declared "Other")})
+
+(deftest expecto-trees-run-each-test-project-with-its-own-filter
+  (in-tree mixed-tree
+    #(doseq [[command filters] [["test" ["FullyQualifiedName!~Laws." "Category!=Property" "Category!=Property"]]
+                                ["property" ["FullyQualifiedName~Laws." "Category=Property" "Category=Property"]]]]
+       (let [{:keys [status lines err]} (sfcs {"LANGUAGE" "fsharp"} command "--no-build")]
+         (is (= 0 status) err)
+         (is (= (mapv (fn [project f] (str "$ dotnet test " project " --filter " f " --no-build"))
+                      ["tests/Csharp/Csharp.csproj" "tests/Laws/Laws.fsproj" "tests/Unit/Unit.fsproj"]
+                      [(nth filters 1) (nth filters 0) (nth filters 2)])
+                lines))))))
+
+(deftest expecto-list-names-match-literally
+  (in-tree {"T/T.fsproj" (declared "a\\b(c)&amp;d|e=f!g~h")}
+    #(is (= ["$ dotnet test T/T.fsproj --filter FullyQualifiedName~a\\\\b\\(c\\)\\&d\\|e\\=f\\!g\\~h."]
+            (:lines (sfcs {"LANGUAGE" "fsharp"} "property"))))))
+
+(deftest expecto-detection-reads-the-package-reference
+  (doseq [reference ["<PackageReference Include=\"YoloDev.Expecto.TestSdk\"/>"
+                     "<PackageReference Include=\"yolodev.expecto.testsdk\"><Version>0.15.3</Version></PackageReference>"
+                     "<PackageReference\n  Version=\"0.15.3\"\n  Include=\"YoloDev.Expecto.TestSdk\" />"]]
+    (in-tree {"T/T.fsproj" (str "<Project><PropertyGroup><SwarmForgePropertyTestList>P</SwarmForgePropertyTestList>"
+                                "</PropertyGroup><ItemGroup>" reference "</ItemGroup></Project>")}
+      #(is (= ["$ dotnet test T/T.fsproj --filter FullyQualifiedName~P."]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))
+           reference)))
+  (testing "only an F# project is an Expecto test project"
+    (in-tree {"T/T.csproj" (declared "P") "U/U.vbproj" (declared "P")}
+      #(is (= ["$ dotnet test --filter Category=Property"]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))))))
+
+(deftest expecto-list-names-are-xml-values
+  (doseq [[declaration filter] [["Laws&amp;Properties" "Laws\\&Properties."]
+                                ["<![CDATA[A&B]]>" "A\\&B."]
+                                ["&#76;aws<!-- note -->" "Laws."]]]
+    (in-tree {"T/T.fsproj" (declared declaration)}
+      #(is (= [(str "$ dotnet test T/T.fsproj --filter FullyQualifiedName~" filter)]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))
+           declaration)))
+  (testing "a commented-out declaration is no declaration"
+    (in-tree {"T/T.fsproj" (expecto-fsproj "<!-- <SwarmForgePropertyTestList>Old</SwarmForgePropertyTestList> -->")}
+      #(is (= 2 (:status (sfcs {"LANGUAGE" "fsharp"} "property")))))
+    (in-tree {"T/T.fsproj" (expecto-fsproj (str "<!-- <SwarmForgePropertyTestList>Old</SwarmForgePropertyTestList> -->"
+                                                "<SwarmForgePropertyTestList>New</SwarmForgePropertyTestList>"))}
+      #(is (= ["$ dotnet test T/T.fsproj --filter FullyQualifiedName~New."]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))))))
+
+(def commented-expecto-reference
+  "<!-- <PackageReference Include=\"YoloDev.Expecto.TestSdk\" Version=\"0.15.3\" /> -->")
+
+(deftest commented-out-elements-do-not-make-a-test-project
+  (testing "an xUnit project with a commented-out Expecto reference keeps the trait run"
+    (in-tree {"T/T.fsproj" (str/replace xunit-fsproj "<ItemGroup>" (str "<ItemGroup>" commented-expecto-reference))}
+      #(is (= ["$ dotnet test --filter Category=Property"]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property"))))))
+  (testing "commented-out test markers leave a project out of the per-project runs"
+    (in-tree {"a/A.fsproj" (declared "P")
+              "b/B.fsproj" (str "<Project><ItemGroup>" commented-expecto-reference
+                                "<!-- <PackageReference Include=\"Microsoft.NET.Test.Sdk\" /> --></ItemGroup></Project>")
+              "c/C.csproj" "<Project><PropertyGroup><!-- <IsTestProject>true</IsTestProject> --></PropertyGroup></Project>"}
+      #(is (= ["$ dotnet test a/A.fsproj --filter FullyQualifiedName~P."]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))))))
+
+(deftest project-files-are-read-as-msbuild-xml
+  (in-tree {"a/A.fsproj" (str "﻿<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+                              "<Project ToolsVersion=\"15.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">"
+                              "<PropertyGroup><SwarmForgePropertyTestList>Laws</SwarmForgePropertyTestList></PropertyGroup>"
+                              "<ItemGroup><PackageReference Include=\" YoloDev.Expecto.TestSdk \" /></ItemGroup></Project>")
+            "b/B.csproj" (str "<Project xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">"
+                              "<PropertyGroup><IsTestProject> True </IsTestProject></PropertyGroup></Project>")
+            "c/C.fsproj" "<Project><ItemGroup><PackageReference Include=\"YoloDev.Expecto.TestSdk\"></ItemGroup>"}
+    #(is (= ["$ dotnet test a/A.fsproj --filter FullyQualifiedName~Laws."
+             "$ dotnet test b/B.csproj --filter Category=Property"]
+            (:lines (sfcs {"LANGUAGE" "fsharp"} "property"))))))
+
+(deftest trees-without-expecto-keep-the-single-trait-run
+  (in-tree {"tests/Unit/Unit.fsproj" xunit-fsproj
+            "bin/Old/Old.fsproj" (declared "Old")
+            ".hidden/Other.fsproj" (declared "Other")}
+    #(doseq [[command filter] [["test" "Category!=Property"] ["property" "Category=Property"]]]
+       (is (= [(str "$ dotnet test --filter " filter " --no-build")]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} command "--no-build")))))))
+
+(deftest only-sf-fs-looks-for-expecto
+  (in-tree mixed-tree
+    #(doseq [language [nil "vbnet"]
+             [command filter] [["test" "Category!=Property"] ["property" "Category=Property"]]]
+       (is (= [(str "$ dotnet test --filter " filter)]
+              (:lines (sfcs (if language {"LANGUAGE" language} {}) command)))
+           (str language " " command)))))
+
+(deftest undeclared-expecto-projects-stop-before-dotnet
+  (doseq [declaration ["" "<SwarmForgePropertyTestList>  </SwarmForgePropertyTestList>" "<SwarmForgePropertyTestList/>"]]
+    (in-tree {"tests/A/A.fsproj" (expecto-fsproj declaration) "tests/B/B.fsproj" (declared "Laws")}
+      #(doseq [command ["test" "property" "coverage"]]
+         (let [{:keys [status lines err]} (sfcs-process {"LANGUAGE" "fsharp"} command)]
+           (is (= 2 status) (str declaration " " command))
+           (is (empty? (dotnet-lines lines)))
+           (is (str/starts-with? err "sf-fs: "))
+           (is (str/includes? err "tests/A/A.fsproj"))
+           (is (not (str/includes? err "tests/B/B.fsproj")))
+           (is (str/includes? err "SwarmForgePropertyTestList")))))))
+
+(deftest every-project-runs-and-the-first-failure-is-the-status
+  (in-tree {"a/A.fsproj" (declared "P") "b/B.fsproj" xunit-fsproj "c/C.fsproj" (declared "Q")}
+    #(doseq [[exits status] [["b/B.fsproj=5,c/C.fsproj=3" 5] ["c/C.fsproj=3" 3] ["" 0]]]
+       (let [result (sfcs {"LANGUAGE" "fsharp" "FAKE_PROJECT_EXITS" exits} "test")]
+         (is (= status (:status result)) exits)
+         (is (= 3 (count (dotnet-lines (:lines result)))) exits)))))
+
+(deftest expecto-coverage-collects-per-project
+  (let [report (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))
+        collector "--collect XPlat Code Coverage --results-directory tmp/coverage --no-build -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura"
+        stale #(let [path (fs/path *repo* "tmp" "coverage" "stale" "coverage.cobertura.xml")]
+                 (fs/create-dirs (fs/parent path))
+                 (spit (str path) "x")
+                 path)]
+    (in-tree {"a/A.fsproj" (declared "P") "b/B.fsproj" xunit-fsproj}
+      #(do
+         (testing "one collector run per project, a fresh report required"
+           (let [old (stale)
+                 {:keys [status lines err]} (sfcs {"LANGUAGE" "fsharp" "FAKE_COVERAGE" report} "coverage" "--no-build")]
+             (is (= 0 status) err)
+             (is (= [(str "$ dotnet test a/A.fsproj --filter FullyQualifiedName!~P. " collector)
+                     (str "$ dotnet test b/B.fsproj --filter Category!=Property " collector)]
+                    (dotnet-lines lines)))
+             (is (not (fs/exists? old)))
+             (is (fs/exists? (fs/path *repo* "tmp" "coverage" "run" "coverage.cobertura.xml")))))
+         (testing "a failing project is the status after every project ran"
+           (let [{:keys [status lines]} (sfcs {"LANGUAGE" "fsharp" "FAKE_COVERAGE" report "FAKE_PROJECT_EXITS" "a/A.fsproj=4"} "coverage")]
+             (is (= 4 status))
+             (is (= 2 (count (dotnet-lines lines))))))
+         (testing "runs that leave no report are an error"
+           (stale)
+           (is (= 2 (:status (sfcs {"LANGUAGE" "fsharp"} "coverage")))))))))
+
+(deftest only-sf-fs-help-mentions-expecto
+  (is (str/includes? (str/join "\n" (:lines (sfcs {"LANGUAGE" "fsharp"} "help"))) "Expecto"))
+  (doseq [env [{} {"LANGUAGE" "vbnet"}]]
+    (let [help (str/join "\n" (:lines (sfcs env "help")))]
+      (is (not (str/includes? help "Expecto")))
+      (is (str/includes? help "unit and acceptance tests (Category!=Property)\n"))
+      (is (str/includes? help "property tests only (Category=Property)\n")))))
