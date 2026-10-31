@@ -60,6 +60,16 @@
 - Avoid running whole-suite language test commands concurrently with acceptance generation.
 - Before handoff, confirm the relevant local verification evidence is current for the affected targets.
 
+## Existing Code
+- This section applies only when `project.md` says `Existing code: ask before refactoring`. With `refactor freely`, or with no such line, skip it. When it applies, it takes precedence, for existing code, over the cleanup, file-split, CRAP, DRY and mutation instructions in role prompts.
+- Decide existing code per function against the merge base of the task branch with the base branch. A function, method, test or file present at that merge base is existing; one the task added is new. "Function" covers methods and their equivalents. Refactor new code as usual.
+- Editing an existing function to deliver the requested behaviour needs no approval. Adding tests, including tests of existing code, never needs approval.
+- Restructuring existing code needs the operator's approval: renaming, extracting, inlining, moving, splitting a file, removing duplication, or reformatting.
+- Gates still run. Fix findings in new code as usual. Fix a finding in existing code by adding tests without approval; fixing it by restructuring needs approval. Record findings in existing functions the task did not change; never propose refactorings for them.
+- To ask, first finish and commit everything you can without restructuring existing code. Then, if you have refactorings of existing code to propose, run one `sf ask <id> "<list>"` whose text is a numbered list, one item per refactoring, each naming the file, the function, the change, the reason, and the gate finding it addresses if any, and stop. If you have nothing to propose, do not ask.
+- The operator's `sf answer` record is the approval. After it, make each approved refactoring and record it with a Lore trailer `Related: <refactoring> | approved in answer item <n>`; record each declined one as `Rejected: <refactoring> | operator declined`.
+- A finding in existing code left unfixed, whether not proposed or declined, does not block handoff. Record it as `Constraint: existing code, <tool> finding left: <where>`, where `<tool>` is the gate (CRAP, DRY or mutation).
+
 ## Guardrails
 - Do not invent project-local CRAP, DRY, mutation, or coverage proxies. Install and run the constitution tools (`crap4clj` with cloverage, `dry4clj`, `clj-mutate`, speclj, `sf-cs`, `sf-fs`, `sf-vb`, `sf-js`, or the language table). Do not treat a homegrown `bb crap` / `bb coverage` / `bb mutation-count` task or a throwaway report-parsing script as those tools.
 - Do not edit mutation testing or Gherkin acceptance mutation manifests by hand; allow approved mutation tools to update those manifests as part of their normal runs.

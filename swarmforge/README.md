@@ -70,7 +70,13 @@ sf new "Migrate public API" -m "..." --route specifier,architecture-design-revie
 ```
 
 The reviewer examines the design after specification approval and before coding;
-`architect` still reviews structure after implementation. Existing named routes
-are unchanged. The catalogue's `optional` flag excludes a role only from the
-implicit fallback when no `feature` route exists; explicit lists, named routes
-and `SWARMFORGE_ROUTE` can include it. It can be combined with `audit`.
+`architect` still reviews structure after implementation.
+
+Optional reviewers are enabled by explicitly including them in a route. Use
+`--route coder,hardener,security-reviewer,qa` for authentication, authorization,
+secrets, untrusted input, or external execution changes. The Security reviewer
+traces concrete enforcement paths and records findings and focused regression
+evidence in commits; the hardener retains mutation testing and quality gates.
+Named routes and the fallback route omit it unless explicitly enabled (including
+through `SWARMFORGE_ROUTE`). Catalogue entries can use the `optional` flag,
+combined with `audit` when needed, so other optional reviewers share this mechanism.
