@@ -18,6 +18,7 @@ is the only writer.
 | `SwarmForge-Route` | trailer of the newest record | The roles this task visits, in catalogue order. Set by `sf new --route`, changed by `sf route`. |
 | `SwarmForge-Needs` | trailer of the newest record | `none`; `operator` after `sf ask` until `sf answer`; `approval` after `sf review` until `sf approve` or `sf reject`. |
 | `.worktrees/<id>` | directory | The checkout roles work in. Created by `sf start`, removed by `sf finish`. |
+| `swarmforge/verify.conf` | file on the base branch | The project's verification: one shell command per line; blank lines and `#` lines are skipped. `sf finish` runs them on the merge before it merges. Optional. |
 
 ## Record commits
 
@@ -106,9 +107,24 @@ sf new ──► stage <first role>
   `.swarmforge/audit/<id>` and is removed when the record is written.
 - `sf next <role>` lists open tasks at that stage that need nothing, so a
   blocked task is invisible to the role until the operator acts.
-- `sf finish` merges `swarm/<id>` into the base branch with `--no-ff` (the
-  merge commit is the `finished` record), then removes the worktree and the
-  branch. A finished task refuses `sf start` and every record.
+- `sf finish` refuses a task worktree with uncommitted changes (staged,
+  unstaged or untracked) and changes nothing. It then detaches the worktree at
+  the base branch and merges `swarm/<id>` there without committing, as the
+  real merge will, runs the commands
+  of that checkout's `swarmforge/verify.conf` with `bash -c` from its root,
+  printing `VERIFY: passed: <command>` for each (or `VERIFY: none
+  configured`), and returns the worktree to the branch tip. A failing command
+  stops `sf finish` with exit 1 and leaves the base branch, the task branch
+  and the worktree as they were. On a pass it merges `swarm/<id>` into the
+  base branch with `--no-ff` (the merge commit is the `finished` record),
+  then removes the worktree without `--force`, then the branch; a rerun
+  completes a cleanup that stopped. A finished task refuses `sf start` and
+  every record.
+- When that merge stops on conflicts, the operator resolves and commits them
+  in the main checkout and runs `sf finish` again, which verifies the
+  committed merge there before it records it and cleans up. If that
+  verification fails, fix the merge with `git commit --amend` and run
+  `sf finish` again; a new commit on top of the merge is refused as finished.
 
 ## Sharing
 

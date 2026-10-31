@@ -202,6 +202,13 @@
       (write-file (worktree world name) path (str (unescape text) "\n"))
       world)]
 
+   [#"the main checkout committed the file \"([^\"]+)\" with \"([^\"]*)\""
+    (fn [world path text]
+      (write-file (:repo world) path (str (unescape text) "\n"))
+      (git world "add" path)
+      (git world "commit" "-q" "-m" (str "Add " path))
+      world)]
+
    [#"the worktree of task \"(\w)\" and the branch \"([^\"]+)\" changed the files \"([^\"]*)\" differently"
     (fn [world name branch files]
       (let [dir (worktree world name)

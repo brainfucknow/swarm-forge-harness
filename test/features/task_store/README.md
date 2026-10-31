@@ -23,6 +23,21 @@ copy of `swarmforge/`. The current contract is
 - The conflict message is `sf: merge of swarm/<id> into <target> stopped on
   conflicts: <files>; resolve them, commit, then run: sf finish <id>`.
 
+## Finishing safely
+
+`finish_verify.feature` covers these rules:
+
+- sf finish refuses a task worktree with uncommitted changes, staged,
+  unstaged or untracked, and changes nothing, so work made after the last
+  handoff survives.
+- The project's verification commands are the lines of
+  `swarmforge/verify.conf`. sf finish runs them on the merge candidate in the
+  task worktree before it touches the target, and on the committed merge
+  when it runs again after a conflict. A failure exits 1 and keeps the
+  target, the task branch and the worktree as they were.
+- Without commands, sf finish prints `VERIFY: none configured` and finishes
+  as before.
+
 ## Placeholders
 
 | Text | Meaning |
@@ -42,7 +57,7 @@ copy of `swarmforge/`. The current contract is
 
 | Step | Meaning |
 |---|---|
-| `a project with swarmforge initialized` | A scratch git repository on `main`. Its first commit has a copy of `swarmforge/` and a `.gitignore` with `.worktrees/`, `.swarmforge/` and `tmp/`. git's identity is `tester <tester@example.com>`. git-bug is not on PATH. `sf init` ran in it and exited 0. |
+| `a project with swarmforge initialized` | A scratch git repository on `main`. Its first commit has a copy of `swarmforge/` without `swarmforge/verify.conf`, and a `.gitignore` with `.worktrees/`, `.swarmforge/` and `tmp/`. git's identity is `tester <tester@example.com>`. git-bug is not on PATH. `sf init` ran in it and exited 0. |
 | `a git repository with a copy of swarmforge and no git-bug on PATH` | The project without `sf init`. |
 | `the git identity of the project is "I"` | Sets `user.name` and `user.email` from `name <email>`. `-` unsets both, in the repository and in HOME. |
 | `task "A" titled "T" was created on route "R"` | `sf new "T" -m "T" --route R` in the main checkout. |
@@ -55,6 +70,7 @@ copy of `swarmforge/`. The current contract is
 | `role "R" committed the file "P" with "M" in the worktree of task "A" as C1` | Writes `P` with the line `x`, then `git add P` and commits as above. |
 | `the worktree of task "A" has the staged new file "S" and the unstaged change "U"` | Commits `U` with the line `1` (as the stage's role), appends the line `2` to `U` without staging it, then writes `S` with the line `s` and stages it with `git add S`. |
 | `the file "P" in the worktree of task "A" is written with "X"` | Writes `X` and a newline to `P` in that worktree. Makes directories as needed. |
+| `the main checkout committed the file "P" with "X"` | Writes `X` (newlines expanded) and a newline to `P` in the main checkout, making directories as needed, then `git add P` and `git commit -m "Add P"` on its current branch. |
 | `the tip of the branch of task "A" is named T1` | `T1` is the current tip of `swarm/$A`. |
 | `the worktree of task "A" and the branch "B" changed the files "F" differently` | For each path in `F` (separated by spaces): in the worktree of A, writes it with the line `ours` and commits it as the stage's role; on branch `B` (made at the main checkout's HEAD when missing), writes it with the line `theirs` and commits it. The main checkout is on `main` afterwards. |
 | `the operator resolved the conflicts and staged them` | In the main checkout, writes every conflicted file with the line `resolved` and runs `git add` on it. |

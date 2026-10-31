@@ -18,7 +18,10 @@ copy_tree() {
 }
 
 mkdir -p "$target/swarmforge"
-cp "$HERE"/swarmforge/*.md "$HERE"/swarmforge/*.conf "$target/swarmforge/"
+# verify.conf holds this repository's own checks; a project writes its own.
+for file in "$HERE"/swarmforge/*.md "$HERE"/swarmforge/*.conf; do
+  [ "$(basename "$file")" = verify.conf ] || cp "$file" "$target/swarmforge/"
+done
 for directory in bin constitution languages roles; do
   copy_tree "$HERE/swarmforge/$directory" "$target/swarmforge/$directory"
 done

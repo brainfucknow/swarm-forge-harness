@@ -30,10 +30,16 @@ git config --global user.name tester
 git config --global user.email tester@example.com
 git config --global init.defaultBranch main
 
+# A copy of this checkout's swarmforge/ without verify.conf, whose commands
+# (this script among them) must not run on every sf finish in the scratch repo.
+copy_swarmforge() {
+  rm -rf "$1/swarmforge" && cp -R "$HERE/swarmforge" "$1/swarmforge" && rm -f "$1/swarmforge/verify.conf"
+}
+
 repo="$scratch/project"
 mkdir -p "$repo" && cd "$repo"
 git init -q .
-cp -R "$HERE/swarmforge" swarmforge
+copy_swarmforge .
 echo "hello" > README.md
 git add -A && git commit -q -m "seed"
 export PATH="$repo/swarmforge/bin:$PATH"
@@ -160,6 +166,7 @@ idn="$(sf new "Not done" -m x --route coder)"
 assert_fails "finish from a non-done task" sf finish "$idn"
 out="$(sf finish "$id")"
 assert_match "finish merges into the current branch" "$out" "merged into main"
+assert_match "finish without verification commands says so" "$out" "^VERIFY: none configured$"
 assert_match "main contains the task work" "$(git log --oneline main)" "Specify login"
 assert_eq "finish removes the worktree" "$(test -d ".worktrees/$id" && echo present || echo gone)" "gone"
 assert_eq "finish deletes the branch" "$(git branch --list "swarm/$id")" ""
@@ -241,19 +248,19 @@ assert_match "codex adapter uses the tier effort" "$(cat .codex/agents/cleaner.t
 
 # committed adapters are current
 work="$(mktemp -d "$scratch/adapters.XXXX")"
-cp -R "$HERE/swarmforge" "$HERE/.claude" "$HERE/.github" "$HERE/.codex" "$work/"
+cp -R "$HERE/.claude" "$HERE/.github" "$HERE/.codex" "$work/" && copy_swarmforge "$work"
 (cd "$work" && git init -q . && git add -A && git commit -q -m seed && ./swarmforge/bin/sf adapters >/dev/null && git diff --quiet) \
   && pass "committed adapters match sf adapters" \
   || fail "committed adapters are stale; run swarmforge/bin/sf adapters"
 
 # configuration check
-rm -rf swarmforge && cp -R "$HERE/swarmforge" swarmforge
+copy_swarmforge .
 assert_match "check passes on the shipped configuration" "$(sf check)" "^CHECK: ok \(6 roles, 5 routes\)$"
 check_fails() {
   local name="$1" expected="$2" out
   out="$(sf check 2>&1 || true)"
   assert_match "$name" "$out" "$expected"
-  rm -rf swarmforge && cp -R "$HERE/swarmforge" swarmforge
+  copy_swarmforge .
 }
 echo "qa strong subagent" >> swarmforge/roles.conf
 check_fails "check rejects a duplicate role" "CHECK: roles.conf: role 'qa' listed twice"
@@ -284,7 +291,7 @@ check_fails "check rejects an unknown tool kind" "CHECK: tools.conf: 'weird' has
 echo "qa strong subagent" >> swarmforge/roles.conf
 assert_fails "init refuses a broken configuration" sf init
 assert_fails "adapters refuse a broken configuration" sf adapters
-rm -rf swarmforge && cp -R "$HERE/swarmforge" swarmforge
+copy_swarmforge .
 sf adapters >/dev/null
 
 for pair in ".claude/skills/swarm/SKILL.md .agents/skills/swarm/SKILL.md"; do

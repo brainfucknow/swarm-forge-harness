@@ -4,20 +4,22 @@ Feature: sf finish resume
   "sf: merge of swarm/<id> into <target> stopped on conflicts: <files>;
   resolve them, commit, then run: sf finish <id>", where files are the
   conflicted paths as git lists them, separated by spaces. The merge stays in
-  progress on the target, with the worktree and the task branch in place.
+  progress on the target, with the worktree and the task branch in place, and
+  the worktree back at the tip of the task branch with no uncommitted change.
 
   While a merge is in progress in the main checkout, sf finish exits 1 with
   "sf: a merge is in progress; commit the merge first" and changes nothing.
 
   Once the operator has committed the merge, sf finish <id> completes the
-  task although tasks/done/<id>.md is in HEAD. If HEAD's first-parent history
-  has the task's finished record, sf finish leaves HEAD as it is. If it has
-  none and HEAD is a merge whose second parent is the tip of the task branch,
-  sf finish rewrites HEAD's message to the finished record, with the same
-  parents and tree. Either way it then removes the worktree and the task
-  branch and prints "FINISHED: <id> merged into <target>". In any other case
-  a task with tasks/done/<id>.md in HEAD is refused as before with
-  "sf: task <id> is finished".
+  task although tasks/done/<id>.md is in HEAD. It first verifies HEAD as sf
+  finish verify describes, and stops on a failure. If HEAD's first-parent
+  history has the task's finished record, sf finish leaves HEAD as it is. If
+  it has none and HEAD is a merge whose second parent is the tip of the task
+  branch, sf finish rewrites HEAD's message to the finished record, with the
+  same parents and tree. Either way it then removes the worktree and the task
+  branch and prints the VERIFY lines, then "FINISHED: <id> merged into
+  <target>". In any other case a task with tasks/done/<id>.md in HEAD is
+  refused as before with "sf: task <id> is finished".
 
   Background:
     Given a project with swarmforge initialized
@@ -35,6 +37,7 @@ Feature: sf finish resume
     And the main checkout is on the branch "<target>" merging T1 with the conflicted files "<files>"
     And the branch "swarm/$A" exists
     And the worktree of task "A" exists
+    And the worktree of task "A" has no uncommitted change
 
     Examples:
       | target  | files               |
@@ -67,7 +70,7 @@ Feature: sf finish resume
     And the HEAD of the main checkout is named M1
     When I run "sf finish $A"
     Then the exit status is 0
-    And the output is "FINISHED: $A merged into <target>"
+    And the output is "VERIFY: none configured\nFINISHED: $A merged into <target>"
     And the HEAD of the main checkout has the parents and the tree of M1
     And the HEAD of the main checkout is a merge whose second parent is T1
     And the HEAD of the main checkout has the message "sf finished: $A\n\nSwarmForge-Task: $A\nSwarmForge-Record: finished\nSwarmForge-From: operator\nSwarmForge-Stage: done\nSwarmForge-Route: coder\nSwarmForge-Needs: none\nSwarmForge-Merged-Into: <target>"
@@ -88,7 +91,7 @@ Feature: sf finish resume
     And the HEAD of the main checkout is named M1
     When I run "sf finish $A"
     Then the exit status is 0
-    And the output is "FINISHED: $A merged into main"
+    And the output is "VERIFY: none configured\nFINISHED: $A merged into main"
     And the HEAD of the main checkout is M1
     And the branch "swarm/$A" does not exist
     And the worktree of task "A" does not exist
