@@ -11,7 +11,8 @@
             [sfcore.outcome :as outcome]
             [sfcore.shell :as shell]
             [sfcore.stryker :as stryker]
-            [sfcs.cobertura :as cob]))
+            [sfcs.cobertura :as cob]
+            [sfcs.project :as project]))
 
 (def tmp "tmp")
 (def coverage-dir (str (fs/path tmp "coverage")))
@@ -78,7 +79,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
 
 (def ^:private skipped-dir-names #{"bin" "obj" "tmp" "node_modules"})
 (def ^:private project-extensions #{"fsproj" "csproj" "vbproj"})
-(def ^:private property-list-element "SwarmForgePropertyTestList")
+(def ^:private property-list-element project/property-list-element)
 
 (defn- skipped-dir? [path]
   (let [name (fs/file-name path)]
@@ -93,28 +94,11 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
               (contains? project-extensions (fs/extension path)) [path]))
           (fs/list-dir dir)))
 
-(defn- references-package? [project-text package]
-  (boolean (re-find (re-pattern (str "(?i)<PackageReference\\s[^>]*\\bInclude\\s*=\\s*\"\\s*"
-                                     (java.util.regex.Pattern/quote package) "\\s*\""))
-                    project-text)))
-
-(defn- declared-property-list [project-text]
-  (some-> (re-find (re-pattern (str "(?s)<" property-list-element ">(.*?)</" property-list-element ">")) project-text)
-          second
-          str/trim
-          not-empty))
-
 (defn- read-test-project
   "The test project at `path`, or nil when it is not one."
   [root path]
-  (let [text (slurp (str path))
-        expecto? (and (= "fsproj" (fs/extension path)) (references-package? text "YoloDev.Expecto.TestSdk"))]
-    (when (or expecto?
-              (references-package? text "Microsoft.NET.Test.Sdk")
-              (re-find #"(?i)<IsTestProject>\s*true\s*</IsTestProject>" text))
-      {:path (str (fs/relativize root path))
-       :expecto? expecto?
-       :property-list (when expecto? (declared-property-list text))})))
+  (when-let [project (project/test-project (slurp (str path)) (= "fsproj" (fs/extension path)))]
+    (assoc project :path (str (fs/relativize root path)))))
 
 (defn- test-projects [root]
   (->> (project-paths root)

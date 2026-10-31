@@ -27,7 +27,10 @@ inside `testList "Laws"` is `Laws.p`).
 test project is a `.fsproj`, `.csproj` or `.vbproj` that references
 `Microsoft.NET.Test.Sdk` or `YoloDev.Expecto.TestSdk`, or sets
 `<IsTestProject>true</IsTestProject>`. An Expecto test project is a `.fsproj`
-with a `PackageReference` to `YoloDev.Expecto.TestSdk`.
+with a `PackageReference` to `YoloDev.Expecto.TestSdk`. Project files are
+read as XML, with or without the legacy MSBuild namespace: commented-out
+elements do not count, and a project file that is not well-formed XML is not a
+test project.
 
 Each Expecto test project declares the `testList` that holds its property
 tests, at any nesting depth:
@@ -61,7 +64,9 @@ is exit 2 before any `dotnet` runs.
 
 `FullyQualifiedName~` is a case-insensitive substring match: any test whose
 name contains `NAME.` counts as a property, wherever that segment sits. Pick a
-list name no unit-test list shares. Filter characters in `NAME` are escaped.
+list name no unit-test list shares. `NAME` is the element's XML value, so
+write `Laws&amp;Properties` for `Laws&Properties`. Filter characters in `NAME`
+are escaped.
 A run that prints "No test matches the given testcase filter" and exits 0
 found no test in the declared list (or, for an xUnit project, none with the
 trait); sf-fs keeps dotnet's exit status.

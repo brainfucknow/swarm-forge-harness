@@ -594,7 +594,7 @@
                 lines))))))
 
 (deftest expecto-list-names-match-literally
-  (in-tree {"T/T.fsproj" (declared "a\\b(c)&d|e=f!g~h")}
+  (in-tree {"T/T.fsproj" (declared "a\\b(c)&amp;d|e=f!g~h")}
     #(is (= ["$ dotnet test T/T.fsproj --filter FullyQualifiedName~a\\\\b\\(c\\)\\&d\\|e\\=f\\!g\\~h."]
             (:lines (sfcs {"LANGUAGE" "fsharp"} "property"))))))
 
@@ -611,6 +611,50 @@
     (in-tree {"T/T.csproj" (declared "P") "U/U.vbproj" (declared "P")}
       #(is (= ["$ dotnet test --filter Category=Property"]
               (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))))))
+
+(deftest expecto-list-names-are-xml-values
+  (doseq [[declaration filter] [["Laws&amp;Properties" "Laws\\&Properties."]
+                                ["<![CDATA[A&B]]>" "A\\&B."]
+                                ["&#76;aws<!-- note -->" "Laws."]]]
+    (in-tree {"T/T.fsproj" (declared declaration)}
+      #(is (= [(str "$ dotnet test T/T.fsproj --filter FullyQualifiedName~" filter)]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))
+           declaration)))
+  (testing "a commented-out declaration is no declaration"
+    (in-tree {"T/T.fsproj" (expecto-fsproj "<!-- <SwarmForgePropertyTestList>Old</SwarmForgePropertyTestList> -->")}
+      #(is (= 2 (:status (sfcs {"LANGUAGE" "fsharp"} "property")))))
+    (in-tree {"T/T.fsproj" (expecto-fsproj (str "<!-- <SwarmForgePropertyTestList>Old</SwarmForgePropertyTestList> -->"
+                                                "<SwarmForgePropertyTestList>New</SwarmForgePropertyTestList>"))}
+      #(is (= ["$ dotnet test T/T.fsproj --filter FullyQualifiedName~New."]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))))))
+
+(def commented-expecto-reference
+  "<!-- <PackageReference Include=\"YoloDev.Expecto.TestSdk\" Version=\"0.15.3\" /> -->")
+
+(deftest commented-out-elements-do-not-make-a-test-project
+  (testing "an xUnit project with a commented-out Expecto reference keeps the trait run"
+    (in-tree {"T/T.fsproj" (str/replace xunit-fsproj "<ItemGroup>" (str "<ItemGroup>" commented-expecto-reference))}
+      #(is (= ["$ dotnet test --filter Category=Property"]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property"))))))
+  (testing "commented-out test markers leave a project out of the per-project runs"
+    (in-tree {"a/A.fsproj" (declared "P")
+              "b/B.fsproj" (str "<Project><ItemGroup>" commented-expecto-reference
+                                "<!-- <PackageReference Include=\"Microsoft.NET.Test.Sdk\" /> --></ItemGroup></Project>")
+              "c/C.csproj" "<Project><PropertyGroup><!-- <IsTestProject>true</IsTestProject> --></PropertyGroup></Project>"}
+      #(is (= ["$ dotnet test a/A.fsproj --filter FullyQualifiedName~P."]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))))))
+
+(deftest project-files-are-read-as-msbuild-xml
+  (in-tree {"a/A.fsproj" (str "﻿<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+                              "<Project ToolsVersion=\"15.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">"
+                              "<PropertyGroup><SwarmForgePropertyTestList>Laws</SwarmForgePropertyTestList></PropertyGroup>"
+                              "<ItemGroup><PackageReference Include=\" YoloDev.Expecto.TestSdk \" /></ItemGroup></Project>")
+            "b/B.csproj" (str "<Project xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">"
+                              "<PropertyGroup><IsTestProject> True </IsTestProject></PropertyGroup></Project>")
+            "c/C.fsproj" "<Project><ItemGroup><PackageReference Include=\"YoloDev.Expecto.TestSdk\"></ItemGroup>"}
+    #(is (= ["$ dotnet test a/A.fsproj --filter FullyQualifiedName~Laws."
+             "$ dotnet test b/B.csproj --filter Category=Property"]
+            (:lines (sfcs {"LANGUAGE" "fsharp"} "property"))))))
 
 (deftest trees-without-expecto-keep-the-single-trait-run
   (in-tree {"tests/Unit/Unit.fsproj" xunit-fsproj
