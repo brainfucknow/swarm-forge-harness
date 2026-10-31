@@ -82,10 +82,15 @@ offer the roles, enable it in `~/.codex/config.toml` per the Codex subagents
 documentation, or fall back to `sf run <id>` below.
 
 If a harness cannot delegate, `sf dispatch <role> <id>` runs the role in a
-headless `claude -p`, `codex exec`, or `copilot -p` session, and
-`sf run <id>` loops through the stages until the task is done or waiting on
-you. Headless runs need tool permissions you grant yourself; pass them in
-`SWARMFORGE_CLAUDE_ARGS`, `SWARMFORGE_CODEX_ARGS`, or `SWARMFORGE_COPILOT_ARGS`.
+headless `claude -p`, `codex exec`, or `copilot -p` session started in the
+task worktree `.worktrees/<id>` (created when missing, refused when it is on
+another branch), and `sf run <id>` loops through the stages until the task
+is done or waiting on you. Headless runs need tool permissions you grant
+yourself; pass them in `SWARMFORGE_CLAUDE_ARGS`, `SWARMFORGE_CODEX_ARGS`, or
+`SWARMFORGE_COPILOT_ARGS`. Claude runs with `--permission-mode acceptEdits`
+and Codex with `--full-auto`; sf grants Copilot no tool permissions on its
+own, so set them there, for example
+`SWARMFORGE_COPILOT_ARGS="--allow-all-tools"`.
 
 ## Roles, routes, and model tiers
 
