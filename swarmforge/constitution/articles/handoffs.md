@@ -3,8 +3,8 @@
 A task is its branch, `swarm/<id>`. Roles pass work by committing on the task
 branch, and `sf` records each handoff as a commit on it. All task bookkeeping
 goes through `swarmforge/bin/sf`; never edit a task file under `tasks/` and
-never write a `SwarmForge-*` trailer by hand. See `swarmforge/handoff-protocol.md` for the
-record formats.
+never write a `SwarmForge-*` trailer by hand. `sf start` and `sf show` print the
+records; `swarmforge/handoff-protocol.md` describes the task branch.
 
 ## Receiving Work
 - `sf next <role>` prints the ids of tasks waiting at `stage:<role>`, or `NO_TASK`. If it prints `NO_TASK`, stop; there is nothing for your role.

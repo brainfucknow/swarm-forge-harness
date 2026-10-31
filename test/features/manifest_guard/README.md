@@ -10,30 +10,6 @@ or a tracked file under `.metrics/`.
 this repository's `test/no_manifests.sh`, real git and bash in a scratch
 repository. `test/no_manifests_test.sh` also exercises the guard directly.
 
-## Behavior
-
-- The check is a bash script, `test/no_manifests.sh`, next to the other test
-  scripts. It needs only bash and git. It is not an `sf` subcommand and
-  `install.sh` does not ship it: the guard belongs to this repository's CI.
-- `.github/workflows/test.yml` runs `bash test/no_manifests.sh` as a step of
-  the job `sf`, right after checkout and before Babashka is installed.
-- The block is found by its marker lines, as gherkin-mutator writes them at
-  the start of a line: `# mutation-stamp:` or
-  `# acceptance-mutation-manifest-begin`. The block's shape is the one in
-  `test/features/metrics_cache/gherkin_block.feature`. A marker inside a
-  line, or indented, does not count.
-- `.metrics` counts at any depth, as the `.metrics/` line in `.gitignore`
-  does.
-- "Tracked" means the git index. In CI the index is the checked-out commit;
-  run by hand before a commit, the guard sees what is staged.
-
-## Not covered by these features
-
-Per `AGENTS.md`, configuration and document text is not pinned by tests. QA
-reads by hand that `.github/workflows/test.yml` runs the guard as described
-above. A run outside a git repository is not
-specified; the script may fail there as git does.
-
 ## Placeholders
 
 | Text | Meaning |
