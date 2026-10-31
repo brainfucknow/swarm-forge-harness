@@ -42,6 +42,9 @@
 (defn- in? [prefix sym]
   (str/starts-with? (str sym) prefix))
 
+(defn- dotnet? [sym]
+  (some #(in? % sym) ["sfcs." "sffs." "sfvb."]))
+
 (defn- violations [pred]
   (into (sorted-map) (keep (fn [[from deps]] (when-let [bad (seq (filter #(pred from %) deps))] [from (vec (sort bad))])))
         graph))
@@ -61,8 +64,8 @@
 
 (deftest languages-stay-apart
   (is (= {} (violations (fn [from dep]
-                          (or (and (in? "sfjs." from) (in? "sfcs." dep))
-                              (and (in? "sfcs." from) (in? "sfjs." dep))))))))
+                          (or (and (in? "sfjs." from) (dotnet? dep))
+                              (and (dotnet? from) (in? "sfjs." dep))))))))
 
 (deftest command-line-dependencies-are-limited-to-the-dotnet-entrypoint
   (is (= {} (violations (fn [from dep]
