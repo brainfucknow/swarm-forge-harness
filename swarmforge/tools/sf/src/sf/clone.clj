@@ -9,8 +9,20 @@
   ["-c" "core.hooksPath=/dev/null" "-c" "core.fsmonitor=false" "-c" "protocol.ext.allow=never"
    "--no-replace-objects"])
 
+(def ^:private other-repository
+  "The caller's variables that point git at another repository, work tree,
+  index or object store: git rev-parse --local-env-vars, less the command-line
+  config git passes on to other repositories."
+  ["GIT_ALTERNATE_OBJECT_DIRECTORIES" "GIT_CONFIG" "GIT_OBJECT_DIRECTORY" "GIT_DIR"
+   "GIT_WORK_TREE" "GIT_IMPLICIT_WORK_TREE" "GIT_GRAFT_FILE" "GIT_INDEX_FILE"
+   "GIT_NO_REPLACE_OBJECTS" "GIT_REPLACE_REF_BASE" "GIT_PREFIX" "GIT_SHALLOW_FILE"
+   "GIT_COMMON_DIR"])
+
+(defn- run-git [opts & args]
+  (apply shell/run (assoc opts :unset other-repository) "git" args))
+
 (defn- git [opts dir & args]
-  (apply shell/run opts "git" "-C" (str dir) (concat untrusted-off args)))
+  (apply run-git opts "-C" (str dir) (concat untrusted-off args)))
 
 (defn- git-out
   "The trimmed stdout of a read-only git command in dir, or nil when it fails."
@@ -50,7 +62,7 @@
 (defn- init [tool dir]
   (fs/create-dirs (fs/parent dir))
   (must tool (str "cannot create a git clone in " dir)
-        (shell/run {:err :inherit} "git" "init" "--quiet" "--template=" "--" (str dir))))
+        (run-git {:err :inherit} "init" "--quiet" "--template=" "--" (str dir))))
 
 (defn ensure-at
   "Puts dir, the cache clone of url, at commit sha: detached, tracked files as

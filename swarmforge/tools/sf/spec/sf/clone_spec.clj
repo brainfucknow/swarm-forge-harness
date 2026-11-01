@@ -1,6 +1,7 @@
 (ns sf.clone-spec
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [speclj.core :refer [describe context it should= should should-not should-contain with around]]
             [sf.clone :as clone]
@@ -123,6 +124,28 @@
       (git (clone-dir) "replace" (up "PIN") (up "NEXT"))
       (should= [0 ""] (ensure-at dir (up "PIN")))
       (should= "PIN" (slurp (str (fs/path (clone-dir) "version"))))))
+
+  (for [variable ["GIT_DIR" "GIT_WORK_TREE" "GIT_INDEX_FILE" "GIT_OBJECT_DIRECTORY"]]
+    (it (str "acts on the clone alone when the caller sets " variable " to the project's")
+      (let [{:keys [dir] :as up} (upstream "PIN" "NEXT")
+            project (fs/path *root* "project")
+            git-dir (fs/path project ".git")
+            value ({"GIT_DIR" git-dir "GIT_WORK_TREE" project
+                    "GIT_INDEX_FILE" (fs/path git-dir "index") "GIT_OBJECT_DIRECTORY" (fs/path git-dir "objects")} variable)
+            _ (spit (str (fs/path project ".gitignore")) ".swarmforge/\n")
+            _ (git project "add" ".gitignore")
+            _ (git project "commit" "-qm" "project")
+            project-state #(vector (git project "rev-parse" "HEAD") (git project "status" "--porcelain")
+                                   (slurp (str (fs/path git-dir "index"))) (count (fs/glob git-dir "objects/**")))
+            before (project-state)
+            src (str (fs/parent (fs/parent (fs/path (.getPath (io/resource "sf/clone.clj"))))))
+            {:keys [exit err]} (p/shell {:out :string :err :string :continue true :extra-env {variable (str value)}}
+                                        "bb" "-cp" src "-e"
+                                        (pr-str `(do (require 'sf.clone)
+                                                     ((resolve 'sf.clone/ensure-at) "x" ~(clone-dir) ~dir ~(up "PIN")))))]
+        (should= [0 ""] [exit err])
+        (should (clean-at? (up "PIN")))
+        (should= before (project-state)))))
 
   (it "writes no file through a link at the clone's .git/config"
     (let [{:keys [dir] :as up} (upstream "PIN")
