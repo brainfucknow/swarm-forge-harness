@@ -1,9 +1,6 @@
 (ns sf.clone
-  "Puts sf tool's cache clone of a GitHub source at its pinned commit. The
-  directory is sf's: it must be the top level of its own git clone, and ensure
-  discards what it holds besides the pinned commit. git runs there with the
-  clone's hooks, fsmonitor and ext transport off, fetches only from the URL it
-  is given, and only when the clone lacks the commit."
+  "Puts sf tool's cache clone of a GitHub source at its pinned commit. The clone
+  is sf's, so git runs in it with hooks, fsmonitor and ext transport off."
   (:require [babashka.fs :as fs]
             [sf.shell :as shell]))
 
@@ -42,11 +39,10 @@
         (shell/run {:err :inherit} "git" "init" "--quiet" "--template=" "--" (str dir))))
 
 (defn ensure-at
-  "Puts dir, the cache clone of the GitHub repository at url, at the commit
-  sha: detached, with tracked files as committed and untracked files that are
-  not ignored removed. Creates a missing clone and fetches sha from url only
-  when the clone lacks it. Stops with an error naming tool, before any git
-  command that changes state, when dir is not the top level of its own clone."
+  "Puts dir, the cache clone of url, at commit sha: detached, tracked files as
+  committed, untracked non-ignored files removed. Creates a missing clone and
+  fetches sha from url only when the clone lacks it. Dies before changing
+  anything when dir is not the top level of its own clone."
   [tool dir url sha]
   (when-not (fs/exists? dir {:nofollow-links true})
     (init tool dir))

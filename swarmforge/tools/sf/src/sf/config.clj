@@ -140,8 +140,9 @@
             (catalogue/ref-problems tool tools))))
 
 (defn- check-tools []
-  (let [tools (map catalogue/tool (rows "tools.conf"))]
-    (map #(str "tools.conf: " %) (scan (rows "tools.conf") (partial tool-problems tools)))))
+  (let [conf-rows (rows "tools.conf")
+        tools (map catalogue/tool conf-rows)]
+    (map #(str "tools.conf: " %) (scan conf-rows (partial tool-problems tools)))))
 
 (defn check
   "Validates the catalogue files and prints a summary; stops on any problem."

@@ -49,9 +49,8 @@ it is: unpinned, never fetched or checked out, and printed without @.")
   (println (str "OK: " tool " " (wrapper-path tool))))
 
 (defn- pinned-source
-  "The tool's source directory and the commit it is at. SWARMFORGE_TOOL_SRC
-  is used as it is, with no commit; otherwise the cache clone is put at the
-  pinned ref."
+  "The tool's source directory and its commit. SWARMFORGE_TOOL_SRC is used as
+  it is, with no commit."
   [tool {:keys [source ref]}]
   (if-let [override (shell/env "SWARMFORGE_TOOL_SRC" nil)]
     [override nil]
@@ -118,9 +117,8 @@ it is: unpinned, never fetched or checked out, and printed without @.")
     (println (str "INSTALLED: " tool " " path (when pin (str " @" pin))))))
 
 (defn- check-known
-  "Stops when the tool or a tool in its needs chain has a kind or rewrite sf
-  tool does not know, or breaks a rule of its ref and source. cloverage's
-  wrapper also reads the speclj row, so that is checked too."
+  "Stops when the tool, a tool it needs, or speclj for cloverage has an unknown
+  kind or rewrite, or breaks a ref or source rule."
   [tool]
   (let [{:keys [kind rewrite needs] :as spec} (spec-of tool)]
     (run! check-known needs)

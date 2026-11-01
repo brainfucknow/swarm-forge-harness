@@ -1,8 +1,7 @@
 (ns sf.catalogue
   "The rows of swarmforge/tools.conf as tools, and the rules a row must keep:
-  its column count, a pinned ref of the form its kind needs, a GitHub source
-  github.com/<owner>/<repo> for the kinds that clone one, and one ref for rows
-  that share a source."
+  column count, a pinned ref of its kind's form, a safe GitHub source, and one
+  ref per shared source."
   (:require [clojure.string :as str]))
 
 (def columns

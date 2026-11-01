@@ -68,11 +68,12 @@
     (should= [] (problems (str "x clj g/x/y 1.0 t - -"))))
 
   (it "names a row whose source the first row of that source pins at another ref"
-    (let [other (str "y bb github.com/a/x " (apply str (repeat 40 "a")) " t - -")]
+    (let [first-row (tool (str "y bb github.com/a/x " (apply str (repeat 40 "a")) " t - -"))
+          second-row (tool (str "x bb github.com/a/x " sha " t - -"))
+          rows [first-row second-row]]
       (should= ["'x' pins github.com/a/x at a different ref than 'y'"]
-               (catalogue/ref-problems (tool (str "x bb github.com/a/x " sha " t - -"))
-                                       [(tool other) (tool (str "x bb github.com/a/x " sha " t - -"))]))
-      (should= [] (catalogue/ref-problems (tool other) [(tool other) (tool (str "x bb github.com/a/x " sha " t - -"))]))))
+               (catalogue/ref-problems second-row rows))
+      (should= [] (catalogue/ref-problems first-row rows))))
 
   (context "on a row with the wrong number of columns"
     (it "names only the columns"
