@@ -1,7 +1,7 @@
 (ns sf.catalogue
   "The rows of swarmforge/tools.conf as tools, and the rules a row must keep:
-  column count, a pinned ref of its kind's form, a safe GitHub source, and one
-  ref per shared source."
+  a unique name, column count, a known kind and rewrite, a pinned ref of its
+  kind's form, a safe GitHub source, and one ref per shared source."
   (:require [clojure.string :as str]))
 
 (def columns
@@ -21,6 +21,12 @@
   {:name name :kind kind :source source :ref ref :task task :rewrite rewrite
    :needs (if (contains? #{nil "-"} needs) [] (str/split needs #","))
    :columns (count row)})
+
+(defn pin-sources
+  "The tools whose rows pin part of the tool's wrapper besides its own row:
+  speclj's version for cloverage's speclj dependency."
+  [name]
+  (if (= "cloverage" name) ["speclj"] []))
 
 (defn clones?
   "True for the kinds whose source is a GitHub repository sf tool clones."
@@ -79,3 +85,17 @@
   (if (not= 7 (:columns tool))
     [(str "'" (:name tool) "' needs exactly " columns)]
     (vec (keep identity [(ref-problem tool) (source-problem tool) (shared-ref-problem tool tools)]))))
+
+(defn- row-problems
+  "The problems of one tool; earlier holds the names of the tools before it."
+  [{:keys [name kind rewrite columns] :as tool} tools earlier]
+  (let [whole? (= 7 columns)]
+    (concat (when (earlier name) [(str "tool '" name "' listed twice")])
+            (when (and whole? (not (kinds kind))) [(str "'" name "' has unknown kind '" kind "'")])
+            (when (and whole? (not (rewrites rewrite))) [(str "'" name "' has unknown rewrite '" rewrite "'")])
+            (ref-problems tool tools))))
+
+(defn problems
+  "Every problem of the tools of a catalogue, tool by tool in row order."
+  [tools]
+  (vec (mapcat #(row-problems %1 tools %2) tools (reductions conj #{} (map :name tools)))))

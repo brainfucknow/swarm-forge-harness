@@ -81,3 +81,25 @@
                (problems "x bb github.com/a/x t - -"))
       (should= ["'x' needs exactly <name> <kind> <source> <ref> <task> <rewrite> <needs>"]
                (problems (str "x bb github.com/a/x " sha " t - - extra"))))))
+
+(describe "problems"
+  (it "is empty for a catalogue whose rows keep the rules"
+    (should= [] (catalogue/problems (map tool [(str "a bb github.com/x/a " sha " t - -")
+                                               (str "b bbmain github.com/x/a " sha " t - a")
+                                               "c local swarmforge/bin/c - - - -"]))))
+
+  (it "names, row by row, a name listed twice, an unknown kind or rewrite, then the ref problems"
+    (should= ["'a' has unknown kind 'java'"
+              "'a' has unknown rewrite 'rot13'"
+              "tool 'a' listed twice"
+              "'a' needs a 40-digit lowercase hex commit SHA as its ref, not '0123abc'"
+              "'short' needs exactly <name> <kind> <source> <ref> <task> <rewrite> <needs>"]
+             (catalogue/problems (map tool ["a java s - t rot13 -" "a bb github.com/x/a 0123abc t - -" "short bb"])))))
+
+(describe "pin-sources"
+  (it "is speclj for cloverage, whose wrapper takes speclj's version"
+    (should= ["speclj"] (catalogue/pin-sources "cloverage")))
+
+  (it "is empty for the other tools"
+    (should= [] (catalogue/pin-sources "speclj"))
+    (should= [] (catalogue/pin-sources "crap4clj"))))

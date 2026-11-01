@@ -87,10 +87,9 @@ it is: unpinned, never fetched or checked out, and printed without @.")
 
 (defn- clj-deps
   "The Maven dependencies of a clj tool's wrapper as [coordinate version]
-  pairs: its own, and for cloverage also speclj at the speclj row's version."
+  pairs: its own, then those of the rows it takes a pin from."
   [tool {:keys [source ref]}]
-  (cond-> [[source ref]]
-    (= "cloverage" tool) (conj ((juxt :source :ref) (spec-of "speclj")))))
+  (into [[source ref]] (map (comp (juxt :source :ref) spec-of)) (catalogue/pin-sources tool)))
 
 (defn- command-for
   "The wrapper command for the tool and the ref it is pinned at, if any."
@@ -117,8 +116,8 @@ it is: unpinned, never fetched or checked out, and printed without @.")
     (println (str "INSTALLED: " tool " " path (when pin (str " @" pin))))))
 
 (defn- check-known
-  "Stops when the tool, a tool it needs, or speclj for cloverage has an unknown
-  kind or rewrite, or breaks a ref or source rule."
+  "Stops when the tool, a tool it needs, or a row it takes a pin from has an
+  unknown kind or rewrite, or breaks a ref or source rule."
   [tool]
   (let [{:keys [kind rewrite needs] :as spec} (spec-of tool)]
     (run! check-known needs)
@@ -126,7 +125,7 @@ it is: unpinned, never fetched or checked out, and printed without @.")
       (shell/die "tools.conf: " problem))
     (when-not (catalogue/kinds kind) (shell/die "unknown kind '" kind "' for " tool))
     (when-not (catalogue/rewrites rewrite) (shell/die "unknown rewrite '" rewrite "' in swarmforge/tools.conf"))
-    (when (= "cloverage" tool) (check-known "speclj"))))
+    (run! check-known (catalogue/pin-sources tool))))
 
 (defn- install-with-needs [tool]
   (run! install-with-needs (:needs (spec-of tool)))

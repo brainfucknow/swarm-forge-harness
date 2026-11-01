@@ -129,20 +129,8 @@
               (seen name) (conj (str "routes.conf: route '" name "' listed twice"))
               (route-problem route) (conj (str "routes.conf: " name ": " (route-problem route))))))))
 
-(defn- tool-problems
-  "The problems of one tools.conf row; seen holds the earlier tool names."
-  [tools row seen]
-  (let [{:keys [name kind rewrite columns] :as tool} (catalogue/tool row)
-        whole? (= 7 columns)]
-    (concat (when (seen name) [(str "tool '" name "' listed twice")])
-            (when (and whole? (not (catalogue/kinds kind))) [(str "'" name "' has unknown kind '" kind "'")])
-            (when (and whole? (not (catalogue/rewrites rewrite))) [(str "'" name "' has unknown rewrite '" rewrite "'")])
-            (catalogue/ref-problems tool tools))))
-
 (defn- check-tools []
-  (let [conf-rows (rows "tools.conf")
-        tools (map catalogue/tool conf-rows)]
-    (map #(str "tools.conf: " %) (scan conf-rows (partial tool-problems tools)))))
+  (map #(str "tools.conf: " %) (catalogue/problems (map catalogue/tool (rows "tools.conf")))))
 
 (defn check
   "Validates the catalogue files and prints a summary; stops on any problem."
