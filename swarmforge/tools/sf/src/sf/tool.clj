@@ -4,7 +4,8 @@
   of the checkout sf tool runs in."
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
-            [sf.config :as config]
+            [sf.catalogue :as catalogue]
+            [sf.clone :as clone]
             [sf.entry-point :as entry-point]
             [sf.shell :as shell]
             [sf.wrapper :as wrapper]))
@@ -16,21 +17,22 @@
   list             print the catalogue
   bin              print the wrapper directory; put it on PATH
 
-The catalogue is swarmforge/tools.conf of the checkout you run in. Wrappers
-live in .swarmforge/bin/ and sources in .swarmforge/tools/, both under the
-main checkout and ignored by git. SWARMFORGE_TOOL_SRC points every
-GitHub source at one local checkout instead of cloning.")
+The catalogue is swarmforge/tools.conf of the checkout you run in. Each row
+pins a ref: ensure puts a GitHub source's clone at its commit and prints it
+after the wrapper path (@<sha>), and a clj tool's wrapper uses its Maven
+version (@<version>). Wrappers live in .swarmforge/bin/ and clones in
+.swarmforge/tools/, both under the main checkout and ignored by git.
+SWARMFORGE_TOOL_SRC points every GitHub source at one local checkout, used as
+it is: unpinned, never fetched or checked out, and printed without @.")
 
-(defn- catalogue
-  "The rows of swarmforge/tools.conf of the checkout sf tool runs in."
+(defn- tools
+  "The tools of swarmforge/tools.conf of the checkout sf tool runs in."
   []
-  (shell/conf-rows (fs/path (shell/checkout-root) "swarmforge" "tools.conf")))
+  (map catalogue/tool (shell/conf-rows (fs/path (shell/checkout-root) "swarmforge" "tools.conf"))))
 
 (defn- spec-of [tool]
-  (let [[_ kind source task rewrite needs] (or (some #(when (= tool (first %)) %) (catalogue))
-                                               (shell/die "unknown tool '" tool "' (see swarmforge/tools.conf)"))]
-    {:kind kind :source source :task task :rewrite rewrite
-     :needs (if (= "-" needs) [] (str/split needs #","))}))
+  (or (some #(when (= tool (:name %)) %) (tools))
+      (shell/die "unknown tool '" tool "' (see swarmforge/tools.conf)")))
 
 (defn- bin-dir []
   (str (fs/path (shell/repo-root) ".swarmforge" "bin")))
@@ -46,26 +48,28 @@ GitHub source at one local checkout instead of cloning.")
       (shell/fail 1 nil)))
   (println (str "OK: " tool " " (wrapper-path tool))))
 
-(defn- ensure-source
-  "The local checkout of a GitHub source. A directory that exists is used as it
-  is; only a missing one is cloned."
-  [source]
-  (let [override (shell/env "SWARMFORGE_TOOL_SRC" nil)
-        dir (or override (str (fs/path (shell/repo-root) ".swarmforge" "tools" (fs/file-name source))))]
-    (when-not (or override (fs/exists? dir))
-      (fs/create-dirs (fs/parent dir))
-      (when-not (shell/ok? (shell/run {:err :inherit} "git" "clone" "--quiet" "--depth" "1" (str "https://" source ".git") dir))
-        (shell/die "failed to clone https://" source ".git")))
-    dir))
+(defn- pinned-source
+  "The tool's source directory, its commit, and a function that puts the clone
+  back where it was. SWARMFORGE_TOOL_SRC is used as it is, with no commit."
+  [tool {:keys [source ref]}]
+  (if-let [override (shell/env "SWARMFORGE_TOOL_SRC" nil)]
+    [override nil (constantly nil)]
+    (let [dir (str (fs/path (shell/repo-root) ".swarmforge" "tools" (catalogue/github-repo source)))
+          url (str "https://" source ".git")
+          earlier (clone/head dir)]
+      (clone/ensure-at tool dir url ref)
+      [dir ref #(when (and earlier (not= earlier ref)) (clone/ensure-at tool dir url earlier))])))
 
 (defn- checked-source
-  "The tool's source directory. A source without the entry point stops the
-  install and leaves any earlier wrapper as it is."
-  [tool {:keys [kind source task]}]
-  (let [dir (ensure-source source)]
+  "The tool's source directory and its commit. A source without the entry
+  point stops the install, puts the clone back at its earlier commit, and
+  leaves any earlier wrapper as it is."
+  [tool {:keys [kind task] :as spec}]
+  (let [[dir pin restore] (pinned-source tool spec)]
     (when-let [problem (entry-point/problem kind dir task)]
+      (restore)
       (shell/die tool ": " problem))
-    dir))
+    [dir pin]))
 
 (defn- coverage-config-path [tool]
   (str (fs/path (shell/repo-root) ".swarmforge" "tools" (str tool "-coverage") "bb.edn")))
@@ -85,34 +89,47 @@ GitHub source at one local checkout instead of cloning.")
     (fs/create-dirs (fs/parent path))
     (spit path (wrapper/coverage-config dir))))
 
-(defn- command-for [tool {:keys [kind source task rewrite] :as spec}]
+(defn- clj-deps
+  "The Maven dependencies of a clj tool's wrapper as [coordinate version]
+  pairs: its own, then those of the rows it takes a pin from."
+  [tool {:keys [source ref]}]
+  (into [[source ref]] (map (comp (juxt :source :ref) spec-of)) (catalogue/pin-sources tool)))
+
+(defn- command-for
+  "The wrapper command for the tool and the ref it is pinned at, if any."
+  [tool {:keys [kind source ref task rewrite] :as spec}]
   (case kind
-    "bb" (let [dir (checked-source tool spec)]
+    "bb" (let [[dir pin] (checked-source tool spec)]
            (when (= "coverage" rewrite) (write-coverage-config tool dir))
-           (wrapper/bb-command dir task))
-    "bbmain" (wrapper/bbmain-command (checked-source tool spec) task)
-    "clj" (wrapper/clj-command tool source task)
-    "local" (wrapper/local-command (shell/repo-root) source)))
+           [(wrapper/bb-command dir task) pin])
+    "bbmain" (let [[dir pin] (checked-source tool spec)]
+               [(wrapper/bbmain-command dir task) pin])
+    "clj" [(wrapper/clj-command tool (clj-deps tool spec) task) ref]
+    "local" [(wrapper/local-command (shell/repo-root) source) nil]))
 
 (defn- install-one [tool]
   (let [spec (spec-of tool)
-        command (cond->> (command-for tool spec)
+        [command pin] (command-for tool spec)
+        command (cond->> command
                   (= "gherkin" (:rewrite spec))
                   (wrapper/keeping-feature-block (sf-src)))
         path (wrapper-path tool)]
     (fs/create-dirs (bin-dir))
     (spit path (wrapper/script (rewrite-for (:rewrite spec) tool) command))
     (fs/set-posix-file-permissions path "rwxr-xr-x")
-    (println (str "INSTALLED: " tool " " path))))
+    (println (str "INSTALLED: " tool " " path (when pin (str " @" pin))))))
 
 (defn- check-known
-  "Stops when the tool or a tool in its needs chain has a kind or rewrite sf
-  tool does not know."
+  "Stops when the tool, a tool it needs, or a row it takes a pin from has an
+  unknown kind or rewrite, or breaks a ref or source rule."
   [tool]
-  (let [{:keys [kind rewrite needs]} (spec-of tool)]
+  (let [{:keys [kind rewrite needs] :as spec} (spec-of tool)]
     (run! check-known needs)
-    (when-not (config/tool-kinds kind) (shell/die "unknown kind '" kind "' for " tool))
-    (when-not (config/tool-rewrites rewrite) (shell/die "unknown rewrite '" rewrite "' in swarmforge/tools.conf"))))
+    (when-let [problem (first (catalogue/ref-problems spec (tools)))]
+      (shell/die "tools.conf: " problem))
+    (when-not (catalogue/kinds kind) (shell/die "unknown kind '" kind "' for " tool))
+    (when-not (catalogue/rewrites rewrite) (shell/die "unknown rewrite '" rewrite "' in swarmforge/tools.conf"))
+    (run! check-known (catalogue/pin-sources tool))))
 
 (defn- install-with-needs [tool]
   (run! install-with-needs (:needs (spec-of tool)))
@@ -123,8 +140,10 @@ GitHub source at one local checkout instead of cloning.")
   (install-with-needs tool))
 
 (defn- list-tools []
-  (doseq [[name kind source] (catalogue)]
-    (println (format "%-22s %-6s %s" name kind source))))
+  (let [rows (tools)
+        width (apply max 0 (map (comp count :source) rows))]
+    (doseq [{:keys [name kind source ref]} rows]
+      (println (format (str "%-22s %-6s %-" (max 1 width) "s %s") name kind source ref)))))
 
 (defn- named
   "The tool the command was given; stops when there is none."
