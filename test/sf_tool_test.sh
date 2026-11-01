@@ -20,7 +20,7 @@ git config --global user.email tester@example.com
 repo="$scratch/project"
 mkdir -p "$repo" && cd "$repo"
 git init -q .
-cp -R "$HERE/swarmforge" swarmforge
+cp -R "$HERE/swarmforge" swarmforge && rm -f swarmforge/verify.conf
 git add -A && git commit -q -m seed
 
 fake="$scratch/fakebin"; mkdir -p "$fake"
@@ -65,27 +65,31 @@ assert_match "fresh install validates its runtime configuration" "$(cd "$consume
 assert_match "installed init is repeatable" "$(cd "$consumer" && swarmforge/bin/sf init)" '^roles: '
 assert_eq "installed compatibility entrypoint lists the same tools" \
   "$(cd "$consumer" && swarmforge/bin/sf-tool list)" "$(cd "$consumer" && swarmforge/bin/sf tool list)"
-for wrapper in sf sf-tool sf-cs sf-fs sf-js; do
+for wrapper in sf sf-tool sf-cs sf-fs sf-vb sf-js; do
   (cd "$consumer" && "swarmforge/bin/$wrapper" --help >/dev/null) \
     && pass "installed $wrapper exposes help" || fail "installed $wrapper cannot load"
 done
 development="$(find "$consumer/swarmforge/tools" -type d \( -name spec -o -name test -o -name property -o -name fixtures -o -name features -o -name acceptance \))"
 assert_eq "fresh install excludes development asset directories" "$development" ""
 assert_fails "fresh install excludes the developer-only sf task config" test -e "$consumer/swarmforge/tools/sf/bb.edn"
+assert_fails "fresh install excludes this repository's verify.conf" test -e "$consumer/swarmforge/verify.conf"
 test -f "$HERE/swarmforge/tools/sf/bb.edn" && test -d "$HERE/swarmforge/tools/javascript/fixtures" \
   && pass "installation leaves source development assets in place" || fail "source development assets changed"
 mkdir -p "$consumer/tmp/jscpd"
 cp "$HERE/swarmforge/tools/csharp/fixtures/jscpd-report.json" "$consumer/tmp/jscpd/jscpd-report.json"
-for wrapper in sf-cs sf-fs sf-js; do
+for wrapper in sf-cs sf-fs sf-vb sf-js; do
   (cd "$consumer" && swarmforge/bin/sf-tool ensure "$wrapper" >/dev/null)
   status=0
   out="$(cd "$consumer" && ".swarmforge/bin/$wrapper" dry --all --report-only)" || status=$?
   assert_eq "installed $wrapper reports clone findings" "$status" 1
   assert_match "installed $wrapper reads reports through shared runtime code" "$out" '3 of 3 clone'
 done
-status=0
-(cd "$consumer" && swarmforge/bin/sf-fs mutate >/dev/null 2>&1) || status=$?
-assert_eq "installed F# mutation fails explicitly" "$status" 2
+for wrapper in sf-fs sf-vb; do
+  status=0
+  (cd "$consumer" && "swarmforge/bin/$wrapper" mutate >/dev/null 2>&1) || status=$?
+  assert_eq "installed $wrapper mutation fails explicitly" "$status" 2
+done
+test -f "$consumer/swarmforge/languages/vbnet.md" && pass "installed VB.NET guide" || fail "installed VB.NET guide missing"
 mkdir -p "$consumer/swarmforge/tools/sf/spec" "$consumer/.agents/skills/project"
 echo owned > "$consumer/swarmforge/tools/sf/spec/project.clj"
 echo owned > "$consumer/.agents/skills/project/SKILL.md"

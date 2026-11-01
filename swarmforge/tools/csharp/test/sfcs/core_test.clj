@@ -86,6 +86,10 @@
   (is (= ["(System.Int32)" 3 3]
          ((juxt :signature :first-line :last-line) (first (cob/parse-cobertura (cobertura-xml [] "A.cs")))))))
 
+(deftest cobertura-after-coverlet-byte-order-mark
+  (is (= (cob/parse-cobertura (cobertura-xml [] "A.vb"))
+         (cob/parse-cobertura (str "\uFEFF<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" (cobertura-xml [] "A.vb"))))))
+
 (deftest cobertura-files-newest-first
   (let [dir (fs/create-temp-dir {:prefix "sfcs-cov"})
         write (fn [path millis]
@@ -156,18 +160,20 @@
         status (binding [shell/*dir* *repo* *out* out *err* err]
                  (with-redefs [shell/run (fake-run env)
                                shell/available? (complement missing)]
-                   (try (if (= "fsharp" (get env "LANGUAGE"))
-                          (cli/main :fsharp (vec args))
+                   (try (if-let [language (get env "LANGUAGE")]
+                          (cli/main (keyword language) (vec args))
                           (cli/main (vec args)))
                         (catch Exception e
                           (binding [*out* err] (println (str "sf-cs: " (ex-message e))))
                           2))))]
     {:status status :lines (vec (str/split-lines (str/trimr (str out)))) :err (str err)}))
 
+(def wrappers {"fsharp" "sf-fs" "vbnet" "sf-vb"})
+
 (defn- sfcs-process [env & args]
   (let [result (apply p/shell {:dir *repo* :out :string :err :string :continue true
                                :extra-env (merge {"PATH" (str *bin* fs/path-separator (System/getenv "PATH"))} env)}
-                      "bash" (str (fs/path here ".." ".." "bin" (if (= "fsharp" (get env "LANGUAGE")) "sf-fs" "sf-cs"))) args)]
+                      "bash" (str (fs/path here ".." ".." "bin" (get wrappers (get env "LANGUAGE") "sf-cs"))) args)]
     {:status (:exit result) :lines (vec (str/split-lines (str/trimr (:out result)))) :err (:err result)}))
 
 (defn- seed-repo [f]
@@ -179,6 +185,7 @@
                "[ -n \"$FAKE_DOTNET_LOG\" ] && printf '%s\\n' \"$@\" > \"$FAKE_DOTNET_LOG\"\n"
                "if [ \"$1 $2\" = \"$FAKE_FAIL_STEP\" ]; then exit 7; fi\n"
                "if [ \"$1\" = test ] && [ -n \"$FAKE_COVERAGE\" ]; then mkdir -p tmp/coverage/run && cp \"$FAKE_COVERAGE\" tmp/coverage/run/coverage.cobertura.xml; fi\n"
+               "for pair in ${FAKE_PROJECT_EXITS//,/ }; do if [ \"$2\" = \"${pair%%=*}\" ]; then exit \"${pair#*=}\"; fi; done\n"
                "if [ \"$1\" = stryker ] && [ -n \"$FAKE_REPORT\" ]; then mkdir -p tmp/stryker/reports && cp \"$FAKE_REPORT\" tmp/stryker/reports/mutation-report.json; fi\n"
                "if [ \"$1\" = new ]; then mkdir -p .config && echo '{\"tools\":{}}' > .config/dotnet-tools.json; fi\n"
                "exit ${FAKE_EXIT:-0}\n"))
@@ -407,8 +414,22 @@
         (is (= 1 (count lines)))
         (when (= "0" exit) (is (str/includes? err "not found")))))))
 
-(defn- sffs [env & args]
-  (apply sfcs (assoc env "LANGUAGE" "fsharp") args))
+(def compiled-languages
+  "Languages scored from compiled methods and not mutable by Stryker.NET."
+  [{:language "fsharp" :label "F#" :extension "fs"
+    :jscpd "--format fsharp --min-tokens"
+    :source "module Bank.Account\nlet calculate value =\n    value + 1\n"
+    :signature-edit ["value =" "value = // signature-only edit"]}
+   {:language "vbnet" :label "VB.NET" :extension "vb"
+    :jscpd "--format visual-basic --formats-exts visual-basic:vb --min-tokens"
+    :source "Public Module Account\n    Public Function Calculate(value As Integer) As Integer\n        Return value + 1\n    End Function\nEnd Module\n"
+    :signature-edit ["As Integer) As Integer" "As Integer) As Integer ' signature-only edit"]}])
+
+(defn- in-language [{:keys [language]} env & args]
+  (apply sfcs (assoc env "LANGUAGE" language) args))
+
+(defn- source-file [{:keys [extension]} stem]
+  (str "Bank/" stem "." extension))
 
 (deftest help-describes-the-language-capabilities
   (let [{:keys [status lines]} (sfcs {} "help")
@@ -416,95 +437,290 @@
     (is (= 0 status))
     (is (str/includes? help "install dotnet-stryker locally"))
     (is (str/includes? help "Stryker on changed files")))
-  (let [{:keys [status lines]} (sffs {} "help")
-        help (str/join "\n" lines)]
-    (is (= 0 status))
-    (is (str/includes? help "check dotnet, node, npx and prepare jscpd"))
-    (is (str/includes? help "unsupported for F#; exit 2"))))
+  (doseq [{:keys [label] :as profile} compiled-languages]
+    (let [{:keys [status lines]} (in-language profile {} "help")
+          help (str/join "\n" lines)]
+      (is (= 0 status))
+      (is (str/includes? help "check dotnet, node, npx and prepare jscpd"))
+      (is (str/includes? help (str "unsupported for " label "; exit 2"))))))
 
-(deftest fsharp-tool-boundary
-  (let [{:keys [status lines err]} (sffs {} "tools")]
-    (is (= 0 status) err)
-    (is (= ["$ npx --yes jscpd@4 --version"] lines)))
-  (is (= 2 (:status (sffs {"MISSING" "dotnet"} "tools"))))
-  (let [{:keys [status lines err]} (sffs {} "mutate" "--all" "--report-only")]
-    (is (= 2 status))
-    (is (every? str/blank? lines))
-    (is (str/includes? err "F# mutation is unsupported"))))
+(deftest compiled-language-tool-boundary
+  (doseq [{:keys [label] :as profile} compiled-languages]
+    (let [{:keys [status lines err]} (in-language profile {} "tools")]
+      (is (= 0 status) err)
+      (is (= ["$ npx --yes jscpd@4 --version"] lines)))
+    (is (= 2 (:status (in-language profile {"MISSING" "dotnet"} "tools"))))
+    (let [{:keys [status lines err]} (in-language profile {} "mutate" "--all" "--report-only")]
+      (is (= 2 status))
+      (is (every? str/blank? lines))
+      (is (str/includes? err (str label " mutation is unsupported"))))))
 
-(deftest fsharp-test-selection-and-failure
-  (let [log (str (fs/path *repo* "fsharp-dotnet.log"))]
-    (doseq [[command category] [["test" "Category!=Property"] ["property" "Category=Property"]]]
-      (is (= 7 (:status (sffs {"FAKE_DOTNET_LOG" log "FAKE_EXIT" "7"} command "--no-build"))))
+(deftest compiled-language-test-selection-and-failure
+  (let [log (str (fs/path *repo* "compiled-dotnet.log"))]
+    (doseq [profile compiled-languages
+            [command category] [["test" "Category!=Property"] ["property" "Category=Property"]]]
+      (is (= 7 (:status (in-language profile {"FAKE_DOTNET_LOG" log "FAKE_EXIT" "7"} command "--no-build"))))
       (is (= ["test" "--filter" category "--no-build"] (str/split-lines (slurp log)))))))
 
-(deftest fsharp-compiled-methods-use-report-spans
-  (let [dir (fs/path *repo* "fsharp-coverage")
-        report (fs/path dir "coverage.cobertura.xml")
-        xml (cobertura-xml [] "Bank/Account.fs")]
-    (fs/create-dirs dir)
-    (spit (str (fs/path *repo* "Bank" "Account.fs")) "module Bank.Account\nlet calculate value =\n    value + 1\n")
-    (spit (str report) xml)
-    (let [{:keys [status lines err]} (sffs {} "crap" "--base" "main" "--report" (str dir))]
-      (is (= 0 status) err)
-      (is (str/includes? (first lines) "Bank/Account.fs:3 B.M")))
-    (spit (str report) (str/replace xml "</classes>"
-                                   "<class name=\"Other\" filename=\"Other.cs\"><methods><method name=\"Ignored\"/></methods></class></classes>"))
-    (is (= 0 (:status (sffs {} "crap" "--all" "--report" (str dir)))))
-    (spit (str report) (str/replace xml "complexity=\"2\"" "complexity=\"0\""))
-    (is (= 0 (:status (sffs {} "crap" "--all" "--report" (str dir)))))
-    (doseq [invalid [(str/replace xml " complexity=\"2\"" "")
-                     (str/replace xml " line-rate=\"1\"" "")
-                     (str/replace xml "number=\"3\"" "number=\"0\"")
-                     (str/replace xml "<line number=\"3\" hits=\"1\"/>"
-                                  "<line number=\"3\" hits=\"1\"/><line number=\"0\" hits=\"0\"/>")
-                     (str/replace xml "<line number=\"3\" hits=\"1\"/>" "")
-                     (str/replace xml "line-rate=\"1\"" "line-rate=\"2\"")
-                     (str/replace xml "complexity=\"2\"" "complexity=\"NaN\"")
-                     (cobertura-xml [] "Bank/Account.cs")]]
-      (spit (str report) invalid)
-      (is (= 2 (:status (sffs {} "crap" "--all" "--report" (str dir)))) invalid))
-    (spit (str report) (-> xml (str/replace "complexity=\"2\"" "complexity=\"4\"")
-                           (str/replace "line-rate=\"1\"" "line-rate=\"0.25\"")))
-    (is (= 1 (:status (sffs {} "crap" "--all" "--report" (str dir)))))))
+(deftest compiled-methods-use-report-spans
+  (doseq [{:keys [language source] :as profile} compiled-languages]
+    (let [dir (fs/path *repo* (str language "-coverage"))
+          report (fs/path dir "coverage.cobertura.xml")
+          file (source-file profile "Account")
+          xml (cobertura-xml [] file)
+          crap-all #(:status (in-language profile {} "crap" "--all" "--report" (str dir)))]
+      (fs/create-dirs dir)
+      (spit (str (fs/path *repo* file)) source)
+      (spit (str report) xml)
+      (let [{:keys [status lines err]} (in-language profile {} "crap" "--base" "main" "--report" (str dir))]
+        (is (= 0 status) err)
+        (is (str/includes? (first lines) (str file ":3 B.M"))))
+      (spit (str report) (str/replace xml "</classes>"
+                                     "<class name=\"Other\" filename=\"Other.cs\"><methods><method name=\"Ignored\"/></methods></class></classes>"))
+      (is (= 0 (crap-all)))
+      (spit (str report) (str/replace xml "complexity=\"2\"" "complexity=\"0\""))
+      (is (= 0 (crap-all)))
+      (doseq [invalid [(str/replace xml " complexity=\"2\"" "")
+                       (str/replace xml " line-rate=\"1\"" "")
+                       (str/replace xml "number=\"3\"" "number=\"0\"")
+                       (str/replace xml "<line number=\"3\" hits=\"1\"/>"
+                                    "<line number=\"3\" hits=\"1\"/><line number=\"0\" hits=\"0\"/>")
+                       (str/replace xml "<line number=\"3\" hits=\"1\"/>" "")
+                       (str/replace xml "line-rate=\"1\"" "line-rate=\"2\"")
+                       (str/replace xml "complexity=\"2\"" "complexity=\"NaN\"")
+                       (cobertura-xml [] "Bank/Account.cs")]]
+        (spit (str report) invalid)
+        (is (= 2 (crap-all)) invalid))
+      (spit (str report) (-> xml (str/replace "complexity=\"2\"" "complexity=\"4\"")
+                             (str/replace "line-rate=\"1\"" "line-rate=\"0.25\"")))
+      (is (= 1 (crap-all))))))
 
-(deftest fsharp-dry-format-and-freshness
+(deftest compiled-language-dry-format-and-freshness
   (let [report (str (fs/path fixtures "jscpd-report.json"))
         path (fs/path *repo* "tmp" "jscpd" "jscpd-report.json")]
-    (let [{:keys [status lines]} (sffs {"FAKE_JSCPD_REPORT" report} "dry" "--all")]
-      (is (= 1 status))
-      (is (str/includes? (first lines) "--format fsharp")))
-    (is (= 1 (:status (sffs {} "dry" "--all" "--report-only"))))
-    (is (= 5 (:status (sffs {"FAKE_EXIT" "5"} "dry" "--all"))))
-    (is (not (fs/exists? path)))))
+    (doseq [{:keys [jscpd] :as profile} compiled-languages]
+      (let [{:keys [status lines]} (in-language profile {"FAKE_JSCPD_REPORT" report} "dry" "--all")]
+        (is (= 1 status))
+        (is (str/includes? (first lines) jscpd))
+        (is (str/includes? (first lines) "**/*.Designer.cs,**/*.Designer.vb")))
+      (is (= 1 (:status (in-language profile {} "dry" "--all" "--report-only"))))
+      (is (= 5 (:status (in-language profile {"FAKE_EXIT" "5"} "dry" "--all"))))
+      (is (not (fs/exists? path))))))
 
-(deftest fsharp-scope-does-not-expand-into-signatures
-  (let [file (fs/path *repo* "Bank" "Unchanged.fs")
-        dir (fs/path *repo* "fsharp-scope")
-        source "module Bank.Unchanged\nlet calculate value =\n    value + 1\n"]
-    (spit (str file) source)
-    (git "add" "Bank/Unchanged.fs")
-    (git "commit" "--quiet" "-m" "compiled method baseline")
-    (let [base (str/trim (:out (git "rev-parse" "HEAD")))]
-      (spit (str file) (str/replace source "value =" "value = // signature-only edit"))
-      (fs/create-dirs dir)
-      (spit (str (fs/path dir "coverage.cobertura.xml")) (cobertura-xml [] "Bank/Unchanged.fs"))
-      (let [{:keys [status lines err]} (sffs {} "crap" "--base" base "--report" (str dir))]
-        (is (= 0 status) err)
-        (is (= ["0 changed method(s), 0 over CRAP 10"] lines))))))
+(deftest compiled-scope-does-not-expand-into-signatures
+  (doseq [{:keys [language source signature-edit] :as profile} compiled-languages]
+    (let [file (source-file profile "Unchanged")
+          dir (fs/path *repo* (str language "-scope"))]
+      (spit (str (fs/path *repo* file)) source)
+      (git "add" file)
+      (git "commit" "--quiet" "-m" "compiled method baseline")
+      (let [base (str/trim (:out (git "rev-parse" "HEAD")))]
+        (spit (str (fs/path *repo* file)) (apply str/replace source signature-edit))
+        (fs/create-dirs dir)
+        (spit (str (fs/path dir "coverage.cobertura.xml")) (cobertura-xml [] file))
+        (let [{:keys [status lines err]} (in-language profile {} "crap" "--base" base "--report" (str dir))]
+          (is (= 0 status) err)
+          (is (= ["0 changed method(s), 0 over CRAP 10"] lines)))))))
 
-(deftest fsharp-coverage-requires-fresh-output
-  (let [path (fs/path *repo* "tmp" "coverage" "stale" "coverage.cobertura.xml")]
-    (fs/create-dirs (fs/parent path))
-    (spit (str path) (cobertura-xml [] "Bank/Account.fs"))
-    (is (= 7 (:status (sffs {"FAKE_EXIT" "7"} "coverage"))))
-    (is (not (fs/exists? path)))
-    (is (= 2 (:status (sffs {} "coverage"))))
-    (is (= 0 (:status (sffs {"FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))}
-                          "coverage"))))))
+(deftest compiled-language-coverage-requires-fresh-output
+  (doseq [profile compiled-languages]
+    (let [path (fs/path *repo* "tmp" "coverage" "stale" "coverage.cobertura.xml")]
+      (fs/create-dirs (fs/parent path))
+      (spit (str path) (cobertura-xml [] (source-file profile "Account")))
+      (is (= 7 (:status (in-language profile {"FAKE_EXIT" "7"} "coverage"))))
+      (is (not (fs/exists? path)))
+      (is (= 2 (:status (in-language profile {} "coverage"))))
+      (is (= 0 (:status (in-language profile {"FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))}
+                                     "coverage")))))))
 
-(deftest fsharp-wrapper-dispatches-its-profile
-  (let [{:keys [status lines]} (sfcs-process {"LANGUAGE" "fsharp"} "help")]
-    (is (= 0 status))
-    (is (str/starts-with? (first lines) "usage: sf-fs")))
-  (is (= 2 (:status (sfcs-process {"LANGUAGE" "fsharp"} "nope")))))
+(deftest compiled-language-wrappers-dispatch-their-profile
+  (doseq [{:keys [language]} compiled-languages]
+    (let [{:keys [status lines]} (sfcs-process {"LANGUAGE" language} "help")]
+      (is (= 0 status))
+      (is (str/starts-with? (first lines) (str "usage: " (wrappers language)))))
+    (is (= 2 (:status (sfcs-process {"LANGUAGE" language} "nope"))))))
+
+;; Expecto test projects: sf-fs selects properties by each project's declared list.
+
+(def xunit-fsproj
+  "<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup>
+    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.12.0\" />
+    <PackageReference Include=\"xunit\" Version=\"2.9.2\" />
+  </ItemGroup></Project>")
+
+(defn- expecto-fsproj [declaration]
+  (str "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup>" declaration "</PropertyGroup><ItemGroup>
+    <PackageReference Include=\"Expecto\" Version=\"10.2.1\" />
+    <PackageReference Include=\"YoloDev.Expecto.TestSdk\" Version=\"0.15.3\" />
+  </ItemGroup></Project>"))
+
+(defn- declared [list-name]
+  (expecto-fsproj (str "<SwarmForgePropertyTestList>" list-name "</SwarmForgePropertyTestList>")))
+
+(defn- in-tree
+  "Calls `f` with *repo* bound to a fresh directory holding `files` (path -> text)."
+  [files f]
+  (let [dir (str (fs/create-temp-dir {:prefix "sffs-tree"}))]
+    (try
+      (doseq [[path text] files]
+        (fs/create-dirs (fs/parent (fs/path dir path)))
+        (spit (str (fs/path dir path)) text))
+      (binding [*repo* dir] (f))
+      (finally (fs/delete-tree dir)))))
+
+(defn- dotnet-lines [lines]
+  (filterv #(str/starts-with? % "$ dotnet") lines))
+
+(def mixed-tree
+  {"src/Domain/Domain.fsproj" "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>"
+   "tests/Unit/Unit.fsproj" xunit-fsproj
+   "tests/Laws/Laws.fsproj" (declared "  Laws  ")
+   "tests/Csharp/Csharp.csproj" "<Project><PropertyGroup><IsTestProject>true</IsTestProject></PropertyGroup></Project>"
+   "bin/Old/Old.fsproj" (declared "Old")
+   "obj/Gen/Gen.fsproj" (declared "Gen")
+   "tmp/Copy/Copy.fsproj" (declared "Copy")
+   "node_modules/pkg/Pkg.fsproj" (declared "Pkg")
+   ".worktrees/other/Other.fsproj" (declared "Other")})
+
+(deftest expecto-trees-run-each-test-project-with-its-own-filter
+  (in-tree mixed-tree
+    #(doseq [[command filters] [["test" ["FullyQualifiedName!~Laws." "Category!=Property" "Category!=Property"]]
+                                ["property" ["FullyQualifiedName~Laws." "Category=Property" "Category=Property"]]]]
+       (let [{:keys [status lines err]} (sfcs {"LANGUAGE" "fsharp"} command "--no-build")]
+         (is (= 0 status) err)
+         (is (= (mapv (fn [project f] (str "$ dotnet test " project " --filter " f " --no-build"))
+                      ["tests/Csharp/Csharp.csproj" "tests/Laws/Laws.fsproj" "tests/Unit/Unit.fsproj"]
+                      [(nth filters 1) (nth filters 0) (nth filters 2)])
+                lines))))))
+
+(deftest expecto-list-names-match-literally
+  (in-tree {"T/T.fsproj" (declared "a\\b(c)&amp;d|e=f!g~h")}
+    #(is (= ["$ dotnet test T/T.fsproj --filter FullyQualifiedName~a\\\\b\\(c\\)\\&d\\|e\\=f\\!g\\~h."]
+            (:lines (sfcs {"LANGUAGE" "fsharp"} "property"))))))
+
+(deftest expecto-detection-reads-the-package-reference
+  (doseq [reference ["<PackageReference Include=\"YoloDev.Expecto.TestSdk\"/>"
+                     "<PackageReference Include=\"yolodev.expecto.testsdk\"><Version>0.15.3</Version></PackageReference>"
+                     "<PackageReference\n  Version=\"0.15.3\"\n  Include=\"YoloDev.Expecto.TestSdk\" />"]]
+    (in-tree {"T/T.fsproj" (str "<Project><PropertyGroup><SwarmForgePropertyTestList>P</SwarmForgePropertyTestList>"
+                                "</PropertyGroup><ItemGroup>" reference "</ItemGroup></Project>")}
+      #(is (= ["$ dotnet test T/T.fsproj --filter FullyQualifiedName~P."]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))
+           reference)))
+  (testing "only an F# project is an Expecto test project"
+    (in-tree {"T/T.csproj" (declared "P") "U/U.vbproj" (declared "P")}
+      #(is (= ["$ dotnet test --filter Category=Property"]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))))))
+
+(deftest expecto-list-names-are-xml-values
+  (doseq [[declaration filter] [["Laws&amp;Properties" "Laws\\&Properties."]
+                                ["<![CDATA[A&B]]>" "A\\&B."]
+                                ["&#76;aws<!-- note -->" "Laws."]]]
+    (in-tree {"T/T.fsproj" (declared declaration)}
+      #(is (= [(str "$ dotnet test T/T.fsproj --filter FullyQualifiedName~" filter)]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))
+           declaration)))
+  (testing "a commented-out declaration is no declaration"
+    (in-tree {"T/T.fsproj" (expecto-fsproj "<!-- <SwarmForgePropertyTestList>Old</SwarmForgePropertyTestList> -->")}
+      #(is (= 2 (:status (sfcs {"LANGUAGE" "fsharp"} "property")))))
+    (in-tree {"T/T.fsproj" (expecto-fsproj (str "<!-- <SwarmForgePropertyTestList>Old</SwarmForgePropertyTestList> -->"
+                                                "<SwarmForgePropertyTestList>New</SwarmForgePropertyTestList>"))}
+      #(is (= ["$ dotnet test T/T.fsproj --filter FullyQualifiedName~New."]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))))))
+
+(def commented-expecto-reference
+  "<!-- <PackageReference Include=\"YoloDev.Expecto.TestSdk\" Version=\"0.15.3\" /> -->")
+
+(deftest commented-out-elements-do-not-make-a-test-project
+  (testing "an xUnit project with a commented-out Expecto reference keeps the trait run"
+    (in-tree {"T/T.fsproj" (str/replace xunit-fsproj "<ItemGroup>" (str "<ItemGroup>" commented-expecto-reference))}
+      #(is (= ["$ dotnet test --filter Category=Property"]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property"))))))
+  (testing "commented-out test markers leave a project out of the per-project runs"
+    (in-tree {"a/A.fsproj" (declared "P")
+              "b/B.fsproj" (str "<Project><ItemGroup>" commented-expecto-reference
+                                "<!-- <PackageReference Include=\"Microsoft.NET.Test.Sdk\" /> --></ItemGroup></Project>")
+              "c/C.csproj" "<Project><PropertyGroup><!-- <IsTestProject>true</IsTestProject> --></PropertyGroup></Project>"}
+      #(is (= ["$ dotnet test a/A.fsproj --filter FullyQualifiedName~P."]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))))))
+
+(deftest project-files-are-read-as-msbuild-xml
+  (in-tree {"a/A.fsproj" (str "﻿<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+                              "<Project ToolsVersion=\"15.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">"
+                              "<PropertyGroup><SwarmForgePropertyTestList>Laws</SwarmForgePropertyTestList></PropertyGroup>"
+                              "<ItemGroup><PackageReference Include=\" YoloDev.Expecto.TestSdk \" /></ItemGroup></Project>")
+            "b/B.csproj" (str "<Project xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">"
+                              "<PropertyGroup><IsTestProject> True </IsTestProject></PropertyGroup></Project>")
+            "c/C.fsproj" "<Project><ItemGroup><PackageReference Include=\"YoloDev.Expecto.TestSdk\"></ItemGroup>"}
+    #(is (= ["$ dotnet test a/A.fsproj --filter FullyQualifiedName~Laws."
+             "$ dotnet test b/B.csproj --filter Category=Property"]
+            (:lines (sfcs {"LANGUAGE" "fsharp"} "property"))))))
+
+(deftest trees-without-expecto-keep-the-single-trait-run
+  (in-tree {"tests/Unit/Unit.fsproj" xunit-fsproj
+            "bin/Old/Old.fsproj" (declared "Old")
+            ".hidden/Other.fsproj" (declared "Other")}
+    #(doseq [[command filter] [["test" "Category!=Property"] ["property" "Category=Property"]]]
+       (is (= [(str "$ dotnet test --filter " filter " --no-build")]
+              (:lines (sfcs {"LANGUAGE" "fsharp"} command "--no-build")))))))
+
+(deftest only-sf-fs-looks-for-expecto
+  (in-tree mixed-tree
+    #(doseq [language [nil "vbnet"]
+             [command filter] [["test" "Category!=Property"] ["property" "Category=Property"]]]
+       (is (= [(str "$ dotnet test --filter " filter)]
+              (:lines (sfcs (if language {"LANGUAGE" language} {}) command)))
+           (str language " " command)))))
+
+(deftest undeclared-expecto-projects-stop-before-dotnet
+  (doseq [declaration ["" "<SwarmForgePropertyTestList>  </SwarmForgePropertyTestList>" "<SwarmForgePropertyTestList/>"]]
+    (in-tree {"tests/A/A.fsproj" (expecto-fsproj declaration) "tests/B/B.fsproj" (declared "Laws")}
+      #(doseq [command ["test" "property" "coverage"]]
+         (let [{:keys [status lines err]} (sfcs-process {"LANGUAGE" "fsharp"} command)]
+           (is (= 2 status) (str declaration " " command))
+           (is (empty? (dotnet-lines lines)))
+           (is (str/starts-with? err "sf-fs: "))
+           (is (str/includes? err "tests/A/A.fsproj"))
+           (is (not (str/includes? err "tests/B/B.fsproj")))
+           (is (str/includes? err "SwarmForgePropertyTestList")))))))
+
+(deftest every-project-runs-and-the-first-failure-is-the-status
+  (in-tree {"a/A.fsproj" (declared "P") "b/B.fsproj" xunit-fsproj "c/C.fsproj" (declared "Q")}
+    #(doseq [[exits status] [["b/B.fsproj=5,c/C.fsproj=3" 5] ["c/C.fsproj=3" 3] ["" 0]]]
+       (let [result (sfcs {"LANGUAGE" "fsharp" "FAKE_PROJECT_EXITS" exits} "test")]
+         (is (= status (:status result)) exits)
+         (is (= 3 (count (dotnet-lines (:lines result)))) exits)))))
+
+(deftest expecto-coverage-collects-per-project
+  (let [report (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))
+        collector "--collect XPlat Code Coverage --results-directory tmp/coverage --no-build -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura"
+        stale #(let [path (fs/path *repo* "tmp" "coverage" "stale" "coverage.cobertura.xml")]
+                 (fs/create-dirs (fs/parent path))
+                 (spit (str path) "x")
+                 path)]
+    (in-tree {"a/A.fsproj" (declared "P") "b/B.fsproj" xunit-fsproj}
+      #(do
+         (testing "one collector run per project, a fresh report required"
+           (let [old (stale)
+                 {:keys [status lines err]} (sfcs {"LANGUAGE" "fsharp" "FAKE_COVERAGE" report} "coverage" "--no-build")]
+             (is (= 0 status) err)
+             (is (= [(str "$ dotnet test a/A.fsproj --filter FullyQualifiedName!~P. " collector)
+                     (str "$ dotnet test b/B.fsproj --filter Category!=Property " collector)]
+                    (dotnet-lines lines)))
+             (is (not (fs/exists? old)))
+             (is (fs/exists? (fs/path *repo* "tmp" "coverage" "run" "coverage.cobertura.xml")))))
+         (testing "a failing project is the status after every project ran"
+           (let [{:keys [status lines]} (sfcs {"LANGUAGE" "fsharp" "FAKE_COVERAGE" report "FAKE_PROJECT_EXITS" "a/A.fsproj=4"} "coverage")]
+             (is (= 4 status))
+             (is (= 2 (count (dotnet-lines lines))))))
+         (testing "runs that leave no report are an error"
+           (stale)
+           (is (= 2 (:status (sfcs {"LANGUAGE" "fsharp"} "coverage")))))))))
+
+(deftest only-sf-fs-help-mentions-expecto
+  (is (str/includes? (str/join "\n" (:lines (sfcs {"LANGUAGE" "fsharp"} "help"))) "Expecto"))
+  (doseq [env [{} {"LANGUAGE" "vbnet"}]]
+    (let [help (str/join "\n" (:lines (sfcs env "help")))]
+      (is (not (str/includes? help "Expecto")))
+      (is (str/includes? help "unit and acceptance tests (Category!=Property)\n"))
+      (is (str/includes? help "property tests only (Category=Property)\n")))))

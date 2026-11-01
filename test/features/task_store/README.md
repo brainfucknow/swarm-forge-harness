@@ -23,6 +23,21 @@ copy of `swarmforge/`. The current contract is
 - The conflict message is `sf: merge of swarm/<id> into <target> stopped on
   conflicts: <files>; resolve them, commit, then run: sf finish <id>`.
 
+## Finishing safely
+
+`finish_verify.feature` covers these rules:
+
+- sf finish refuses a task worktree with uncommitted changes, staged,
+  unstaged or untracked, and changes nothing, so work made after the last
+  handoff survives.
+- The project's verification commands are the lines of
+  `swarmforge/verify.conf`. sf finish runs them on the merge candidate in the
+  task worktree before it touches the target, and on the committed merge
+  when it runs again after a conflict. A failure exits 1 and keeps the
+  target, the task branch and the worktree as they were.
+- Without commands, sf finish prints `VERIFY: none configured` and finishes
+  as before.
+
 ## Placeholders
 
 | Text | Meaning |
@@ -34,7 +49,7 @@ copy of `swarmforge/`. The current contract is
 | `$A:created` | The abbreviated sha (`git rev-parse --short`) of the created record commit of task "A", the first commit on its branch. |
 | `NEW` | The id that the step under test (`sf new`) printed. "task NEW" is that task. |
 | `C1`, `C2`, `T1`, `M1` | The abbreviated sha of the commit that a step named so. |
-| `L1` | The `Lore-id` that the hook gave commit `C1`. |
+| `L1`, `L2`, `L3` | The `Lore-id` that the hook gave commit `C1`, `C2`, `C3`. |
 | `DATE` | Any date in the form `YYYY-MM-DD`. |
 | `ROOT` | The absolute path of the main checkout. |
 
@@ -42,7 +57,7 @@ copy of `swarmforge/`. The current contract is
 
 | Step | Meaning |
 |---|---|
-| `a project with swarmforge initialized` | A scratch git repository on `main`. Its first commit has a copy of `swarmforge/` and a `.gitignore` with `.worktrees/`, `.swarmforge/` and `tmp/`. git's identity is `tester <tester@example.com>`. git-bug is not on PATH. `sf init` ran in it and exited 0. |
+| `a project with swarmforge initialized` | A scratch git repository on `main`. Its first commit has a copy of `swarmforge/` without `swarmforge/verify.conf`, and a `.gitignore` with `.worktrees/`, `.swarmforge/` and `tmp/`. git's identity is `tester <tester@example.com>`. git-bug is not on PATH. `sf init` ran in it and exited 0. |
 | `a git repository with a copy of swarmforge and no git-bug on PATH` | The project without `sf init`. |
 | `the git identity of the project is "I"` | Sets `user.name` and `user.email` from `name <email>`. `-` unsets both, in the repository and in HOME. |
 | `task "A" titled "T" was created on route "R"` | `sf new "T" -m "T" --route R` in the main checkout. |
@@ -51,10 +66,12 @@ copy of `swarmforge/`. The current contract is
 | `task "A" was finished` | `sf handoff $A --to done` with `SWARMFORGE_ROLE` unset, then `sf finish $A`, in the main checkout. |
 | `task "A" was handed off to done and squash-merged into main` | `sf handoff $A --to done` with `SWARMFORGE_ROLE` unset, then, in the main checkout, `git merge --squash swarm/$A` and `git commit -m "Squash A"`. The branch and the worktree of A stay. |
 | `the worktree and the branch of task "A" were removed` | `git worktree remove --force .worktrees/$A`, then `git branch -D swarm/$A`, in the main checkout. |
-| `role "R" committed "M" in the worktree of task "A" as C1` | `SWARMFORGE_ROLE=R git commit --allow-empty -m M` in the worktree of A. The commit is `C1`. |
+| `role "R" committed "M" in the worktree of task "A" as C1` | `SWARMFORGE_ROLE=R git commit --allow-empty -m M` in the worktree of A, with placeholders in `M` filled in (for example `Supersedes: L1`). The commit is `C1`. |
+| `"M" was committed in the worktree of task "A" with the hook skipped as C1` | `git commit --allow-empty --no-verify -m M` in the worktree of A. The commit is `C1`. |
 | `role "R" committed the file "P" with "M" in the worktree of task "A" as C1` | Writes `P` with the line `x`, then `git add P` and commits as above. |
 | `the worktree of task "A" has the staged new file "S" and the unstaged change "U"` | Commits `U` with the line `1` (as the stage's role), appends the line `2` to `U` without staging it, then writes `S` with the line `s` and stages it with `git add S`. |
 | `the file "P" in the worktree of task "A" is written with "X"` | Writes `X` and a newline to `P` in that worktree. Makes directories as needed. |
+| `the main checkout committed the file "P" with "X"` | Writes `X` (newlines expanded) and a newline to `P` in the main checkout, making directories as needed, then `git add P` and `git commit -m "Add P"` on its current branch. |
 | `the tip of the branch of task "A" is named T1` | `T1` is the current tip of `swarm/$A`. |
 | `the worktree of task "A" and the branch "B" changed the files "F" differently` | For each path in `F` (separated by spaces): in the worktree of A, writes it with the line `ours` and commits it as the stage's role; on branch `B` (made at the main checkout's HEAD when missing), writes it with the line `theirs` and commits it. The main checkout is on `main` afterwards. |
 | `the operator resolved the conflicts and staged them` | In the main checkout, writes every conflicted file with the line `resolved` and runs `git add` on it. |
@@ -63,6 +80,8 @@ copy of `swarmforge/`. The current contract is
 | `the HEAD of the main checkout is named M1` | `M1` is the current HEAD of the main checkout. |
 | `I ran "C"` / `I ran "C" in the worktree of task "A"` | Runs `C` (placeholders filled in, split on spaces) in the main checkout or that worktree. Output and status are not checked. |
 | `I ran "C" with the text "X"` | The same, with `X` (newlines expanded) added as one last argument. |
+| `the operator asked and answered N questions on task "A"` | For I = 1 to N: `sf ask $A qI`, then `sf answer $A aI`, in the main checkout with `SWARMFORGE_ROLE` unset. Adds 2N records. |
+| `the route of task "A" was set to "R" N times` | `sf route $A R` N times in the main checkout. Adds N `route` records. |
 | `I run …` | The same forms. This is the step under test, whose output and status the `Then` steps check. |
 | `I run sf new with the title "T"` | `sf new "T"` in the main checkout. |
 | `I run sf new with the title "T", the request "Q" and the route "R"` | `sf new "T" -m "Q" --route R`, with `\n` in Q expanded. |
@@ -73,6 +92,7 @@ copy of `swarmforge/`. The current contract is
 | `the output matches "RE"` | Stdout without its last newline matches the regular expression `RE` (placeholders filled in first). |
 | `the output has the line "X"` | One stdout line equals `X`. |
 | `the output has the lines "X"` | The lines of `X` appear in stdout as consecutive lines, in order. |
+| `the output has N lines starting with "X"` | Exactly N stdout lines start with `X`. |
 | `the output has the lines "X" before the line "L"` | The same, and all of them come before the first line equal to `L`. |
 | `the output after the line "L" is "X"` | The stdout lines after the first line equal to `L`, joined by newlines without the last newline, equal `X`. |
 | `the output ends with the lines "X"` | The last stdout lines equal the lines of `X`. |

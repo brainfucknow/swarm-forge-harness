@@ -18,6 +18,7 @@ is the only writer.
 | `SwarmForge-Route` | trailer of the newest record | The roles this task visits, in catalogue order. Set by `sf new --route`, changed by `sf route`. |
 | `SwarmForge-Needs` | trailer of the newest record | `none`; `operator` after `sf ask` until `sf answer`; `approval` after `sf review` until `sf approve` or `sf reject`. |
 | `.worktrees/<id>` | directory | The checkout roles work in. Created by `sf start`, removed by `sf finish`. |
+| `swarmforge/verify.conf` | file on the base branch | The project's verification: one shell command per line; blank lines and `#` lines are skipped. `sf finish` runs them on the merge before it merges. Optional. |
 
 ## Record commits
 
@@ -70,6 +71,28 @@ After `sf finish`, `sf show` reads them from the merge's second parent. After
 a host squash merge, it prints the records from `tasks/done/<id>.md`, and
 `LORE:` lines only while the task branch still exists.
 
+## What sf start leaves out
+
+`sf show` prints every record and every `LORE:` line. `sf start` gives a role
+a shorter brief:
+
+- Every `question`, `answer` and `changes-requested` record, and only the
+  last 10 of the other records, oldest first. When it leaves out other
+  records, the line
+  `RECORDS: <k> earlier records omitted; sf show <id> prints them` comes after
+  the request, before the first printed record; `<k>` counts the records it
+  left out.
+- No evidence lines: `Tested`, `Not-tested`, `Confidence` and `Lore-id`.
+- No lines of a superseded commit. A `Supersedes: <Lore-id>` trailer on any
+  commit of the branch removes every line of the commit with that `Lore-id`;
+  the `Supersedes` line stays unless its own commit is superseded, and a value
+  that matches no commit removes nothing.
+- When it leaves out any `LORE:` line, the line
+  `LORE-OMITTED: <k> superseded or evidence lines; sf show <id> prints them`
+  comes before the printed `LORE:` lines.
+
+`test/features/task_store/start_brief.feature` specifies this.
+
 ## Lifecycle
 
 ```text
@@ -87,7 +110,7 @@ sf new ──► stage <first role>
 ```
 
 - `sf new` records the route (`--route`, else `SWARMFORGE_ROUTE`, else
-  `feature` from `swarmforge/routes.conf`, else every role) and sets the stage
+  `feature` from `swarmforge/routes.conf`, else every non-optional role) and sets the stage
   to its first role. A route is any subset of `swarmforge/roles.conf` in that
   file's order.
 - `sf handoff` requires a clean worktree on the task branch and needs
@@ -106,9 +129,24 @@ sf new ──► stage <first role>
   `.swarmforge/audit/<id>` and is removed when the record is written.
 - `sf next <role>` lists open tasks at that stage that need nothing, so a
   blocked task is invisible to the role until the operator acts.
-- `sf finish` merges `swarm/<id>` into the base branch with `--no-ff` (the
-  merge commit is the `finished` record), then removes the worktree and the
-  branch. A finished task refuses `sf start` and every record.
+- `sf finish` refuses a task worktree with uncommitted changes (staged,
+  unstaged or untracked) and changes nothing. It then detaches the worktree at
+  the base branch and merges `swarm/<id>` there without committing, as the
+  real merge will, runs the commands
+  of that checkout's `swarmforge/verify.conf` with `bash -c` from its root,
+  printing `VERIFY: passed: <command>` for each (or `VERIFY: none
+  configured`), and returns the worktree to the branch tip. A failing command
+  stops `sf finish` with exit 1 and leaves the base branch, the task branch
+  and the worktree as they were. On a pass it merges `swarm/<id>` into the
+  base branch with `--no-ff` (the merge commit is the `finished` record),
+  then removes the worktree without `--force`, then the branch; a rerun
+  completes a cleanup that stopped. A finished task refuses `sf start` and
+  every record.
+- When that merge stops on conflicts, the operator resolves and commits them
+  in the main checkout and runs `sf finish` again, which verifies the
+  committed merge there before it records it and cleans up. If that
+  verification fails, fix the merge with `git commit --amend` and run
+  `sf finish` again; a new commit on top of the merge is refused as finished.
 
 ## Sharing
 

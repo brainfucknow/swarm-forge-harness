@@ -124,3 +124,33 @@
                          (= [id title req blocks {:stage "done" :route route :needs "none"}]
                             [(get-in file [:front "id"]) (:title file) (:request file) (:blocks file)
                              (record/archived-state file)])))))))
+
+(def ^:private kept-kinds #{"question" "answer" "changes-requested"})
+
+(def ^:private history
+  "Records of every kind, each with its position as :n so equal kinds differ."
+  (gen/fmap #(vec (map-indexed (fn [n kind] {:record kind :n n}) %))
+            (gen/vector (gen/elements ["created" "question" "answer" "changes-requested" "review"
+                                       "approval" "handoff" "route" "start"])
+                        0 30)))
+
+(defn- other? [r] (not (kept-kinds (:record r))))
+
+(describe "brief"
+  (it "keeps the records in order and counts every record it leaves out"
+    (should (passes? (prop/for-all [records history limit (gen/choose 0 12)]
+                       (let [{shown :records omitted :omitted} (record/brief records limit)]
+                         (and (apply < -1 (map :n shown))
+                              (= (count records) (+ (count shown) omitted))))))))
+
+  (it "keeps every question, answer and changes-requested record and the last limit others"
+    (should (passes? (prop/for-all [records history limit (gen/choose 0 12)]
+                       (let [shown (:records (record/brief records limit))
+                             others (filter other? records)]
+                         (and (= (remove other? records) (remove other? shown))
+                              (= (vec (take-last limit others)) (filter other? shown))))))))
+
+  (it "is idempotent: a brief leaves nothing more out of itself"
+    (should (passes? (prop/for-all [records history limit (gen/choose 0 12)]
+                       (let [shown (:records (record/brief records limit))]
+                         (= {:records shown :omitted 0} (record/brief shown limit))))))))
