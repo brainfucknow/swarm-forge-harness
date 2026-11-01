@@ -60,6 +60,15 @@
       (should (clean-at? (up "PIN")))
       (should= "PIN" (slurp (str (fs/path (clone-dir) "version"))))))
 
+  (it "names the commit of its own clone only, never the project's"
+    (let [{:keys [dir] :as up} (upstream "PIN" "NEXT")]
+      (should= nil (clone/head (clone-dir)))
+      (fs/create-dirs (clone-dir))
+      (should= nil (clone/head (clone-dir)))
+      (fs/delete (clone-dir))
+      (should= [0 ""] (ensure-at dir (up "PIN")))
+      (should= (up "PIN") (clone/head (clone-dir)))))
+
   (it "moves a clone, drops local commits, edits and untracked files, and keeps ignored ones"
     (let [{:keys [dir] :as up} (upstream "PIN" "NEXT")]
       (git *root* "clone" "-q" dir (clone-dir))

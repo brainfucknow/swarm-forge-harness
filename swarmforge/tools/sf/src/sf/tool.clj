@@ -49,21 +49,25 @@ it is: unpinned, never fetched or checked out, and printed without @.")
   (println (str "OK: " tool " " (wrapper-path tool))))
 
 (defn- pinned-source
-  "The tool's source directory and its commit. SWARMFORGE_TOOL_SRC is used as
-  it is, with no commit."
+  "The tool's source directory, its commit, and a function that puts the clone
+  back where it was. SWARMFORGE_TOOL_SRC is used as it is, with no commit."
   [tool {:keys [source ref]}]
   (if-let [override (shell/env "SWARMFORGE_TOOL_SRC" nil)]
-    [override nil]
-    (let [dir (str (fs/path (shell/repo-root) ".swarmforge" "tools" (catalogue/github-repo source)))]
-      (clone/ensure-at tool dir (str "https://" source ".git") ref)
-      [dir ref])))
+    [override nil (constantly nil)]
+    (let [dir (str (fs/path (shell/repo-root) ".swarmforge" "tools" (catalogue/github-repo source)))
+          url (str "https://" source ".git")
+          earlier (clone/head dir)]
+      (clone/ensure-at tool dir url ref)
+      [dir ref #(when (and earlier (not= earlier ref)) (clone/ensure-at tool dir url earlier))])))
 
 (defn- checked-source
   "The tool's source directory and its commit. A source without the entry
-  point stops the install and leaves any earlier wrapper as it is."
+  point stops the install, puts the clone back at its earlier commit, and
+  leaves any earlier wrapper as it is."
   [tool {:keys [kind task] :as spec}]
-  (let [[dir pin] (pinned-source tool spec)]
+  (let [[dir pin restore] (pinned-source tool spec)]
     (when-let [problem (entry-point/problem kind dir task)]
+      (restore)
       (shell/die tool ": " problem))
     [dir pin]))
 

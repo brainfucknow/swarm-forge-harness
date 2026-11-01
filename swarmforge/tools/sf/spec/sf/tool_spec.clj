@@ -152,6 +152,20 @@ moved          bb     github.com/x/aps      aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
         (should (str/includes? err "gherkin-parser: ")))
       (should= "stale" (slurp (wrapper "gherkin-parser"))))
 
+    (it "puts the clone back at its earlier commit when the pinned commit lacks the entry point"
+      (let [dir (source "aps" :tasks ["other"])
+            earlier "fedcba9876543210fedcba9876543210fedcba98"
+            calls (atom [])]
+        (fs/create-dirs (fs/path *dir* ".swarmforge" "bin"))
+        (spit (wrapper "gherkin-parser") "stale")
+        (with-redefs [clone/head (constantly earlier)]
+          (binding [*clone* (fn [args] (swap! calls conj args))]
+            (should= 1 (first (sf-tool "ensure" "gherkin-parser")))))
+        (should= [["gherkin-parser" dir "https://github.com/x/aps.git" sha]
+                  ["gherkin-parser" dir "https://github.com/x/aps.git" earlier]]
+                 @calls)
+        (should= "stale" (slurp (wrapper "gherkin-parser")))))
+
     (it "stops on an unknown kind or rewrite in the needs chain before it writes or clones anything"
       (let [cloned (atom [])]
         (binding [*clone* (fn [cmd] (swap! cloned conj cmd) {:exit 1})]
