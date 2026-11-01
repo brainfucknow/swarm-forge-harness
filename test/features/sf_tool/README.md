@@ -16,6 +16,11 @@ compatibility checks are in the
 | `MAIN` | The scratch project's main checkout (the repository root). |
 | `SRC` | The tool source directory: `SWARMFORGE_TOOL_SRC` when set, else `MAIN/.swarmforge/tools/<repo>`. |
 | `CFG` | `MAIN/.swarmforge/tools/crap4clj-coverage/bb.edn`. |
+| `PIN`, `NEXT` | The full 40-digit SHAs of the commits of those names in the scenario's upstream. |
+| `CLONE` | The scenario's upstream clone directory, `MAIN/.swarmforge/tools/<repo>`. |
+
+Placeholders are filled in commands, expected output and error text, file
+paths, and the ref of `pins`.
 
 ## Step meanings
 
@@ -30,9 +35,20 @@ compatibility checks are in the
 | `the directory "D" exists without bb.edn` | `D` exists, holds a `README.md`, and has no `bb.edn`. |
 | `an earlier install left a wrapper for "T"` | An executable `MAIN/.swarmforge/bin/T` exists before the step under test. |
 | `the wrapper for "T" is unchanged` | `MAIN/.swarmforge/bin/T` is still executable and its content is byte-for-byte what `an earlier install left a wrapper for "T"` wrote. |
-| `a snapshot of "D"` | Records every file and directory under `D` (placeholders filled in), with each file's content and permissions. |
-| `"D" matches the snapshot` | The files and directories under `D`, their content and their permissions are exactly those the snapshot recorded: nothing added, removed, or changed. |
-| `"C" ran in the main checkout` | Command `C` ran from `MAIN` and exited 0. Its output is not checked. |
+| `a snapshot of "D"` | Records, for `D`, every file and directory under `D` (placeholders filled in), with each file's content and permissions. |
+| `"D" matches the snapshot` | The files and directories under `D`, their content and their permissions are exactly those the snapshot of `D` recorded: nothing added, removed, or changed. |
+| `"C" ran in the <checkout>` | Command `C` ran from the main checkout or the task worktree and exited 0. Its output is not checked. |
+| `the upstream "R" has the commits "A B"` | A local git repository stands in for `https://github.com/unclebob/R.git`: the scenario's `sf` runs see a git `url.<local>.insteadOf` rule for that URL, given in their environment (for example `GIT_CONFIG_COUNT`), never in `sf`'s code or the project. It has one commit per name, in order, each with a `bb.edn` defining the task `R` and a file `version` holding the commit's name. |
+| `the upstream "R" is reachable/unreachable` | `reachable` changes nothing. `unreachable` points the rule at a path that does not exist, so any fetch or clone from that URL fails. |
+| `the main checkout's tools.conf pins "T" at "REF"` | Replaces the ref column of row `T` in `MAIN/swarmforge/tools.conf` (working tree, not committed) with `REF`, placeholders filled in. |
+| `the main checkout's tools.conf adds the line "L"` | Appends `L` to `MAIN/swarmforge/tools.conf` (working tree, not committed). |
+| `an earlier clone with C` | Before the step under test, `CLONE` is a clone of the upstream in state `C`. `HEAD at NEXT`: a full clone with `NEXT` checked out. `a local commit on top of PIN`: a full clone at `PIN` plus a commit made in the clone that changes `version`. `an edited tracked file`: a full clone at `PIN` with `version` changed and not committed. `an untracked file`: a full clone at `PIN` with an untracked `src/extra.clj`. `only NEXT and an unreachable origin remote`: a `--depth 1` clone of `NEXT`, so it lacks `PIN`, whose `origin` URL is then set to a path that does not exist. |
+| `the clone has a post-checkout hook that writes "F"` | `CLONE/.git/hooks/post-checkout` is an executable script that creates `F`. |
+| `the clone is clean at "REF"` | In `CLONE`, HEAD is detached at `REF` and `git status --porcelain --untracked-files=all` prints nothing. |
+| `a snapshot of the main checkout's git state` / `the main checkout's git state matches the snapshot` | Records, then compares, `MAIN`'s HEAD commit, its checked-out branch, the output of `git status --porcelain --untracked-files=all --ignored`, and the content of `.git/FETCH_HEAD` (or its absence). |
+| `there is no file "F"` | Nothing exists at `F`. |
+| `the output has a line with the words "W"` | A stdout line, split on whitespace, equals the words of `W` (placeholders filled in). |
+| `the file "F" does not mention "X"` | `X` is not a substring of file `F`. |
 | `I run "C" in the <checkout>` | Runs command `C` (split on spaces) from the main checkout or the task worktree. `sf` is the scratch project's `swarmforge/bin/sf`. |
 | `I run the T wrapper with "ARGS"` | Runs `MAIN/.swarmforge/bin/T` from `MAIN` with `ARGS` (placeholders filled in), split on spaces. An empty value passes no arguments. |
 | `I run the sf-cs wrapper in the <place>` | Runs `MAIN/.swarmforge/bin/sf-cs` with no arguments from that directory. `directory outside git` is a scratch directory that git does not see as inside any repository (run with `GIT_CEILING_DIRECTORIES` set to its parent). |

@@ -1,9 +1,9 @@
 # Engineering Rules
 
 ## Startup Tools
-- For applicable verification targets, procure the latest version of each required CRAP, mutation, and DRY tool for the project language directly from the listed `github.com/unclebob/...` repositories and get each one ready to run. A stage with no applicable target does not require tool installation.
-- Resolve each listed repository at its latest available upstream version before installing or building it.
-- Do not rely on stale cached, vendored, or preinstalled copies when a fresh GitHub install/build is possible in the current environment.
+- For applicable verification targets, procure the version pinned in `swarmforge/tools.conf` of each required CRAP, mutation, and DRY tool for the project language directly from the listed `github.com/unclebob/...` repositories and get each one ready to run. A stage with no applicable target does not require tool installation.
+- Resolve each listed repository at the version pinned in `swarmforge/tools.conf` (its ref column: a full commit SHA for a GitHub source, a Maven version for a Clojure CLI tool) before installing or building it. `sf tool ensure` puts each clone under `.swarmforge/tools/` at its pin and discards local changes there. An upgrade is a reviewed commit that edits the ref column.
+- Do not rely on stale cached, vendored, or preinstalled copies, or on a copy at another version than the pin, when a fresh GitHub install/build at the version pinned in `swarmforge/tools.conf` is possible in the current environment. `SWARMFORGE_TOOL_SRC` points `sf tool` at a local, unpinned checkout for tool development; do not cite it as pinned evidence.
 - Language tool table:
   - Go: install with `go install`; mutation `github.com/unclebob/mutate4go`, CRAP `github.com/unclebob/crap4go`, DRY `github.com/unclebob/dry4go`.
   - Clojure: install with Clojure CLI/deps.edn; mutation `github.com/unclebob/clj-mutate`, CRAP `github.com/unclebob/crap4clj`, DRY `github.com/unclebob/dry4clj`. `swarmforge/languages/clojure.md` explains how to run them on Babashka code.
@@ -12,7 +12,7 @@
   - F#: install with `sf-fs tools`; tests, coverage, CRAP and DRY through `sf-fs`. Mutation is unsupported (exit 2). `swarmforge/languages/fsharp.md` describes compiled-method scope and requirements.
   - VB.NET: install with `sf-vb tools`; tests, coverage, CRAP and DRY through `sf-vb`. Mutation is unsupported (exit 2). `swarmforge/languages/vbnet.md` describes compiled-method scope and requirements.
   - JavaScript/TypeScript: install with `sf-js tools`; tests `sf-js test` (Vitest, else Jest, after `tsc --noEmit`), mutation `sf-js mutate` (StrykerJS), CRAP `sf-js crap` (oxlint or ESLint complexity with Istanbul coverage), DRY `sf-js dry` (jscpd). `swarmforge/languages/javascript.md` maps every constitution tool to its `sf-js` command and explains the output.
-- Install every listed tool with `sf tool ensure <tool>` and check it with `sf tool require <tool>`; `sf tool list` prints the catalogue. Wrappers land in `.swarmforge/bin/` at the repository root, ignored by git and shared by every task worktree, so a tool install never writes outside the project. Run tools through those wrappers (`sf tool bin` prints the directory to put on PATH); they carry the argument guardrails below.
+- Install every listed tool with `sf tool ensure <tool>` and check it with `sf tool require <tool>`; `sf tool list` prints the catalogue with each pin. Each `INSTALLED:` line of `sf tool ensure` ends in `@<ref>`, the pinned commit or version; cite that `@<ref>` for each tool you ran in your `Tested` trailers. Wrappers land in `.swarmforge/bin/` at the repository root, ignored by git and shared by every task worktree, so a tool install never writes outside the project. Run tools through those wrappers (`sf tool bin` prints the directory to put on PATH); they carry the argument guardrails below.
 
 ## Language Defaults
 - For Clojure projects, prefer Babashka where possible.

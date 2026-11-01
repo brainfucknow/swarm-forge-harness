@@ -22,7 +22,12 @@ needs to know to run them on Babashka code.
 ## Tool compatibility checks
 
 When changing wrappers or upgrading their upstream tools, use disposable
-projects under `tmp/`, real GitHub sources and Maven dependencies:
+projects under `tmp/`, real GitHub sources and Maven dependencies. An upgrade
+edits the ref column of the tool's rows in `swarmforge/tools.conf`: the new
+full commit SHA of a GitHub tool (`git ls-remote https://github.com/<owner>/<repo>.git HEAD`),
+the same SHA on every row of one source, or the new Maven version of
+`cloverage` or `speclj` (the cloverage wrapper uses the speclj row's version).
+Run these checks at the new refs before the upgrade commit:
 
 - Install and require `dry4clj`, `clj-mutate`, `crap4clj` and the APS tools
   through `sf tool`. Confirm DRY output, mutation scan counts and parser
@@ -38,4 +43,5 @@ projects under `tmp/`, real GitHub sources and Maven dependencies:
   root tests or root outputs. An invalid source root must fail before coverage.
 - Explicit `--lcov` and `--use-existing-coverage` choices must not trigger
   another coverage run. Keep generated output and verification detail out of
-  commits; record actual tool versions, outcomes and unavailable checks in Lore.
+  commits; record the `@<ref>` of each `INSTALLED:` line, outcomes and
+  unavailable checks in Lore.
