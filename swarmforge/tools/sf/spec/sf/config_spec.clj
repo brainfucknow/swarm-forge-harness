@@ -56,7 +56,9 @@
       (should-throw clojure.lang.ExceptionInfo "empty route" (config/resolve-route ""))
       (should-throw clojure.lang.ExceptionInfo "unknown role 'x' in route 'coder,x' (see swarmforge/roles.conf)" (config/resolve-route "coder,x"))
       (should-throw clojure.lang.ExceptionInfo "route 'qa,coder' is out of order; follow swarmforge/roles.conf: specifier,coder,qa"
-                    (config/resolve-route "qa,coder")))
+                    (config/resolve-route "qa,coder"))
+      (should-throw clojure.lang.ExceptionInfo "route 'coder,coder' is out of order; follow swarmforge/roles.conf: specifier,coder,qa"
+                    (config/resolve-route "coder,coder")))
 
     (it "defaults to SWARMFORGE_ROUTE, then the feature route, then the catalogue"
       (binding [*env* {"SWARMFORGE_ROUTE" "quick"}] (should= "coder,qa" (config/default-route)))

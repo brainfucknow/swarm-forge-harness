@@ -69,6 +69,12 @@ moved          bb     github.com/x/aps      aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       (should (some #{(str "dry4clj                bbmain github.com/x/dry4clj  " sha)} (str/split-lines out)))
       (should (some #{"cloverage              clj    cloverage/cloverage   9.8.7"} (str/split-lines out)))))
 
+  (it "lists rows that have no source without failing on the column width"
+    (spit (str (fs/path *dir* "swarmforge" "tools.conf")) "lonely\n")
+    (let [[status out err] (sf-tool "list")]
+      (should= [0 ""] [status err])
+      (should (str/starts-with? out "lonely "))))
+
   (it "rejects an unknown command, a missing tool name and an unknown tool"
     (should= [1 "" "sf tool: unknown command 'frob'\n"] (sf-tool "frob"))
     (should= [1 "" "sf tool: ensure needs a tool\n"] (sf-tool "ensure"))

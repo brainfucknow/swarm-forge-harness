@@ -39,7 +39,7 @@
       (should-not (catalogue/commit-sha? ref))))
 
   (it "are pinned Maven versions for clj"
-    (doseq [ref ["1.2.4" "3.13.0" "1.0.0-RC1" "2.0_beta+3"]]
+    (doseq [ref ["1.2.4" "3.13.0" "1.0.0-RC1" "2.0_beta+3" "1.0SNAPSHOT" "1.0-SNAPSHOT-1"]]
       (should (catalogue/maven-version? ref)))
     (doseq [ref ["RELEASE" "LATEST" "1.0-SNAPSHOT" "1.0\"}" "v1.0" "-1" "" nil]]
       (should-not (catalogue/maven-version? ref)))))

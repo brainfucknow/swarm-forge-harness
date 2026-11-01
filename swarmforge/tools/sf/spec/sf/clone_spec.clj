@@ -123,6 +123,22 @@
         (fs/create-sym-link (clone-dir) dir)
         (should= [1 @not-clone-message] (ensure-at dir (up "PIN")))))
 
+    (it "when the directory is a dangling link, creating nothing behind it"
+      (let [{:keys [dir] :as up} (upstream "PIN")
+            target (str (fs/path *root* "elsewhere"))]
+        (fs/create-dirs (fs/parent (clone-dir)))
+        (fs/create-sym-link (clone-dir) target)
+        (should= [1 @not-clone-message] (ensure-at dir (up "PIN")))
+        (should-not (fs/exists? target))))
+
+    (it "when the clone's .git is a link to a git directory"
+      (let [{:keys [dir] :as up} (upstream "PIN")
+            real (str (fs/path *root* "real"))]
+        (git *root* "clone" "-q" dir real)
+        (fs/create-dirs (clone-dir))
+        (fs/create-sym-link (fs/path (clone-dir) ".git") (fs/path real ".git"))
+        (should= [1 @not-clone-message] (ensure-at dir (up "PIN")))))
+
     (it "when the clone's .git points at another repository"
       (let [{:keys [dir] :as up} (upstream "PIN")]
         (fs/create-dirs (clone-dir))
