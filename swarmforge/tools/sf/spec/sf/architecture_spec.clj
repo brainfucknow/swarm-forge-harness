@@ -24,7 +24,7 @@
 
 (def ^:private pure
   "The high-level namespaces: plain values in and out, no IO."
-  '#{sf.lore sf.record sf.flow sf.feature-block sf.coverage-args})
+  '#{sf.lore sf.record sf.flow sf.feature-block sf.coverage-args sf.catalogue})
 
 (def ^:private allowed
   "The sf namespaces each sf namespace may require. Dependencies point from the
@@ -33,10 +33,12 @@
     sf.lore #{}
     sf.record #{}
     sf.flow #{sf.record}
-    sf.config #{sf.flow sf.shell}
+    sf.catalogue #{}
+    sf.config #{sf.catalogue sf.flow sf.shell}
     sf.entry-point #{}
     sf.wrapper #{sf.shell}
-    sf.tool #{sf.config sf.entry-point sf.shell sf.wrapper}
+    sf.clone #{sf.shell}
+    sf.tool #{sf.catalogue sf.clone sf.entry-point sf.shell sf.wrapper}
     sf.adapters #{sf.config sf.shell}
     sf.git #{sf.shell}
     sf.store #{sf.git sf.record sf.shell}
