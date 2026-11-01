@@ -65,7 +65,17 @@
   (it "names a GitHub source that is not github.com/<owner>/<repo>"
     (should= ["'x' needs a source github.com/<owner>/<repo>, not 'github.com/a/..'"]
              (problems (str "x bb github.com/a/.. " sha " t - -")))
-    (should= [] (problems (str "x clj g/x/y 1.0 t - -"))))
+    (should= [] (problems "x clj org.clojure/tools.cli 1.0 t - -")))
+
+  (it "names a clj source that is not a <group>/<artifact> Maven coordinate"
+    (doseq [source ["g/x/y" "x" "g/" "/x" "g/.." "g/x,{:local/root\"/tmp\"}" "g/x{:git/url\"https://e\"}"]]
+      (should= [(str "'x' needs a source <group>/<artifact>, not '" source "'")]
+               (problems (str "x clj " source " 1.0 t - -")))))
+
+  (it "names a tool name that could leave the wrapper and coverage directories"
+    (doseq [name ["../x" "a/b" "." ".." "x;y" "x$y"]]
+      (should= [(str "'" name "' needs a name of letters, digits, \".\", \"_\" and \"-\", not \".\" or \"..\"")]
+               (problems (str name " local swarmforge/bin/x - - - -")))))
 
   (it "names a row whose source the first row of that source pins at another ref"
     (let [first-row (tool (str "y bb github.com/a/x " (apply str (repeat 40 "a")) " t - -"))

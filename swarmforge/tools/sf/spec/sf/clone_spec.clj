@@ -97,6 +97,44 @@
       (should= [0 ""] (ensure-at dir (up "PIN")))
       (should-not (fs/exists? marker))))
 
+  (it "runs no filter of the clone's own config on checkout"
+    (let [{:keys [dir] :as up} (upstream "PIN" "NEXT")
+          marker (fs/path *root* "smudged")]
+      (git *root* "clone" "-q" dir (clone-dir))
+      (git (clone-dir) "config" "filter.x.smudge" (str "sh -c 'touch " marker "; cat'"))
+      (spit (str (fs/path (clone-dir) ".git" "info" "attributes")) "* filter=x\n")
+      (should= [0 ""] (ensure-at dir (up "PIN")))
+      (should (clean-at? (up "PIN")))
+      (should-not (fs/exists? marker))))
+
+  (it "fetches through no url rewrite or ssh command of the clone's own config"
+    (let [{:keys [dir]} (upstream "PIN")
+          nowhere (str *root* "/nowhere")
+          marker (fs/path *root* "sshed")]
+      (git *root* "clone" "-q" dir (clone-dir))
+      (git (clone-dir) "config" "url.ssh://git@example.invalid/.insteadOf" nowhere)
+      (git (clone-dir) "config" "core.sshCommand" (str "sh -c 'touch " marker "; exit 1' --"))
+      (should= 1 (first (ensure-at nowhere (apply str (repeat 40 "b")))))
+      (should-not (fs/exists? marker))))
+
+  (it "checks out the pinned commit's files though a replace ref names another"
+    (let [{:keys [dir] :as up} (upstream "PIN" "NEXT")]
+      (git *root* "clone" "-q" dir (clone-dir))
+      (git (clone-dir) "replace" (up "PIN") (up "NEXT"))
+      (should= [0 ""] (ensure-at dir (up "PIN")))
+      (should= "PIN" (slurp (str (fs/path (clone-dir) "version"))))))
+
+  (it "writes no file through a link at the clone's .git/config"
+    (let [{:keys [dir] :as up} (upstream "PIN")
+          outside (str (fs/path *root* "outside"))]
+      (git *root* "clone" "-q" dir (clone-dir))
+      (spit outside "kept")
+      (fs/delete (fs/path (clone-dir) ".git" "config"))
+      (fs/create-sym-link (fs/path (clone-dir) ".git" "config") outside)
+      (should= [0 ""] (ensure-at dir (up "PIN")))
+      (should= "kept" (slurp outside))
+      (should-not (fs/sym-link? (fs/path (clone-dir) ".git" "config")))))
+
   (context "fails"
     (it "when the commit cannot be fetched"
       (let [{:keys [dir] :as up} (upstream "PIN")

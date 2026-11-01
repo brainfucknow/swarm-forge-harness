@@ -1,7 +1,8 @@
 (ns sf.catalogue
   "The rows of swarmforge/tools.conf as tools, and the rules a row must keep:
-  a unique name, column count, a known kind and rewrite, a pinned ref of its
-  kind's form, a safe GitHub source, and one ref per shared source."
+  a unique name in safe characters, column count, a known kind and rewrite, a
+  pinned ref of its kind's form, a safe GitHub source or Maven coordinate, and
+  one ref per shared source."
   (:require [clojure.string :as str]))
 
 (def columns
@@ -45,6 +46,13 @@
     (when (and (= "github.com" host) (nil? more) owner repo (safe-part? owner) (safe-part? repo))
       repo)))
 
+(defn maven-coordinate?
+  "True for a Maven coordinate <group>/<artifact> whose parts use only letters,
+  digits, \".\", \"_\" and \"-\" and are not \".\" or \"..\"."
+  [source]
+  (let [[group artifact & more] (str/split (str source) #"/" -1)]
+    (boolean (and artifact (nil? more) (safe-part? group) (safe-part? artifact)))))
+
 (defn commit-sha?
   "True for a full commit SHA: 40 lowercase hexadecimal digits."
   [ref]
@@ -66,9 +74,16 @@
     (and (= "local" kind) (not= "-" ref))
     (str "'" name "' is local and needs '-' as its ref, not '" ref "'")))
 
+(defn- name-problem [{:keys [name]}]
+  (when-not (safe-part? (str name))
+    (str "'" name "' needs a name of letters, digits, \".\", \"_\" and \"-\", not \".\" or \"..\"")))
+
 (defn- source-problem [{:keys [name kind source]}]
-  (when (and (clones? kind) (not (github-repo source)))
-    (str "'" name "' needs a source github.com/<owner>/<repo>, not '" source "'")))
+  (cond
+    (and (clones? kind) (not (github-repo source)))
+    (str "'" name "' needs a source github.com/<owner>/<repo>, not '" source "'")
+    (and (= "clj" kind) (not (maven-coordinate? source)))
+    (str "'" name "' needs a source <group>/<artifact>, not '" source "'")))
 
 (defn- shared-ref-problem
   "The tool's ref against the first of tools with the same source."
@@ -78,13 +93,14 @@
       (str "'" name "' pins " source " at a different ref than '" (:name first-row) "'"))))
 
 (defn ref-problems
-  "The problems of the tool's columns, ref and source, then of its ref against
-  the other tools of its source. Only the column count is checked on a row
-  with the wrong number of columns."
+  "The problems of the tool's columns, name, ref and source, then of its ref
+  against the other tools of its source. Only the column count is checked on a
+  row with the wrong number of columns."
   [tool tools]
   (if (not= 7 (:columns tool))
     [(str "'" (:name tool) "' needs exactly " columns)]
-    (vec (keep identity [(ref-problem tool) (source-problem tool) (shared-ref-problem tool tools)]))))
+    (vec (keep identity [(name-problem tool) (ref-problem tool) (source-problem tool)
+                         (shared-ref-problem tool tools)]))))
 
 (defn- row-problems
   "The problems of one tool; earlier holds the names of the tools before it."

@@ -1,11 +1,13 @@
 (ns sf.clone
   "Puts sf tool's cache clone of a GitHub source at its pinned commit. The clone
-  is sf's, so git runs in it with hooks, fsmonitor and ext transport off."
+  is sf's, so git runs in it with hooks, fsmonitor, ext transport and replace
+  refs off, and with a .git/config sf writes."
   (:require [babashka.fs :as fs]
             [sf.shell :as shell]))
 
 (def ^:private untrusted-off
-  ["-c" "core.hooksPath=/dev/null" "-c" "core.fsmonitor=false" "-c" "protocol.ext.allow=never"])
+  ["-c" "core.hooksPath=/dev/null" "-c" "core.fsmonitor=false" "-c" "protocol.ext.allow=never"
+   "--no-replace-objects"])
 
 (defn- git [opts dir & args]
   (apply shell/run opts "git" "-C" (str dir) (concat untrusted-off args)))
@@ -33,6 +35,18 @@
   (when-not (shell/ok? result)
     (shell/die tool ": " what)))
 
+(def ^:private own-config
+  "The whole .git/config of a clone: no remote, url rewrite, filter, helper or
+  command that someone put in the clone's config survives to run."
+  "[core]\n\trepositoryformatversion = 0\n\tbare = false\n")
+
+(defn- reset-config
+  "Replaces the clone's .git/config, never writing through a link there."
+  [dir]
+  (let [config (fs/path dir ".git" "config")]
+    (fs/delete-if-exists config)
+    (spit (str config) own-config)))
+
 (defn- init [tool dir]
   (fs/create-dirs (fs/parent dir))
   (must tool (str "cannot create a git clone in " dir)
@@ -40,14 +54,16 @@
 
 (defn ensure-at
   "Puts dir, the cache clone of url, at commit sha: detached, tracked files as
-  committed, untracked non-ignored files removed. Creates a missing clone and
-  fetches sha from url only when the clone lacks it. Dies before changing
-  anything when dir is not the top level of its own clone."
+  committed, untracked non-ignored files removed, and its config sf's own.
+  Creates a missing clone and fetches sha from url only when the clone lacks
+  it. Dies before changing anything when dir is not the top level of its own
+  clone."
   [tool dir url sha]
   (when-not (fs/exists? dir {:nofollow-links true})
     (init tool dir))
   (when-not (own-clone? dir)
     (shell/die tool ": " dir " is not the top level of a git clone"))
+  (reset-config dir)
   (when-not (has-commit? dir sha)
     (must tool (str "cannot fetch " sha " from " url)
           (git {:err :inherit} dir "fetch" "--quiet" "--no-tags" "--no-recurse-submodules" "--depth" "1" "--" url sha)))
