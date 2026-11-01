@@ -15,9 +15,9 @@ Feature: sf tool write guard
     Given a project with swarmforge initialized
     And no tool source override
     And a task worktree
-    And the task worktree's tools.conf adds the line "weird java example.invalid/x/weird crap - cloverage"
-    And the task worktree's tools.conf adds the line "odd bb example.invalid/x/odd crap rot13 cloverage"
-    And the task worktree's tools.conf adds the line "outer bb example.invalid/x/outer crap coverage weird"
+    And the task worktree's tools.conf adds the line "weird java github.com/x/weird 0123456789abcdef0123456789abcdef01234567 crap - cloverage"
+    And the task worktree's tools.conf adds the line "odd bb github.com/x/odd 0123456789abcdef0123456789abcdef01234567 crap rot13 cloverage"
+    And the task worktree's tools.conf adds the line "outer bb github.com/x/outer 0123456789abcdef0123456789abcdef01234567 crap coverage weird"
     And an earlier install left a wrapper for "cloverage"
     And an earlier install left a wrapper for "weird"
     And an earlier install left a wrapper for "<tool>"
