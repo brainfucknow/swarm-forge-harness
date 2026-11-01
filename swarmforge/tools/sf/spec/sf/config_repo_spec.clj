@@ -62,15 +62,18 @@
       (should-contain "'lonely' needs exactly" err)))
 
   (it "names every problem of a tool"
-    (let [{:keys [err]} (check-with {"tools.conf" (str "a bb src t - -\n"
-                                                       "a bb src t - -\n"
-                                                       "b zzz src t - -\n"
-                                                       "c bb src t zzz -\n"
-                                                       "d bb\n")})]
+    (let [{:keys [err]} (check-with {"tools.conf" (str "a bb github.com/x/a 0123456789abcdef0123456789abcdef01234567 t - -\n"
+                                                       "a bb github.com/x/a 0123456789abcdef0123456789abcdef01234567 t - -\n"
+                                                       "b zzz src - t - -\n"
+                                                       "c bb github.com/x/c 0123456789abcdef0123456789abcdef01234567 t zzz -\n"
+                                                       "d bb\n"
+                                                       "e bbmain example.com/x/e 0123abc t - -\n")})]
       (should-contain "tool 'a' listed twice" err)
       (should-contain "'b' has unknown kind 'zzz'" err)
       (should-contain "'c' has unknown rewrite 'zzz'" err)
-      (should-contain "'d' needs exactly" err)))
+      (should-contain "'d' needs exactly" err)
+      (should-contain "'e' needs a 40-digit lowercase hex commit SHA as its ref, not '0123abc'" err)
+      (should-contain "'e' needs a source github.com/<owner>/<repo>, not 'example.com/x/e'" err)))
 
   (it "counts the problems"
     (should-contain "2 configuration problem(s)"

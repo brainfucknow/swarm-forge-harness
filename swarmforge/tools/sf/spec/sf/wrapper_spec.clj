@@ -10,12 +10,26 @@
 
 (describe "commands"
   (it "runs a bb task of the source's bb.edn"
-    (should= "exec bb --config '/t/crap4clj/bb.edn' crap \"$@\""
+    (should= "exec bb --config '/t/crap4clj/bb.edn' 'crap' \"$@\""
              (wrapper/bb-command "/t/crap4clj" "crap")))
 
   (it "runs a main namespace from the source's src"
-    (should= "exec bb -cp '/t/dry4clj/src' -m dry4clj.core \"$@\""
+    (should= "exec bb -cp '/t/dry4clj/src' -m 'dry4clj.core' \"$@\""
              (wrapper/bbmain-command "/t/dry4clj" "dry4clj.core")))
+
+  (it "passes the task or namespace as one quoted word"
+    (should= "exec bb --config '/t/bb.edn' 'x;touch${IFS}y'\\''z' \"$@\"" (wrapper/bb-command "/t" "x;touch${IFS}y'z"))
+    (should= "exec bb -cp '/t/src' -m 'x;y' \"$@\"" (wrapper/bbmain-command "/t" "x;y")))
+
+  (it "runs a clj main at the pinned Maven versions"
+    (should= "exec clojure -Sdeps '{:deps {g/x {:mvn/version \"1.2\"}}}' -M -m 'x.main' \"$@\""
+             (wrapper/clj-command "x" [["g/x" "1.2"]] "x.main"))
+    (should= (str "exec clojure -Sdeps '{:paths [\"src\" \"spec\" \"test\"] :deps {speclj/speclj {:mvn/version \"3.13.0\"}}}'"
+                  " -M -m 'speclj.main' -c spec \"$@\"")
+             (wrapper/clj-command "speclj" [["speclj/speclj" "3.13.0"]] "speclj.main"))
+    (should= (str "exec clojure -Sdeps '{:paths [\"src\" \"spec\" \"test\"] :deps {cloverage/cloverage {:mvn/version \"1.2.4\"}"
+                  " speclj/speclj {:mvn/version \"3.13.0\"}}}' -M -m 'cloverage.coverage' -p src -s spec -s test -r speclj \"$@\"")
+             (wrapper/clj-command "cloverage" [["cloverage/cloverage" "1.2.4"] ["speclj/speclj" "3.13.0"]] "cloverage.coverage")))
 
   (it "runs a local script from the caller's checkout of the same repository when it has one, else the main checkout's"
     (should= (str "top=\"$(git rev-parse --show-toplevel 2>/dev/null)\""
@@ -25,7 +39,7 @@
              (wrapper/local-command "/main" "bin/x")))
 
   (it "quotes single quotes in paths"
-    (should= "exec bb --config '/it'\\''s/bb.edn' t \"$@\"" (wrapper/bb-command "/it's" "t"))))
+    (should= "exec bb --config '/it'\\''s/bb.edn' 't' \"$@\"" (wrapper/bb-command "/it's" "t"))))
 
 (describe "coverage-config"
   (with config (edamame/parse-string (wrapper/coverage-config "/t/crap4clj") {:all true}))

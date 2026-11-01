@@ -329,13 +329,13 @@ echo "slow opus" >> swarmforge/tiers.conf
 check_fails "check rejects a short tier line" "CHECK: tiers.conf: 'slow' needs exactly"
 echo "fast haiku low claude-haiku-5.5" >> swarmforge/tiers.conf
 check_fails "check rejects a duplicate tier" "CHECK: tiers.conf: tier 'fast' listed twice"
-echo "sf-cs local swarmforge/bin/sf-cs - - -" >> swarmforge/tools.conf
+echo "sf-cs local swarmforge/bin/sf-cs - - - -" >> swarmforge/tools.conf
 check_fails "check rejects a duplicate tool" "CHECK: tools.conf: tool 'sf-cs' listed twice"
 echo "backwards qa,coder" >> swarmforge/routes.conf
 check_fails "check rejects an out-of-order route" "CHECK: routes.conf: backwards: route 'qa,coder' is out of order"
 echo "feature specifier" >> swarmforge/routes.conf
 check_fails "check rejects a duplicate route" "CHECK: routes.conf: route 'feature' listed twice"
-echo "weird magic github.com/x/y task - -" >> swarmforge/tools.conf
+echo "weird magic github.com/x/y - task - -" >> swarmforge/tools.conf
 check_fails "check rejects an unknown tool kind" "CHECK: tools.conf: 'weird' has unknown kind 'magic'"
 echo "qa strong subagent" >> swarmforge/roles.conf
 assert_fails "init refuses a broken configuration" sf init

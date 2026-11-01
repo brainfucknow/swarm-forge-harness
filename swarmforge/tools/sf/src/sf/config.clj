@@ -2,6 +2,7 @@
   "The catalogue files under swarmforge/: roles, tiers, routes, and tools."
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
+            [sf.catalogue :as catalogue]
             [sf.flow :as flow]
             [sf.shell :as shell]))
 
@@ -128,23 +129,19 @@
               (seen name) (conj (str "routes.conf: route '" name "' listed twice"))
               (route-problem route) (conj (str "routes.conf: " name ": " (route-problem route))))))))
 
-(def tool-kinds
-  "The kinds sf tool can install."
-  #{"bb" "bbmain" "clj" "local"})
-
-(def tool-rewrites
-  "The argument rewrites sf tool can write."
-  #{"mutate" "gherkin" "coverage" "-"})
+(defn- tool-problems
+  "The problems of one tools.conf row; seen holds the earlier tool names."
+  [tools row seen]
+  (let [{:keys [name kind rewrite columns] :as tool} (catalogue/tool row)
+        whole? (= 7 columns)]
+    (concat (when (seen name) [(str "tool '" name "' listed twice")])
+            (when (and whole? (not (catalogue/kinds kind))) [(str "'" name "' has unknown kind '" kind "'")])
+            (when (and whole? (not (catalogue/rewrites rewrite))) [(str "'" name "' has unknown rewrite '" rewrite "'")])
+            (catalogue/ref-problems tool tools))))
 
 (defn- check-tools []
-  (scan (rows "tools.conf")
-        (fn [[name kind _ _ rewrite :as row] seen]
-          (let [twice (when (seen name) [(str "tools.conf: tool '" name "' listed twice")])]
-            (if (not= 6 (count row))
-              (conj (vec twice) (str "tools.conf: '" name "' needs exactly <name> <kind> <source> <task> <rewrite> <needs>"))
-              (cond-> (vec twice)
-                (not (tool-kinds kind)) (conj (str "tools.conf: '" name "' has unknown kind '" kind "'"))
-                (not (tool-rewrites rewrite)) (conj (str "tools.conf: '" name "' has unknown rewrite '" rewrite "'"))))))))
+  (let [tools (map catalogue/tool (rows "tools.conf"))]
+    (map #(str "tools.conf: " %) (scan (rows "tools.conf") (partial tool-problems tools)))))
 
 (defn check
   "Validates the catalogue files and prints a summary; stops on any problem."

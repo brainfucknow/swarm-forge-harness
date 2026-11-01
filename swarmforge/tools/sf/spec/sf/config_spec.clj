@@ -22,7 +22,10 @@
           (conf "tiers.conf" "strong opus high gpt\nfast sonnet low mini\n")
           (conf "roles.conf" "specifier strong session\ncoder strong subagent audit\nqa fast subagent\n")
           (conf "routes.conf" "feature specifier,coder,qa\nquick coder,qa\n")
-          (conf "tools.conf" "dry4clj bbmain github.com/x/dry4clj dry4clj.core - -\ncrap4clj bb github.com/x/crap4clj crap coverage -\n")
+          (conf "tools.conf" (str "dry4clj bbmain github.com/x/dry4clj 0123456789abcdef0123456789abcdef01234567 dry4clj.core - -\n"
+                                  "crap4clj bb github.com/x/crap4clj 0123456789abcdef0123456789abcdef01234567 crap coverage -\n"
+                                  "speclj clj speclj/speclj 3.13.0 speclj.main - -\n"
+                                  "sf-cs local swarmforge/bin/sf-cs - - - -\n"))
           (run-spec)))
       (finally (fs/delete-tree dir)))))
 
@@ -122,7 +125,7 @@
       (conf "roles.conf" (str "specifier strong session\nBad strong subagent\ndone strong subagent\nspecifier strong subagent\n"
                               "coder weak robot\nqa strong subagent flag\nx\n"))
       (conf "routes.conf" "feature specifier,qa\nfeature qa,specifier\nlonely\n")
-      (conf "tools.conf" "a java s t rot13 -\na bb s t - -\nshort bb\n")
+      (conf "tools.conf" "a java s - t rot13 -\na bb github.com/x/a 0123abc t - -\nshort bb\nc bb github.com/x/a aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa t - -\n")
       (should= ["CHECK: tiers.conf: 'strong' needs exactly <tier> <claude-model> <codex-effort> <copilot-model>"
                 "CHECK: tiers.conf: tier 'strong' listed twice"
                 "CHECK: roles.conf: role name 'Bad' must be lowercase letters, digits, and hyphens"
@@ -140,8 +143,10 @@
                 "CHECK: tools.conf: 'a' has unknown kind 'java'"
                 "CHECK: tools.conf: 'a' has unknown rewrite 'rot13'"
                 "CHECK: tools.conf: tool 'a' listed twice"
-                "CHECK: tools.conf: 'short' needs exactly <name> <kind> <source> <task> <rewrite> <needs>"
-                (str "sf: 18 configuration problem(s) in " *dir* "/swarmforge")]
+                "CHECK: tools.conf: 'a' needs a 40-digit lowercase hex commit SHA as its ref, not '0123abc'"
+                "CHECK: tools.conf: 'short' needs exactly <name> <kind> <source> <ref> <task> <rewrite> <needs>"
+                "CHECK: tools.conf: 'c' pins github.com/x/a at a different ref than 'a'"
+                (str "sf: 20 configuration problem(s) in " *dir* "/swarmforge")]
                (nth (check) 2)))
 
     (it "reports an empty roles file"
