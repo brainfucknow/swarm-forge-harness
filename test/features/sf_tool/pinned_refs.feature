@@ -2,20 +2,20 @@ Feature: sf tool pinned refs
 
   Each GitHub row of swarmforge/tools.conf pins a full commit SHA in its ref
   column. sf tool ensure puts the tool's clone under .swarmforge/tools at that
-  commit, detached, with no local changes: it clones a missing clone, moves an
-  existing one, discards edits to tracked files, and removes untracked files
-  that are not ignored. It fetches the commit from https://<source>.git only
-  when the clone lacks it, and never through the clone's origin remote, so
-  ensure works offline once the clone has the commit. It runs no git hook of
-  the clone. It checks that the clone's HEAD is the pinned commit, writes the
-  wrapper, and prints "INSTALLED: <tool> <wrapper> @<sha>".
+  commit, detached and clean: it clones a missing clone, moves an existing one,
+  discards edits to tracked files, and removes untracked files that are not
+  ignored. It fetches the commit from https://<source>.git only when the clone
+  lacks it, never through the clone's origin remote, so ensure works offline
+  once the clone has the commit. It runs no git hook of the clone, checks that
+  HEAD is the pinned commit, writes the wrapper, and prints
+  "INSTALLED: <tool> <wrapper> @<sha>".
 
   If the pinned commit cannot be fetched, ensure prints an error naming the
-  tool on stderr, exits 1, and leaves an earlier wrapper byte-for-byte as it
-  was. A directory under .swarmforge/tools that is not the top level of its
-  own git clone fails the install; ensure changes nothing in it and nothing in
-  the project's own repository. A SWARMFORGE_TOOL_SRC override is used as it
-  is: never fetched, checked out or cleaned, and its INSTALLED line has no @
+  tool on stderr, exits 1, and leaves an earlier wrapper unchanged. A
+  directory under .swarmforge/tools that is not the top level of its own git
+  clone fails the install, and ensure changes nothing in it or in the
+  project's own repository. A SWARMFORGE_TOOL_SRC override is used as it is:
+  never fetched, checked out or cleaned, and its INSTALLED line has no @
   suffix.
 
   Background:

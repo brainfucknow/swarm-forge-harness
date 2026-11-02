@@ -17,13 +17,13 @@
   list             print the catalogue
   bin              print the wrapper directory; put it on PATH
 
-The catalogue is swarmforge/tools.conf of the checkout you run in. Each row
-pins a ref: ensure puts a GitHub source's clone at its commit and prints it
-after the wrapper path (@<sha>), and a clj tool's wrapper uses its Maven
-version (@<version>). Wrappers live in .swarmforge/bin/ and clones in
-.swarmforge/tools/, both under the main checkout and ignored by git.
-SWARMFORGE_TOOL_SRC points every GitHub source at one local checkout, used as
-it is: unpinned, never fetched or checked out, and printed without @.")
+The catalogue is swarmforge/tools.conf of the checkout you run in. ensure puts
+a GitHub source's clone at its pinned commit, discarding local changes, and
+prints @<ref> after the wrapper path (a clj tool's Maven version too).
+Wrappers live in .swarmforge/bin/ and clones in .swarmforge/tools/, both under
+the main checkout and ignored by git. SWARMFORGE_TOOL_SRC points every GitHub
+source at one local checkout, used as it is: unpinned, never fetched or checked
+out, and printed without @.")
 
 (defn- tools
   "The tools of swarmforge/tools.conf of the checkout sf tool runs in."
