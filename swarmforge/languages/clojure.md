@@ -23,9 +23,10 @@ needs to know to run them on Babashka code.
 
 - Code scanner: clj-holmes (`sf tool ensure clj-holmes`), run on each `.clj`
   file changed since the merge base, committed or not. It is unmaintained
-  since 2022, has 9 rules and reads `.clj` only, so changed `.cljc`, `.cljs`
-  and `.bb` files are Not-tested. Its defaults write to `/tmp` and the
-  current directory; keep rules and output under `./tmp`:
+  since 2022, has 9 security rules and reads `.clj` only, so changed `.cljc`,
+  `.cljs` and `.bb` files are Not-tested. Fetching rules reaches
+  api.github.com. Its defaults write to `/tmp` and the current directory;
+  keep rules and output under `./tmp`:
 
   ```sh
   clj-holmes fetch-rules -o tmp/clj-holmes-rules \
