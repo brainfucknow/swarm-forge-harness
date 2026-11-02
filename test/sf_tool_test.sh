@@ -112,6 +112,8 @@ for rule in '[Bb]in/' 'bin/' 'bin' '**/[Bb]in/*' '**/bin/**'; do
   assert_fails "git check-ignore of swarmforge/bin/sf after install under '$rule'" git -C "$dotnet" check-ignore -q swarmforge/bin/sf
   git -C "$dotnet" check-ignore -q src/App/bin/App.dll \
     && pass "install under '$rule' keeps other bin directories ignored" || fail "install under '$rule' unignored src/App/bin"
+  git -C "$dotnet" check-ignore -q swarmforge/tools/sf/bin/out \
+    && pass "install under '$rule' keeps bin directories nested in swarmforge ignored" || fail "install under '$rule' unignored swarmforge/tools/sf/bin"
   assert_eq "install under '$rule' adds no negation to the root .gitignore" "$(grep -c '^!' "$dotnet/.gitignore")" 0
 done
 echo scratch/ > "$dotnet/swarmforge/.gitignore"
