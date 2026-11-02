@@ -51,6 +51,20 @@ mutation score 50.0% (Killed 1, Survived 1, NoCoverage 1, Timeout 1, Ignored 1)
 Kill a survivor with a test that fails under the replacement. `NoCoverage`
 means no test reaches the line.
 
+## Security scanners
+
+- Code scanner: build the enclosing project or solution with the SDK's
+  security analyzers and read only the warnings in changed `.cs` files:
+  `dotnet build <project> --no-incremental -p:EnableNETAnalyzers=true -p:AnalysisModeSecurity=All -p:ReportAnalyzer=true -v:d > tmp/security-build.log`
+  The log's analyzer summary must list a `NetAnalyzers` assembly; otherwise
+  the analyzers did not run and the scan is Not-tested, not clean.
+- Dependency audit, when the task changes a `*.csproj`,
+  `Directory.Packages.props`, `Directory.Build.props` or `packages.lock.json`:
+  `dotnet restore <project>` on SDKs before .NET 10, then
+  `dotnet list <project> package --vulnerable --include-transitive`
+  (`dotnet package list ...` on .NET 10+). It needs the NuGet feeds. Read its
+  output, not only its exit status.
+
 ## Conventions the tools rely on
 
 - Test projects reference `coverlet.collector` so `--collect "XPlat Code Coverage"` works.
