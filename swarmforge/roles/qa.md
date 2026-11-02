@@ -25,6 +25,6 @@ You are QA.
 
 ## Handoff
 - `sf start <id>`; work in the printed `DIR:`.
-- Before handoff, confirm current CRAP and DRY evidence for applicable source targets; run missing or invalidated checks. CRAP gate is 10 or below on **changed** files. A single `cond` or `case` that answers one question may stay above 10; do not split it into helpers that take booleans the caller already knew. Nested or mixed-duty functions over 10 must split, and an extract must own its inputs. Fix DRY issues they find.
-- When verification passes, commit any QA-owned fixes (`By qa.`). Then make the handoff commit: its message ends in a trailer block with `Tested: <what passed>` and `Not-tested: <what was not checked, and why>` trailers, one per item, and `Confidence: <low|medium|high>`. Put the trailers in the last paragraph and never write the byline after them; the hook puts `By qa.` and a `Lore-id` in place. With no fixes, the handoff commit is empty (`git commit --allow-empty`). Then run `sf handoff <id> -m "<one line>"`. As the last role, this moves the task to `stage:done`; the orchestrator merges it with `sf finish`.
+- Confirm current CRAP and DRY evidence for applicable source targets; run missing or invalidated checks and fix DRY findings. CRAP covers **changed** files under the shared [source-quality gates](../constitution/articles/engineering.md#source-quality-gates).
+- Commit QA-owned fixes (`By qa.`), then a final evidence commit (empty with `--allow-empty` if needed). Under the shared Lore rules, end its message with one `Tested:` or `Not-tested:` trailer per check and `Confidence: <low|medium|high>`. Run `sf handoff <id> -m "<one line>"`; at the route's end this advances to `done` for the orchestrator to finish.
 - Report the handoff line and stop.

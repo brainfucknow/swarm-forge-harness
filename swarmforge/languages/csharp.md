@@ -1,10 +1,7 @@
 # C# tooling
 
-`swarmforge/bin/sf-cs` wraps the C# tools so every role runs the same command
-and reads the same output. Run it from the task worktree (`DIR:` from
-`sf start`), by path or with `swarmforge/bin` on PATH. It writes only under
-`./tmp/`. It needs Babashka (`bb`) on PATH; `dotnet` for the .NET tools; and
-`node` with `npx` for jscpd.
+Run `swarmforge/bin/sf-cs` from the task worktree. It needs Babashka, the
+.NET SDK, and Node with `npx`; reports go under `./tmp/`.
 
 | Constitution tool | Command | Behind it |
 |---|---|---|
