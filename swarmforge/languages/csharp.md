@@ -55,7 +55,7 @@ means no test reaches the line.
 
 - Code scanner: build the enclosing project or solution with the SDK's
   security analyzers and read only the warnings in changed `.cs` files:
-  `dotnet build <project> --no-incremental -p:EnableNETAnalyzers=true -p:AnalysisModeSecurity=All -p:ReportAnalyzer=true -v:d > tmp/security-build.log`
+  `mkdir -p tmp && dotnet build <project> --no-incremental -p:EnableNETAnalyzers=true -p:AnalysisModeSecurity=All -p:ReportAnalyzer=true -v:d > tmp/security-build.log`
   The log's analyzer summary must list a `NetAnalyzers` assembly; otherwise
   the analyzers did not run and the scan is Not-tested, not clean.
 - Dependency audit, when the task changes a `*.csproj`,

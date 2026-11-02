@@ -29,6 +29,7 @@ needs to know to run them on Babashka code.
   keep rules and output under `./tmp`:
 
   ```sh
+  mkdir -p tmp
   clj-holmes fetch-rules -o tmp/clj-holmes-rules \
     -r git://clj-holmes/clj-holmes-rules#fbf5e2eeebe9a85e2dc568c04b482a50fc482a02
   clj-holmes scan -p <file> -d tmp/clj-holmes-rules -t json -o tmp/clj-holmes.json --fail-on-result
@@ -42,7 +43,7 @@ needs to know to run them on Babashka code.
   --format classpath` or `lein classpath`):
 
   ```sh
-  cd tmp && nvd-clojure nvd-clojure.edn "$(cd .. && clojure -Spath)"
+  mkdir -p tmp && cd tmp && nvd-clojure nvd-clojure.edn "$(cd .. && clojure -Spath)"
   ```
 
 ## Tool compatibility checks
