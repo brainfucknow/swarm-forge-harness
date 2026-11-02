@@ -24,7 +24,9 @@ cd your-project
 The installer copies the SwarmForge runtime, guidance, and `swarm` skill into
 the project, adds instructions to `AGENTS.md`, `CLAUDE.md`, and
 `.github/copilot-instructions.md`, generates the agents, and installs the
-commit-msg hook. Commit the result.
+commit-msg hook. It also writes `swarmforge/.gitignore` so that a project
+rule ignoring every `bin/` directory, such as Visual Studio's `[Bb]in/`, does
+not drop `swarmforge/bin`. Commit the result.
 Development assets stay in this source checkout; reinstalling does not prune
 existing project files.
 

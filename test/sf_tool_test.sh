@@ -103,5 +103,22 @@ for path in swarmforge/tools/sf/spec/project.clj .agents/skills/project/SKILL.md
 done
 assert_eq "reinstall leaves one ignore entry" "$(grep -cxF .metrics/ "$consumer/.gitignore")" 1
 
+for rule in '[Bb]in/' 'bin/' 'bin' '**/[Bb]in/*' '**/bin/**'; do
+  dotnet="$scratch/dotnet-$RANDOM"
+  git init -q "$dotnet"
+  printf '%s\n' "$rule" > "$dotnet/.gitignore"
+  mkdir -p "$dotnet/src/App/bin" && echo x > "$dotnet/src/App/bin/App.dll"
+  bash "$HERE/install.sh" "$dotnet" >/dev/null
+  assert_fails "git check-ignore of swarmforge/bin/sf after install under '$rule'" git -C "$dotnet" check-ignore -q swarmforge/bin/sf
+  git -C "$dotnet" check-ignore -q src/App/bin/App.dll \
+    && pass "install under '$rule' keeps other bin directories ignored" || fail "install under '$rule' unignored src/App/bin"
+  assert_eq "install under '$rule' adds no negation to the root .gitignore" "$(grep -c '^!' "$dotnet/.gitignore")" 0
+done
+echo scratch/ > "$dotnet/swarmforge/.gitignore"
+bash "$HERE/install.sh" "$dotnet" >/dev/null
+bash "$HERE/install.sh" "$dotnet" >/dev/null
+assert_eq "reinstall keeps swarmforge/.gitignore lines once" "$(sort "$dotnet/swarmforge/.gitignore" | uniq -d)" ""
+assert_eq "reinstall keeps existing swarmforge/.gitignore lines" "$(grep -cxF scratch/ "$dotnet/swarmforge/.gitignore")" 1
+
 if [ "$failures" -gt 0 ]; then echo "$failures failure(s)" >&2; exit 1; fi
 echo "all tests passed"

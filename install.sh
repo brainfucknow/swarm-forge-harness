@@ -54,6 +54,11 @@ append_once "$target/.gitignore" ".worktrees/"
 append_once "$target/.gitignore" ".swarmforge/"
 append_once "$target/.gitignore" "tmp/"
 append_once "$target/.gitignore" ".metrics/"
+# Keeps swarmforge/bin tracked when the project ignores every bin/ directory,
+# as Visual Studio's "[Bb]in/" does. A file inside swarmforge/bin is never read
+# under such a rule; "!bin/**" also covers rules like "**/bin/**".
+append_once "$target/swarmforge/.gitignore" "!bin/"
+append_once "$target/swarmforge/.gitignore" "!bin/**"
 
 (cd "$target" && ./swarmforge/bin/sf adapters >/dev/null && ./swarmforge/bin/sf init)
 
