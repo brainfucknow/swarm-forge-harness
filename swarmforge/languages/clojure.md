@@ -22,7 +22,10 @@ needs to know to run them on Babashka code.
 ## Tool compatibility checks
 
 When changing wrappers or upgrading their upstream tools, use disposable
-projects under `tmp/`, real GitHub sources and Maven dependencies:
+projects under `tmp/`, real GitHub sources and Maven dependencies. An upgrade
+edits the ref column of `swarmforge/tools.conf` (`git ls-remote
+https://github.com/<owner>/<repo>.git HEAD` prints a SHA); run these checks at
+the new refs before the upgrade commit:
 
 - Install and require `dry4clj`, `clj-mutate`, `crap4clj` and the APS tools
   through `sf tool`. Confirm DRY output, mutation scan counts and parser
@@ -38,4 +41,5 @@ projects under `tmp/`, real GitHub sources and Maven dependencies:
   root tests or root outputs. An invalid source root must fail before coverage.
 - Explicit `--lcov` and `--use-existing-coverage` choices must not trigger
   another coverage run. Keep generated output and verification detail out of
-  commits; record actual tool versions, outcomes and unavailable checks in Lore.
+  commits; record each tool's `@<ref>`, outcomes and unavailable
+  checks in Lore.
