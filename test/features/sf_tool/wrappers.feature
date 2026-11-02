@@ -9,6 +9,8 @@ Feature: sf tool wrappers
   crap, and dry4clj (kind bbmain) runs the namespace dry4clj.core. The
   wrapper's own arguments follow, after any argument rewriting the tool has.
   An ensure that succeeds replaces a wrapper left by an earlier install.
+  The wrapper passes the task column to bb (or the main namespace to
+  clojure) as one quoted word, so no character in it is read by the shell.
   sf check accepts the kinds bb, bbmain, clj and local.
 
   Background:
@@ -48,3 +50,16 @@ Feature: sf tool wrappers
     And "sf tool ensure gherkin-parser" ran in the main checkout
     When I run the gherkin-parser wrapper with "a.feature"
     Then bb received "--config SRC/bb.edn gherkin-parser a.feature"
+
+  # sf tool wrappers 5
+  Scenario Outline: sf tool wrappers 5: the task column reaches bb as one word
+    Given the tool source has the namespace "<namespace>"
+    And a task worktree
+    And the task worktree's tools.conf adds the line "odd bbmain github.com/x/odd 0123456789abcdef0123456789abcdef01234567 <namespace> - -"
+    And "sf tool ensure odd" ran in the task worktree
+    When I run the odd wrapper with "a"
+    Then bb received "-cp SRC/src -m <namespace> a"
+
+    Examples:
+      | namespace              |
+      | x;touch${IFS}injected  |

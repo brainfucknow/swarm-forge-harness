@@ -5,14 +5,6 @@ harness agents in Claude Code, Codex, or Copilot CLI. Each task takes a route
 through the role catalogue, and roles pass work through task branches in this
 repository.
 
-```text
-operator ──► session: orchestrator ──► subagents on the task's route, e.g.
-                        │                feature: specifier → coder → cleaner → architect → hardener → qa
-                        │                bugfix:  specifier → coder → qa
-                        │ task branch swarm/<id>, worktree .worktrees/<id>
-                        └─ sf review ─► operator approves ─► sf approve ─► … ─► sf finish
-```
-
 | File | Purpose |
 |---|---|
 | `roles.conf` | The role catalogue in canonical order, each with a model tier. All run as subagents unless marked `session`. |
@@ -30,9 +22,8 @@ operator ──► session: orchestrator ──► subagents on the task's route
 | `handoff-protocol.md` | The task branch, task file, record commits, and lifecycle. |
 | `verify.conf` | Optional, written by the project: one shell command per line that `sf finish` runs on the merge before it merges, for example `make test`. |
 
-Mutation manifests are a cache on the orphan branch `swarmforge/metrics`, out
-of the tree and of every PR. `sf start` copies them into the worktree's
-ignored `.metrics/`, and `sf handoff` saves them back.
+The [handoff protocol](handoff-protocol.md) covers task state, approval, merge
+recovery, and sharing the mutation cache on `swarmforge/metrics`.
 
 Prerequisites: `git`, `bash`, and [Babashka](https://babashka.org) (`bb`).
 Run `swarmforge/bin/sf init` once per clone.
@@ -53,6 +44,8 @@ Without harness subagents, `sf run <id>` dispatches each stage to a headless
 `claude`, `codex`, or `copilot` process until the task is done or needs the
 operator.
 
+## Configuration
+
 After editing `roles.conf`, `routes.conf`, or `tiers.conf`, run `sf adapters`
 to regenerate the agent files under `.claude/agents/`, `.codex/agents/`, and
 `.github/agents/`. `sf check` validates the configuration files and the role
@@ -62,21 +55,22 @@ Adapter ownership is recorded in ignored `.swarmforge/adapters.edn` in the
 main checkout. Regeneration preserves unrelated agents and
 refuses conflicting or locally edited adapters before changing agent files.
 
-For migrations, public API changes or major dependency changes, opt into
-**Architecture design reviewer** with an explicit route, for example:
+Catalogue settings:
+
+- `session` makes the orchestrator play a role in chat; `subagent` delegates it.
+- `audit` makes the first handoff or review at each commit request self-review
+  without recording anything. Complete that review before retrying.
+- `optional` excludes a role from fallback routes. Include it explicitly in a
+  named route, `--route`, or `SWARMFORGE_ROUTE` to enable it; it can also use `audit`.
+
+Optional reviewers preserve the existing approval and handoff flow:
+
+| Role | When to include it | Position |
+|---|---|---|
+| [Architecture design reviewer](roles/architecture-design-reviewer.md) | Migrations, public APIs, major dependency changes. | After specification approval, before coding; architect still reviews implementation. |
+| [Security reviewer](roles/security-reviewer.md) | Authentication, authorization, secrets, untrusted input, external execution. | After hardener, before QA; hardener retains mutation and quality gates. |
 
 ```sh
 sf new "Migrate public API" -m "..." --route specifier,architecture-design-reviewer,coder,architect,qa
+sf new "Review authentication" -m "..." --route coder,hardener,security-reviewer,qa
 ```
-
-The reviewer examines the design after specification approval and before coding;
-`architect` still reviews structure after implementation.
-
-Optional reviewers are enabled by explicitly including them in a route. Use
-`--route coder,hardener,security-reviewer,qa` for authentication, authorization,
-secrets, untrusted input, or external execution changes. The Security reviewer
-traces concrete enforcement paths and records findings and focused regression
-evidence in commits; the hardener retains mutation testing and quality gates.
-Named routes and the fallback route omit it unless explicitly enabled (including
-through `SWARMFORGE_ROUTE`). Catalogue entries can use the `optional` flag,
-combined with `audit` when needed, so other optional reviewers share this mechanism.
