@@ -1,10 +1,8 @@
 # swarm-forge-harness
 
 A harness-integrated [SwarmForge](https://github.com/brainfucknow/swarm-forge).
-The roles are agents you run directly in Claude Code, Codex, or Copilot CLI.
-There is no tmux, no daemon, and no web dashboard. Roles talk to each other
-through task branches in the project repository, and they talk to you in
-chat.
+Run its roles in Claude Code, Codex, or Copilot CLI. Roles pass work through
+Git task branches; the operator handles questions and approvals in chat.
 
 ## Prerequisites
 
@@ -40,31 +38,19 @@ Open the project in your harness and ask:
 /swarm Users can log in with email and password; lock the account after five failures.
 ```
 
-For the default `feature` route, the session becomes the orchestrator:
+For the default `feature` route, the session orchestrates:
 
-1. The orchestrator picks a route for the request from `swarmforge/routes.conf`
-   (`feature`, `bugfix`, `refactor`, `harden`, `spike`, or any subset of the
-   roles in order) and `sf new --route` creates the task and its branch with
-   that route on it. The `specifier` subagent commits concise criteria and QA,
-   using durable Gherkin files when they provide a useful executable contract
-   in `.worktrees/<id>`,
-   runs `sf review`, and returns. If the request is ambiguous it runs
-   `sf ask` with its questions first and returns; you answer in chat.
-2. The orchestrator shows you the committed spec and the route. You say
-   approve, ask for changes, or change the route (`sf route <id> ...`).
-3. `sf approve` hands the task to the `coder` subagent. Each subagent reads the
-   constitution and its role, works on the task branch, commits, and runs
-   `sf handoff`. The orchestrator dispatches the next role.
-4. A role that is blocked runs `sf ask` and stops. The question appears in chat.
-   Your answer goes back with `sf answer` and the same role resumes.
-5. After the last role on the route, the task is at stage `done` and its task
-   file moves to `tasks/done/`. `sf finish` merges the branch into your base
-   branch and removes it.
+1. The specifier commits criteria and independent QA, then stops for your
+   approval. You can request changes or adjust the route before approving.
+2. Roles implement, review, and verify on the task branch, committing and
+   handing off in sequence. Questions stop the task until you answer in chat.
+3. `sf finish` verifies the completed merge, merges into the base branch,
+   and removes the task branch and worktree.
 
-`sf ls` shows every open task with its stage and whether it is waiting on you.
-`sf show <id>` prints the whole history, also after the merge. Both work in
-any clone that has the task branch (`git push origin swarm/<id>` and a fetch
-move it).
+`sf ls` shows open tasks and what they need from you; `sf show <id>` shows
+history. See the [installed guide](swarmforge/README.md) for commands and the
+[handoff protocol](swarmforge/handoff-protocol.md) for approval, recovery,
+and sharing rules.
 
 ## Harness integration
 
@@ -74,10 +60,9 @@ move it).
 | Codex CLI | `$swarm` from `.agents/skills/swarm/` | `.codex/agents/<role>.toml` | `model_reasoning_effort` high / medium / low |
 | Copilot CLI | `/swarm` from `.agents/skills/swarm/` | `.github/agents/<role>.agent.md` | `model: gpt-6.1-sol` or `gpt-6.1-terra` |
 
-The agent files are generated from `swarmforge/roles.conf` and
-`swarmforge/tiers.conf` by `swarmforge/bin/sf adapters`. Each one is a thin
-wrapper that tells the agent to read the constitution and its role prompt, so
-prompts live in one place.
+`sf adapters` generates agent files from `swarmforge/roles.conf` and
+`swarmforge/tiers.conf`. Each agent reads the shared constitution and its role
+prompt under `swarmforge/roles/`.
 
 Codex: custom agent roles need the multi-agent feature. If `codex` does not
 offer the roles, enable it in `~/.codex/config.toml` per the Codex subagents
@@ -96,10 +81,8 @@ own, so set them there, for example
 
 ## Roles, routes, and model tiers
 
-There is no pack to choose. `swarmforge/roles.conf` is the catalogue of roles
-in canonical order; each task picks a route through it, so a bug fix can skip
-the cleaner, architect, and hardener while a feature visits all six. Named
-routes live in `swarmforge/routes.conf`:
+Each task follows a named route from `swarmforge/routes.conf`, or an explicit
+subset of the catalogue in `swarmforge/roles.conf` order:
 
 | Route | Roles |
 |---|---|
@@ -109,27 +92,12 @@ routes live in `swarmforge/routes.conf`:
 | `harden` | hardener, qa |
 | `spike` | specifier |
 
-The catalogue:
-
-| Role | Tier | Runs as |
-|---|---|---|
-| specifier | frontier | subagent |
-| coder | strong | subagent |
-| cleaner | fast | subagent |
-| architect | strong | subagent |
-| hardener | fast | subagent |
-| qa | strong | subagent |
-
-`swarmforge/tiers.conf` keeps Claude's frontier on the session model and maps
-`strong`/`fast` to Opus/Sonnet; Codex uses reasoning effort. Copilot defaults
-to GPT-6.1 Sol for `frontier`/`strong` and GPT-6.1 Terra for `fast`.
-Regenerate agents with `sf adapters` after editing roles or tiers.
-Setting a role to `session` instead of `subagent` makes the
-orchestrator play it in chat, which suits co-writing a specification turn by
-turn at the cost of a fuller session context. Adding `audit` to a role's line
-makes its first `sf handoff` at any commit come back with a self-review
-checklist instead of a record; the second attempt at the same commit records
-it. It is off by default.
+The [role catalogue](swarmforge/roles.conf) assigns tiers and supports
+`subagent`, `session`, `audit`, and `optional` settings. See
+[configuration](swarmforge/README.md#configuration) for these settings and
+opt-in design and security review. Model mappings live in
+[`swarmforge/tiers.conf`](swarmforge/tiers.conf); regenerate agents with
+`sf adapters` after changing roles, routes, or tiers.
 
 ## Reference
 
