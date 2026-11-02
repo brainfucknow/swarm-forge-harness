@@ -33,3 +33,8 @@ treats text after `!` as a comment and is not used.
 Checks exit 0 when clean, 1 on findings, and 2 on usage/input errors; test and
 external-tool failures retain their exit status. Acceptance tests use the shared
 Acceptance Pipeline Specification tools and the project's runtime/handlers.
+
+## Security scanners
+
+As in [csharp.md](csharp.md#security-scanners), reading warnings in changed
+`.vb` files, with `*.vbproj` in place of `*.csproj` among the dependency files.
