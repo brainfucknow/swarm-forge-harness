@@ -1,11 +1,10 @@
 Feature: sf tool clj versions
 
-  A wrapper for a tool of kind clj depends on the Maven version in the ref
-  column of its row, never on RELEASE or LATEST, and sf tool ensure prints
-  "INSTALLED: <tool> <wrapper> @<version>". The cloverage wrapper also
-  depends on speclj, at the version the speclj row pins. The pins of the
-  crap4clj coverage config (crap4clj_coverage.feature) are not read from
-  tools.conf.
+  A wrapper for a clj tool depends on the Maven version in its row's ref
+  column, never RELEASE or LATEST, and sf tool ensure prints
+  "INSTALLED: <tool> <wrapper> @<version>". The cloverage wrapper also depends
+  on speclj at the version the speclj row pins. The pins of the crap4clj
+  coverage config (crap4clj_coverage.feature) are not read from tools.conf.
 
   Background:
     Given a project with swarmforge initialized

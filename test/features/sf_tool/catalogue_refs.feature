@@ -2,20 +2,19 @@ Feature: sf tool catalogue refs
 
   A row of swarmforge/tools.conf is
   "<name> <kind> <source> <ref> <task> <rewrite> <needs>". The ref of a row of
-  kind bb or bbmain is a full commit SHA: exactly 40 lowercase hexadecimal
+  kind bb or bbmain is a full commit SHA: 40 lowercase hexadecimal
   digits. Its source is github.com/<owner>/<repo>, where owner and repo use
   only letters, digits, ".", "_" and "-", and neither is "." or "..". The ref
-  of a row of kind clj is a pinned Maven version: it starts with a digit,
-  uses only letters, digits, ".", "_", "+" and "-", and does not end in
-  "-SNAPSHOT" (so RELEASE and LATEST are refused). The ref of a row of kind
-  local is "-". Rows with the same source pin the same ref.
+  of a row of kind clj is a Maven version: it starts with a digit, uses only
+  letters, digits, ".", "_", "+" and "-", and does not end in "-SNAPSHOT" (so
+  RELEASE and LATEST are refused). The ref of a row of kind local is "-". Rows with the same source pin the same ref.
 
   sf check reports each broken rule as "CHECK: tools.conf: <problem>" on
   stderr and exits 1. sf tool ensure checks the same rules for the tool and
-  every tool in its needs chain before it writes anything or runs git, also
-  when SWARMFORGE_TOOL_SRC is set: on a problem it prints
-  "sf tool: tools.conf: <problem>" on stderr, exits 1, and nothing under the
-  main checkout's .swarmforge/ changes. sf tool list prints each row's name,
+  its needs chain before it writes anything or runs git, also when
+  SWARMFORGE_TOOL_SRC is set: on a problem it prints
+  "sf tool: tools.conf: <problem>" on stderr, exits 1, and changes nothing
+  under the main checkout's .swarmforge/. sf tool list prints each row's name,
   kind, source and ref.
 
   # sf tool catalogue refs 1

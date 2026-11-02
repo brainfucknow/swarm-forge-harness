@@ -17,13 +17,13 @@
   list             print the catalogue
   bin              print the wrapper directory; put it on PATH
 
-The catalogue is swarmforge/tools.conf of the checkout you run in. Each row
-pins a ref: ensure puts a GitHub source's clone at its commit and prints it
-after the wrapper path (@<sha>), and a clj tool's wrapper uses its Maven
-version (@<version>). Wrappers live in .swarmforge/bin/ and clones in
-.swarmforge/tools/, both under the main checkout and ignored by git.
-SWARMFORGE_TOOL_SRC points every GitHub source at one local checkout, used as
-it is: unpinned, never fetched or checked out, and printed without @.")
+The catalogue is swarmforge/tools.conf of the checkout you run in. ensure puts
+a GitHub source's clone at its pinned commit, discarding local changes, and
+prints @<ref> after the wrapper path (a clj tool's Maven version too).
+Wrappers live in .swarmforge/bin/ and clones in .swarmforge/tools/, both under
+the main checkout and ignored by git. SWARMFORGE_TOOL_SRC points every GitHub
+source at one local checkout, used as it is: unpinned, never fetched or checked
+out, and printed without @.")
 
 (defn- tools
   "The tools of swarmforge/tools.conf of the checkout sf tool runs in."
@@ -49,21 +49,25 @@ it is: unpinned, never fetched or checked out, and printed without @.")
   (println (str "OK: " tool " " (wrapper-path tool))))
 
 (defn- pinned-source
-  "The tool's source directory and its commit. SWARMFORGE_TOOL_SRC is used as
-  it is, with no commit."
+  "The tool's source directory, its commit, and a function that puts the clone
+  back where it was. SWARMFORGE_TOOL_SRC is used as it is, with no commit."
   [tool {:keys [source ref]}]
   (if-let [override (shell/env "SWARMFORGE_TOOL_SRC" nil)]
-    [override nil]
-    (let [dir (str (fs/path (shell/repo-root) ".swarmforge" "tools" (catalogue/github-repo source)))]
-      (clone/ensure-at tool dir (str "https://" source ".git") ref)
-      [dir ref])))
+    [override nil (constantly nil)]
+    (let [dir (str (fs/path (shell/repo-root) ".swarmforge" "tools" (catalogue/github-repo source)))
+          url (str "https://" source ".git")
+          earlier (clone/head dir)]
+      (clone/ensure-at tool dir url ref)
+      [dir ref #(when (and earlier (not= earlier ref)) (clone/ensure-at tool dir url earlier))])))
 
 (defn- checked-source
   "The tool's source directory and its commit. A source without the entry
-  point stops the install and leaves any earlier wrapper as it is."
+  point stops the install, puts the clone back at its earlier commit, and
+  leaves any earlier wrapper as it is."
   [tool {:keys [kind task] :as spec}]
-  (let [[dir pin] (pinned-source tool spec)]
+  (let [[dir pin restore] (pinned-source tool spec)]
     (when-let [problem (entry-point/problem kind dir task)]
+      (restore)
       (shell/die tool ": " problem))
     [dir pin]))
 

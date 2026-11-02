@@ -40,6 +40,12 @@
          (= real (git-out dir "rev-parse" "--show-toplevel"))
          (= (str (fs/path real ".git")) (git-out dir "rev-parse" "--absolute-git-dir")))))
 
+(defn head
+  "The commit dir, the top level of its own clone, is at, or nil."
+  [dir]
+  (when (and (fs/exists? dir {:nofollow-links true}) (own-clone? dir))
+    (git-out dir "rev-parse" "--verify" "--quiet" "HEAD^{commit}")))
+
 (defn- has-commit? [dir sha]
   (some? (git-out dir "rev-parse" "--verify" "--quiet" "--end-of-options" (str sha "^{commit}"))))
 
