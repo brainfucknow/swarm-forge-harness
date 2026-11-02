@@ -15,10 +15,10 @@
   (str "#!/usr/bin/env bash\n" prelude command "\n"))
 
 (defn bb-command [source-dir task]
-  (str "exec bb --config " (sq (str source-dir "/bb.edn")) " " task " \"$@\""))
+  (str "exec bb --config " (sq (str source-dir "/bb.edn")) " " (sq task) " \"$@\""))
 
 (defn bbmain-command [source-dir namespace]
-  (str "exec bb -cp " (sq (str source-dir "/src")) " -m " namespace " \"$@\""))
+  (str "exec bb -cp " (sq (str source-dir "/src")) " -m " (sq namespace) " \"$@\""))
 
 (defn local-command
   "Runs the script at source in the caller's checkout when it has one and shares
@@ -39,16 +39,25 @@
       (str/replace "{{command}}" (str/replace-first command #"^exec " ""))
       str/trim-newline))
 
-(def ^:private speclj-dep "speclj/speclj {:mvn/version \"3.13.0\"}")
+(defn- sdeps
+  "The -Sdeps argument: paths (or none) and each [coordinate version] of deps
+  at its Maven version."
+  [paths deps]
+  (sq (str "{" (when paths (str ":paths " (pr-str paths) " "))
+           ":deps {" (str/join " " (for [[coordinate version] deps]
+                                     (str coordinate " {:mvn/version " (pr-str version) "}")))
+           "}}")))
 
-(defn clj-command [tool coordinate main]
+(defn clj-command
+  "Runs the main namespace of a clj tool with the Clojure CLI, its Maven
+  dependencies given as [coordinate version] pairs."
+  [tool deps main]
   (case tool
-    "cloverage" (str "exec clojure -Sdeps " (sq (str "{:paths [\"src\" \"spec\" \"test\"] :deps {cloverage/cloverage {:mvn/version \"RELEASE\"} " speclj-dep "}}"))
-                     " -M -m " main " -p src -s spec -s test -r speclj \"$@\"")
-    "speclj" (str "exec clojure -Sdeps " (sq (str "{:paths [\"src\" \"spec\" \"test\"] :deps {" speclj-dep "}}"))
-                  " -M -m " main " -c spec \"$@\"")
-    (str "exec clojure -Sdeps " (sq (str "{:deps {" coordinate " {:mvn/version \"RELEASE\"}}}"))
-         " -M -m " main " \"$@\"")))
+    "cloverage" (str "exec clojure -Sdeps " (sdeps ["src" "spec" "test"] deps)
+                     " -M -m " (sq main) " -p src -s spec -s test -r speclj \"$@\"")
+    "speclj" (str "exec clojure -Sdeps " (sdeps ["src" "spec" "test"] deps)
+                  " -M -m " (sq main) " -c spec \"$@\"")
+    (str "exec clojure -Sdeps " (sdeps nil deps) " -M -m " (sq main) " \"$@\"")))
 
 (defn coverage-rewrite
   "Has sf.coverage-rewrite of sf-src, run by the Babashka executable bb, move

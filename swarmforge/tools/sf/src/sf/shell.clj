@@ -28,12 +28,13 @@
 
 (defn run
   "Runs a command and captures its output, unless out or err name another
-  destination. env holds extra environment variables. A program that cannot
-  start exits 127."
-  [{:keys [dir in out err env] :or {out :string err :string}} & cmd]
+  destination. env holds extra environment variables; unset names variables
+  the command does not inherit. A program that cannot start exits 127."
+  [{:keys [dir in out err env unset] :or {out :string err :string}} & cmd]
   (try
     (p/shell (cond-> {:cmd (vec cmd) :out out :err err :continue true :dir (some-> dir str)}
                in (assoc :in in)
+               unset (assoc :env (apply dissoc (into {} (System/getenv)) unset))
                env (assoc :extra-env env)))
     (catch java.io.IOException e
       {:exit 127 :out "" :err (ex-message e)})))

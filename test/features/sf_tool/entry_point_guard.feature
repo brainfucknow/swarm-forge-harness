@@ -10,8 +10,8 @@ Feature: sf tool entry point guard
   byte-for-byte as it was, so require still reports the tool; a failing ensure
   never replaces or removes a wrapper. Tools the tool needs that were
   installed first stay installed. ensure does not try another way to install
-  the tool. A source directory that already exists under .swarmforge/tools is
-  used as it is and is not cloned again.
+  the tool. How ensure puts a clone at its pinned commit is in
+  pinned_refs.feature.
 
   Background:
     Given a project with swarmforge initialized
@@ -45,15 +45,6 @@ Feature: sf tool entry point guard
       | tool        |
       | crap4go     |
       | mutate4java |
-
-  # sf tool entry point guard 3
-  Scenario: sf tool entry point guard 3: an existing clone is not cloned again
-    Given no tool source override
-    And the directory "MAIN/.swarmforge/tools/dry4go" exists without bb.edn
-    When I run "sf tool ensure dry4go" in the main checkout
-    Then the exit status is 1
-    And the error output contains "sf tool: dry4go: no bb.edn in MAIN/.swarmforge/tools/dry4go"
-    And the error output does not mention "clone"
 
   # sf tool entry point guard 4
   Scenario: sf tool entry point guard 4: a bb.edn that cannot be read fails the install and keeps the earlier wrapper

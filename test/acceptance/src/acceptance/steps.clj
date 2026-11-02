@@ -25,11 +25,23 @@
     "directory outside git" (:outside world)
     "another git repository" (:other world)))
 
+(defn- upstream-env
+  "A git url.<dir>.insteadOf rule, given in the environment, that makes the
+  world's upstream stand in for its GitHub URL; an unreachable upstream points
+  at a path that does not exist."
+  [{:keys [upstream]}]
+  (when upstream
+    {"GIT_CONFIG_COUNT" "1"
+     "GIT_CONFIG_KEY_0" (str "url." (if (:reachable upstream) (:dir upstream) (str (:dir upstream) "-missing")) ".insteadOf")
+     "GIT_CONFIG_VALUE_0" (str "https://github.com/unclebob/" (:name upstream) ".git")}))
+
 (defn- tool-env
   "SWARMFORGE_TOOL_SRC when the world has a tool source override, else
-  GIT_TERMINAL_PROMPT=0 so a clone that should not happen fails fast."
+  GIT_TERMINAL_PROMPT=0 so a clone that should not happen fails fast; and the
+  upstream's insteadOf rule."
   [world]
-  (if-let [src (:src world)] {"SWARMFORGE_TOOL_SRC" src} {"GIT_TERMINAL_PROMPT" "0"}))
+  (merge (if-let [src (:src world)] {"SWARMFORGE_TOOL_SRC" src} {"GIT_TERMINAL_PROMPT" "0"})
+         (upstream-env world)))
 
 (defn- run-command
   "Runs command, split on spaces, from the place; sf is the scratch project's sf."
@@ -152,14 +164,17 @@
 ;; sf tool (test/features/sf_tool)
 
 (defn- fill-paths
-  "text with MAIN, SRC and CFG replaced by the scratch project's paths."
+  "text with MAIN, SRC, CFG and CLONE replaced by the scratch project's paths,
+  and PIN and NEXT by the upstream's commits of those names."
   [world text]
-  (str/replace text #"\b(MAIN|SRC|CFG)\b"
+  (str/replace text #"\b(MAIN|SRC|CFG|CLONE|PIN|NEXT)\b"
                (fn [[_ name]]
                  (case name
                    "MAIN" (:repo world)
-                   "SRC" (or (:src world) (throw (ex-info "no tool source override" {})))
-                   "CFG" (str (fs/path (:repo world) ".swarmforge" "tools" "crap4clj-coverage" "bb.edn"))))))
+                   "SRC" (or (:src world) (:clone world) (throw (ex-info "no tool source" {})))
+                   "CFG" (str (fs/path (:repo world) ".swarmforge" "tools" "crap4clj-coverage" "bb.edn"))
+                   "CLONE" (or (:clone world) (throw (ex-info "no upstream" {})))
+                   (or (get-in world [:upstream :commits name]) (throw (ex-info (str "no commit " name) {})))))))
 
 (defn- scratch-dir [prefix]
   (str (fs/create-temp-dir {:dir @support/scratch :prefix prefix})))
@@ -212,11 +227,71 @@
 (def ^:private stale-wrapper "echo stale")
 
 (defn- tree-state
-  "Every path under dir with its permissions, and each file's content."
+  "Every path under dir with its permissions, and each file's content; nil
+  when dir does not exist."
   [dir]
-  (into {} (for [path (fs/glob dir "**" {:hidden true})]
-             [(str (fs/relativize dir path))
-              [(fs/posix-file-permissions path) (when (fs/regular-file? path) (seq (fs/read-all-bytes path)))]])))
+  (when (fs/exists? dir {:nofollow-links true})
+    (into {} (for [path (fs/glob dir "**" {:hidden true})]
+               [(str (fs/relativize dir path))
+                [(fs/posix-file-permissions path) (when (fs/regular-file? path) (seq (fs/read-all-bytes path)))]]))))
+
+(defn- git-state
+  "The main checkout's HEAD commit, branch, status with untracked and ignored
+  files, and FETCH_HEAD."
+  [world]
+  (let [repo (:repo world)
+        fetch-head (fs/path repo ".git" "FETCH_HEAD")]
+    [(must repo "git" "rev-parse" "HEAD")
+     (must repo "git" "branch" "--show-current")
+     (must repo "git" "status" "--porcelain" "--untracked-files=all" "--ignored")
+     (when (fs/exists? fetch-head) (slurp (str fetch-head)))]))
+
+(defn- new-upstream
+  "A repository with one commit per name, each with a bb.edn defining the task
+  repo and a file version holding the name."
+  [repo names]
+  (let [dir (scratch-dir "upstream-")]
+    (must dir "git" "init" "-q")
+    {:name repo :dir dir :reachable true
+     :commits (into {} (for [name names]
+                         (do (spit (str (fs/path dir "bb.edn")) (str "{:tasks {" repo " {}}}"))
+                             (spit (str (fs/path dir "version")) name)
+                             (must dir "git" "add" "-A")
+                             (must dir "git" "commit" "-q" "-m" name)
+                             [name (must dir "git" "rev-parse" "HEAD")])))}))
+
+(defn- earlier-clone
+  "Makes the world's clone a clone of its upstream in the state the step names."
+  [world state]
+  (let [{:keys [dir commits]} (:upstream world)
+        clone (:clone world)
+        at-pin (fn []
+                 (must @support/scratch "git" "clone" "-q" dir clone)
+                 (must clone "git" "checkout" "-q" "--detach" (commits "PIN")))]
+    (fs/create-dirs (fs/parent clone))
+    (case state
+      "HEAD at NEXT" (do (must @support/scratch "git" "clone" "-q" dir clone)
+                         (must clone "git" "checkout" "-q" "--detach" (commits "NEXT")))
+      "a local commit on top of PIN" (do (at-pin)
+                                         (spit (str (fs/path clone "version")) "local")
+                                         (must clone "git" "commit" "-q" "-am" "local"))
+      "an edited tracked file" (do (at-pin) (spit (str (fs/path clone "version")) "edited"))
+      "an untracked file" (do (at-pin)
+                              (fs/create-dirs (fs/path clone "src"))
+                              (spit (str (fs/path clone "src" "extra.clj")) "(ns extra)\n"))
+      "only NEXT and an unreachable origin remote"
+      (do (must @support/scratch "git" "clone" "-q" "--depth" "1" (str "file://" dir) clone)
+          (must clone "git" "remote" "set-url" "origin" (str dir "-missing"))))
+    world))
+
+(defn- set-ref
+  "The tools.conf text with the ref column of the row of tool replaced."
+  [text tool ref]
+  (str/join (for [line (str/split text #"(?<=\n)")]
+              (let [fields (str/split (str/trim line) #"\s+")]
+                (if (= tool (first fields))
+                  (str (str/join " " (assoc fields 3 ref)) "\n")
+                  line)))))
 
 (defn- fake-bb-args [world]
   (check (some? (:out world)) "no wrapper ran")
@@ -274,17 +349,69 @@
 
    [#"a snapshot of \"([^\"]+)\""
     (fn [world dir]
-      (assoc world :snapshot (tree-state (fill-paths world dir))))]
+      (assoc-in world [:snapshots dir] (tree-state (fill-paths world dir))))]
 
    [#"\"([^\"]+)\" matches the snapshot"
     (fn [world dir]
-      (check (= (:snapshot world) (tree-state (fill-paths world dir))) (str dir " changed"))
+      (check (contains? (:snapshots world) dir) (str "no snapshot of " dir))
+      (check (= (get-in world [:snapshots dir]) (tree-state (fill-paths world dir))) (str dir " changed"))
       world)]
 
-   [#"\"(.*)\" ran in the main checkout"
-    (fn [world command]
-      (require-ok (run-command world command "main checkout") command)
+   [#"a snapshot of the main checkout's git state"
+    (fn [world] (assoc world :git-state (git-state world)))]
+
+   [#"the main checkout's git state matches the snapshot"
+    (fn [world]
+      (check (= (:git-state world) (git-state world)) (str "git state was " (pr-str (git-state world))))
       world)]
+
+   [#"\"(.*)\" ran in the (main checkout|task worktree)"
+    (fn [world command place]
+      (require-ok (run-command world command place) command)
+      world)]
+
+   [#"the upstream \"([^\"]+)\" has the commits \"([^\"]+)\""
+    (fn [world repo names]
+      (assoc world :upstream (new-upstream repo (words names))
+             :clone (str (fs/path (:repo world) ".swarmforge" "tools" repo))))]
+
+   [#"the upstream \"([^\"]+)\" is (reachable|unreachable)"
+    (fn [world _ how]
+      (assoc-in world [:upstream :reachable] (= "reachable" how)))]
+
+   [#"the main checkout's tools.conf pins \"([^\"]+)\" at \"([^\"]+)\""
+    (fn [world tool ref]
+      (let [file (str (fs/path (:repo world) "swarmforge" "tools.conf"))]
+        (spit file (set-ref (slurp file) tool (fill-paths world ref)))
+        world))]
+
+   [#"an earlier clone with (.+)"
+    (fn [world state] (earlier-clone world state))]
+
+   [#"the clone has a post-checkout hook that writes \"([^\"]+)\""
+    (fn [world file]
+      (write-script (fs/path (:clone world) ".git" "hooks" "post-checkout") (str "touch '" (fill-paths world file) "'"))
+      world)]
+
+   [#"the clone is clean at \"([^\"]+)\""
+    (fn [world ref]
+      (let [clone (:clone world)]
+        (check (= (fill-paths world ref) (must clone "git" "rev-parse" "HEAD")) (str "HEAD is " (must clone "git" "log" "-1" "--format=%s")))
+        (check (not (zero? (:exit (run clone ["git" "symbolic-ref" "-q" "HEAD"])))) "HEAD is not detached")
+        (check (= "" (must clone "git" "status" "--porcelain" "--untracked-files=all")) "the clone has changes")
+        world))]
+
+   [#"there is no file \"([^\"]+)\""
+    (fn [world file]
+      (check (not (fs/exists? (fill-paths world file) {:nofollow-links true})) (str (fill-paths world file) " exists"))
+      world)]
+
+   [#"the output has a line with the words \"(.*)\""
+    (fn [world expected]
+      (let [expected (words (fill-paths world expected))]
+        (check (some #(= expected (remove str/blank? (str/split % #"\s+"))) (output-lines world))
+               (str "stdout was " (pr-str (:out world))))
+        world))]
 
    [#"\"(.*)\" in the (task worktree|main checkout) prints \"(.*)\""
     (fn [world command place expected]
@@ -302,11 +429,11 @@
         (commit-all dir (str "Delete " file))
         (assoc world :worktree2 dir)))]
 
-   [#"the task worktree's tools.conf adds the line \"(.*)\""
-    (fn [world line]
-      (let [file (str (fs/path (:worktree world) "swarmforge" "tools.conf"))]
-        (spit file (str line "\n") :append true)
-        (commit-all (:worktree world) "Add a tool")
+   [#"the (task worktree|main checkout)'s tools.conf adds the line \"(.*)\""
+    (fn [world place line]
+      (let [dir (place-dir world place)]
+        (spit (str (fs/path dir "swarmforge" "tools.conf")) (str line "\n") :append true)
+        (when (= "task worktree" place) (commit-all dir "Add a tool"))
         world))]
 
    [#"the (task worktree|main checkout)'s \"([^\"]+)\" prints \"(.*)\""
@@ -351,9 +478,10 @@
       (check (fs/regular-file? (fill-paths world file)) (str (fill-paths world file) " is not a file"))
       world)]
 
-   [#"the file \"([^\"]+)\" mentions \"(.*)\""
-    (fn [world file text]
-      (check (str/includes? (slurp (fill-paths world file)) text) (str file " does not mention " (pr-str text)))
+   [#"the file \"([^\"]+)\" (mentions|does not mention) \"(.*)\""
+    (fn [world file how text]
+      (check (= (= "mentions" how) (str/includes? (slurp (fill-paths world file)) text))
+             (str file (if (= "mentions" how) " does not mention " " mentions ") (pr-str text)))
       world)]
 
    [#"clj is (present|absent) on PATH"

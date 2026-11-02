@@ -31,17 +31,17 @@ fake_bb() { PATH="$fake:$PATH" "$@"; }
 src="$scratch/tool-src"; mkdir -p "$src"; echo '{:tasks {mutate {} gherkin-mutator {}}}' > "$src/bb.edn"
 export SWARMFORGE_TOOL_SRC="$src"
 
-assert_match "list prints the catalogue" "$(sf tool list)" "^clj-mutate +bb +github.com/unclebob/clj-mutate$"
+assert_match "list prints the catalogue with its refs" "$(sf tool list)" "^clj-mutate +bb +github.com/unclebob/clj-mutate +[0-9a-f]{40}$"
 assert_eq "bin names the wrapper directory" "$(sf tool bin)" "$repo/.swarmforge/bin"
 assert_fails "unknown tool" sf tool require nosuchtool
 out="$(sf tool require clj-mutate || true)"
 assert_match "require reports the first missing dependency" "$out" "^MISSING: cloverage$"
 
 out="$(sf tool ensure clj-mutate)"
-assert_match "ensure installs the dependency first" "$out" "^INSTALLED: cloverage .*/.swarmforge/bin/cloverage$"
-assert_match "ensure installs the tool" "$out" "INSTALLED: clj-mutate .*/.swarmforge/bin/clj-mutate$"
+assert_match "ensure installs the dependency first at its pinned version" "$out" "^INSTALLED: cloverage .*/.swarmforge/bin/cloverage @[0-9][^ ]*$"
+assert_match "ensure installs the tool from the unpinned override" "$out" "INSTALLED: clj-mutate .*/.swarmforge/bin/clj-mutate$"
 assert_match "require passes after ensure" "$(sf tool require clj-mutate)" "^OK: clj-mutate $repo/.swarmforge/bin/clj-mutate$"
-assert_match "cloverage wrapper runs the Clojure CLI" "$(head -2 .swarmforge/bin/cloverage | tail -1)" "^exec clojure -Sdeps .* -M -m cloverage.coverage -p src -s spec -s test -r speclj"
+assert_match "cloverage wrapper runs the Clojure CLI" "$(head -2 .swarmforge/bin/cloverage | tail -1)" "^exec clojure -Sdeps .* -M -m 'cloverage.coverage' -p src -s spec -s test -r speclj"
 
 run="$(fake_bb .swarmforge/bin/clj-mutate --mutate-all --max-workers 9 src/a.clj | paste -sd ' ' -)"
 assert_eq "mutate wrapper drops --mutate-all and forces four workers" "$run" "--config $src/bb.edn mutate src/a.clj --max-workers 4"
