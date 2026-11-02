@@ -51,3 +51,11 @@ Use the CRAP `cc` column as a complexity hint when reviewing module boundaries.
 Checks exit 0 when clean, 1 on findings, and 2 on usage/input errors; test and
 external-tool failures retain their exit status. Acceptance tests use the shared
 Acceptance Pipeline Specification tools and the project's runtime/handlers.
+
+## Security scanners
+
+- Code scanner: none. The SDK's security analyzers skip F# and no maintained
+  F# scanner exists, so an F# project adds
+  `Security code scanner absent: <reason>` to `project.md`.
+- Dependency audit: as in [csharp.md](csharp.md#security-scanners), restore
+  included, with `*.fsproj` in place of `*.csproj` among the dependency files.

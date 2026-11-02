@@ -19,6 +19,32 @@ needs to know to run them on Babashka code.
   and `spec`, or `src`, `test`, `../core/src` and `../core/test`), with
   `--no-coverage`, which clj-mutate requires for a custom test command.
 
+## Security scanners
+
+- Code scanner: clj-holmes (`sf tool ensure clj-holmes`), run on each `.clj`
+  file changed since the merge base, committed or not. It is unmaintained
+  since 2022, has 9 security rules and reads `.clj` only, so changed `.cljc`,
+  `.cljs` and `.bb` files are Not-tested. Fetching rules reaches
+  api.github.com. Its defaults write to `/tmp` and the current directory;
+  keep rules and output under `./tmp`:
+
+  ```sh
+  clj-holmes fetch-rules -o tmp/clj-holmes-rules \
+    -r git://clj-holmes/clj-holmes-rules#fbf5e2eeebe9a85e2dc568c04b482a50fc482a02
+  clj-holmes scan -p <file> -d tmp/clj-holmes-rules -t json -o tmp/clj-holmes.json --fail-on-result
+  ```
+
+- Dependency audit: nvd-clojure (`sf tool ensure nvd-clojure`), when the task
+  changes `deps.edn`, `bb.edn` or `project.clj`. It needs `NVD_API_TOKEN` and
+  reaches clojars.org and the NVD API. Run it from `./tmp`, which keeps the
+  project's `deps.edn` out of its `-Sdeps` and its config and report in
+  `./tmp`. Pass the project classpath (`clojure -Spath`, `bb print-deps
+  --format classpath` or `lein classpath`):
+
+  ```sh
+  cd tmp && nvd-clojure nvd-clojure.edn "$(cd .. && clojure -Spath)"
+  ```
+
 ## Tool compatibility checks
 
 When changing wrappers or upgrading their upstream tools, use disposable

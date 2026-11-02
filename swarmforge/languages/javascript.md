@@ -82,6 +82,17 @@ function is covered if called. A function missing from coverage counts as
 Use the `cc` column of `crap --all` to review module responsibilities;
 JavaScript has no mutation scan/count mode.
 
+## Security scanners
+
+- Code scanner, on the changed files defined under "Changed code"; it needs
+  uv and semgrep.dev:
+  `uvx semgrep@1.183.0 scan --config p/javascript --config p/typescript --metrics=off --error <changed files>`
+- Dependency audit, when the task changes `package.json` or a lockfile listed
+  under "Package manager and runner": the detected manager's `npm audit`,
+  `pnpm audit`, `yarn npm audit --all --recursive` (Yarn 2+: every workspace
+  and transitive packages), `yarn audit` (Yarn 1) or `bun audit`. It needs the
+  package registry.
+
 ## Mutation and output
 
 Stryker uses four workers unless overridden, its project config when present,
