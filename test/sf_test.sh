@@ -177,15 +177,15 @@ assert_fails "a finished task cannot be started" sf start "$id"
 # routes
 assert_eq "routes lists the presets" "$(sf routes | awk '{print $1}' | paste -sd ' ' -)" "feature bugfix refactor harden spike"
 id2="$(sf new "Fix rounding" -m "x" --route bugfix)"
-assert_eq "named route is recorded" "$(sf route "$id2")" "specifier,coder,qa"
+assert_eq "named route is recorded" "$(sf route "$id2")" "specifier,coder,cleaner,qa"
 sf start "$id2" >/dev/null
 git -C ".worktrees/$id2" commit -q --allow-empty -m "Spec. By specifier."
 sf review "$id2" >/dev/null && sf approve "$id2" >/dev/null
-assert_match "handoff follows the route" "$(sf handoff "$id2")" "coder -> qa"
 assert_fails "route change must contain the current stage" sf route "$id2" refactor
+assert_match "handoff follows the route" "$(sf handoff "$id2")" "coder -> cleaner"
 assert_match "route change at the current stage" "$(sf route "$id2" "coder,cleaner,qa")" "^ROUTE: $id2 coder,cleaner,qa$"
 assert_match "route change is recorded" "$(sf show "$id2")" "route: coder,cleaner,qa"
-assert_match "handoff follows the changed route" "$(sf handoff "$id2")" "qa -> done"
+assert_match "handoff follows the changed route" "$(sf handoff "$id2")" "cleaner -> qa"
 assert_fails "route in the wrong order" sf new "Bad" -m x --route "qa,coder"
 assert_fails "route with an unknown role" sf new "Bad" -m x --route "janitor"
 id3="$(sf new "Tidy" -m "x" --route "cleaner,architect")"
