@@ -12,6 +12,9 @@
 ## Verification
 - After installation, record the application's public interfaces and verification commands here, or link to maintained project documentation that defines them.
 - Apply the engineering article's target-based verification and evidence-reuse rules. Fix applicable failures before handoff.
+- Each language guide in `swarmforge/languages/` names a security code scanner and a dependency audit. A project without one adds a line here per absent tool, with its reason:
+  - `Security code scanner absent: <reason>`
+  - `Dependency audit absent: <reason>`
 - The architect, hardener, and QA own property-test verification for affected behavior; keep it separate from normal unit, coverage, and mutation runs.
 
 ## Handoffs
