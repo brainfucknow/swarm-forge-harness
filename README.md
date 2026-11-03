@@ -87,7 +87,7 @@ subset of the catalogue in `swarmforge/roles.conf` order:
 | Route | Roles |
 |---|---|
 | `feature` (default) | specifier, coder, cleaner, architect, hardener, qa |
-| `bugfix` | specifier, coder, qa |
+| `bugfix` | specifier, coder, cleaner, qa |
 | `refactor` | cleaner, architect, hardener |
 | `harden` | hardener, qa |
 | `spike` | specifier |
