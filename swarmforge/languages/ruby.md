@@ -14,6 +14,7 @@ bundle add simplecov --version 1.3.2 --group "development,test"
 bundle add rubocop --version 1.92.2 --group "development,test"      # crap, Security cops
 bundle add flog --version 4.9.4 --group "development,test"          # crap --complexity flog
 bundle add flay --version 2.14.4 --group "development,test"         # dry --tool flay
+bundle add reek --version 6.6.0 --group "development,test"          # code-smell check (recommended)
 bundle add mutant-rspec --version 0.17.1 --group "development,test"
 bundle add pbt --version 0.7.0 --group "development,test"           # property tests
 bundle add bundler-audit --version 0.9.3 --group "development,test"
@@ -61,3 +62,12 @@ usage` and continue.
 - Dependency audit when `Gemfile`, `Gemfile.lock` or a `*.gemspec` changes
   (reaches github.com):
   `bundle exec bundle-audit check --update --database tmp/ruby-advisory-db`
+
+## Code-smell check
+
+reek (MIT) is recommended; it honours the project's `.reek.yml` and inline
+`:reek:` comments. Run it from the task worktree on the changed `.rb` files
+since the merge base, specs included, deleted files left out:
+`mkdir -p tmp && bundle exec reek --no-progress --no-color -s --force-exclusion <changed .rb files> > tmp/reek.log 2>&1`
+It exits 2 on smells and 0 when clean; ignore IrresponsibleModule. A file the
+log reports as "cannot be processed" is Not-tested, not clean, even on exit 0.
