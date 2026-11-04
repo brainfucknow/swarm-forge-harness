@@ -101,14 +101,24 @@
                :file "src/a.ts" :line line :name "f"})
             (gen/tuple (gen/choose 1 30) coverage (gen/choose 1 500))))
 
-(defspec crap-review-flags-exactly-the-units-over-the-limit trials
-  (prop/for-all [units (gen/vector unit 0 8)]
-    (let [{:keys [lines status]} (crap/review crap/crap-limit units crap/format-row "function" nil)
-          over (filter (partial crap/over? crap/crap-limit) units)]
+(def limit (gen/one-of [(gen/return crap/crap-limit) (gen/choose 1 60)]))
+
+(defspec crap-review-flags-exactly-the-units-over-any-limit trials
+  (prop/for-all [units (gen/vector unit 0 8) limit limit]
+    (let [{:keys [lines status]} (crap/review limit units crap/format-row "function" nil)
+          over (filter #(> (:crap %) limit) units)]
       (and (= (inc (count units)) (count lines))
-           (= (count over) (count (filter #(str/starts-with? % "OVER") lines)))
+           (= (map #(> (:crap %) limit) units)
+              (map #(str/starts-with? % "OVER") (butlast lines)))
+           (= (str (count units) " function(s), " (count over) " over CRAP " limit) (last lines))
            (= (if (seq over) 1 0) status)
            (= (map :crap (crap/sort-worst-first units)) (sort > (map :crap units)))))))
+
+(defspec a-unit-over-a-limit-is-over-every-lower-limit trials
+  (prop/for-all [u unit a limit b limit]
+    (let [[low high] (sort [a b])]
+      (and (= (> (:crap u) high) (crap/over? high u))
+           (or (not (crap/over? high u)) (crap/over? low u))))))
 
 (def spanned-unit
   (gen/fmap (fn [[file line length crap]] {:file file :line line :last-line (+ line length) :crap crap})
