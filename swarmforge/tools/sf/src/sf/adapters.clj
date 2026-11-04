@@ -68,7 +68,7 @@
   (str/replace text
                (if (str/ends-with? path ".toml")
                  #"(?m)^model_reasoning_effort = \"[^\r\n]*\"\n"
-                 #"(?m)^(?:model|mode): [^\r\n]*\n") ""))
+                 #"(?m)^model: [^\r\n]*\n") ""))
 
 (defn- legacy-ownership [root owned]
   (into {} (for [prompt (fs/glob (fs/path (config/conf-dir) "roles") "*.md")

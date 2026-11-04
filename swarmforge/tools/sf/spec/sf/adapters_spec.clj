@@ -98,6 +98,18 @@
     (should-not (fs/exists? (fs/path *dir* ".codex/agents/specifier.toml")))
     (should-contain "model_reasoning_effort = \"low\"" (slurp (str (fs/path *dir* (nth paths 2))))))
 
+  (it "refuses a Kilo adapter whose mode was edited when ownership state is absent"
+    (adapters/adapters [])
+    (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
+    (let [path ".kilo/agent/coder.md"
+          file (fs/path *dir* path)
+          edited (str/replace (slurp (str file)) "mode: subagent" "mode: primary")]
+      (write-agent path edited)
+      (let [before (snapshot)]
+        (should= 1 (:status (captured #(adapters/adapters []))))
+        (should= before (snapshot))
+        (should= edited (slurp (str file))))))
+
   (it "refreshes stale ownership after clean checkouts and fast-forward pulls"
     (stale-checkout)
     (should= "" (git *dir* "status" "--porcelain"))
