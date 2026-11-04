@@ -98,6 +98,8 @@ done
 status=0
 (cd "$consumer" && swarmforge/bin/sf-rb crap --complexity skunk >/dev/null 2>&1) || status=$?
 assert_eq "installed sf-rb refuses an unknown complexity source" "$status" 2
+(cd "$consumer/swarmforge/tools/csharp/resources" && test -f smell.globalconfig && test -f smell.targets && test -f fsharplint.json) \
+  && pass "installed .NET code-smell configs" || fail "installed .NET code-smell configs missing"
 mkdir -p "$consumer/swarmforge/tools/sf/spec" "$consumer/.agents/skills/project"
 echo owned > "$consumer/swarmforge/tools/sf/spec/project.clj"
 echo owned > "$consumer/.agents/skills/project/SKILL.md"
