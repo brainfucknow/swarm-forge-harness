@@ -1,0 +1,39 @@
+{
+ "clones": [
+  {
+   "mass": 585,
+   "sides": [
+    {
+     "file": "lib/a.rb",
+     "line": 2,
+     "line_max": 11
+    },
+    {
+     "file": "lib/b.rb",
+     "line": 2,
+     "line_max": 11
+    },
+    {
+     "file": "lib/c.rb",
+     "line": 2,
+     "line_max": 11
+    }
+   ]
+  },
+  {
+   "mass": 34,
+   "sides": [
+    {
+     "file": "lib/d.rb",
+     "line": 2,
+     "line_max": 4
+    },
+    {
+     "file": "lib/d.rb",
+     "line": 5,
+     "line_max": 7
+    }
+   ]
+  }
+ ]
+}

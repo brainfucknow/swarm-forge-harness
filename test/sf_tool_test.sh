@@ -65,7 +65,7 @@ assert_match "fresh install validates its runtime configuration" "$(cd "$consume
 assert_match "installed init is repeatable" "$(cd "$consumer" && swarmforge/bin/sf init)" '^roles: '
 assert_eq "installed compatibility entrypoint lists the same tools" \
   "$(cd "$consumer" && swarmforge/bin/sf-tool list)" "$(cd "$consumer" && swarmforge/bin/sf tool list)"
-for wrapper in sf sf-tool sf-cs sf-fs sf-vb sf-js; do
+for wrapper in sf sf-tool sf-cs sf-fs sf-vb sf-js sf-rb; do
   (cd "$consumer" && "swarmforge/bin/$wrapper" --help >/dev/null) \
     && pass "installed $wrapper exposes help" || fail "installed $wrapper cannot load"
 done
@@ -77,7 +77,7 @@ test -f "$HERE/swarmforge/tools/sf/bb.edn" && test -d "$HERE/swarmforge/tools/ja
   && pass "installation leaves source development assets in place" || fail "source development assets changed"
 mkdir -p "$consumer/tmp/jscpd"
 cp "$HERE/swarmforge/tools/csharp/fixtures/jscpd-report.json" "$consumer/tmp/jscpd/jscpd-report.json"
-for wrapper in sf-cs sf-fs sf-vb sf-js; do
+for wrapper in sf-cs sf-fs sf-vb sf-js sf-rb; do
   (cd "$consumer" && swarmforge/bin/sf-tool ensure "$wrapper" >/dev/null)
   status=0
   out="$(cd "$consumer" && ".swarmforge/bin/$wrapper" dry --all --report-only)" || status=$?
@@ -90,6 +90,16 @@ for wrapper in sf-fs sf-vb; do
   assert_eq "installed $wrapper mutation fails explicitly" "$status" 2
 done
 test -f "$consumer/swarmforge/languages/vbnet.md" && pass "installed VB.NET guide" || fail "installed VB.NET guide missing"
+test -f "$consumer/swarmforge/languages/ruby.md" && pass "installed Ruby guide" || fail "installed Ruby guide missing"
+for resource in simplecov.rb flay_report.rb; do
+  test -f "$consumer/swarmforge/tools/ruby/resources/sfrb/$resource" \
+    && pass "installed sf-rb resource $resource" || fail "installed sf-rb resource $resource missing"
+done
+status=0
+(cd "$consumer" && swarmforge/bin/sf-rb crap --complexity skunk >/dev/null 2>&1) || status=$?
+assert_eq "installed sf-rb refuses an unknown complexity source" "$status" 2
+(cd "$consumer/swarmforge/tools/csharp/resources" && test -f smell.globalconfig && test -f smell.targets && test -f fsharplint.json) \
+  && pass "installed .NET code-smell configs" || fail "installed .NET code-smell configs missing"
 mkdir -p "$consumer/swarmforge/tools/sf/spec" "$consumer/.agents/skills/project"
 echo owned > "$consumer/swarmforge/tools/sf/spec/project.clj"
 echo owned > "$consumer/.agents/skills/project/SKILL.md"

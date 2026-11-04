@@ -39,3 +39,14 @@ jobs:
         run: |
           swarmforge/bin/sf tool ensure gherkin-parser
           bb --config swarmforge/tools/javascript/bb.edn acceptance
+      - name: Test sf-rb
+        run: bb --config swarmforge/tools/ruby/bb.edn test
+      - name: Property-test sf-rb
+        run: bb --config swarmforge/tools/ruby/bb.edn property
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@de492cf36cbab201753d720ce4f4e336cd688c94 # v1.336.0
+        with:
+          ruby-version: "3.3"
+          bundler: "4.0.18"
+      - name: End-to-end sf-rb with the real gems
+        run: bash test/sf_rb_e2e_test.sh

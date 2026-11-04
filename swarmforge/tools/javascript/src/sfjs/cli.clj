@@ -2,7 +2,6 @@
   "sf-js: JavaScript and TypeScript tool wrapper for SwarmForge roles. One
   subcommand per constitution tool."
   (:require [babashka.fs :as fs]
-            [cheshire.core :as json]
             [clojure.string :as str]
             [sfcore.command :as command]
             [sfcore.crap :as crap]
@@ -44,31 +43,21 @@ manager comes from packageManager in package.json, else from the lockfile.
 (defn- changed-for [opts]
   (git/changed-since-base opts commands/source-pathspecs))
 
-(defn- exists? [path]
-  (fs/exists? (shell/in-dir path)))
-
-(defn- read-json [path]
-  (json/parse-string (slurp (shell/in-dir path))))
-
-(defn- write-file [path content]
-  (fs/create-dirs (fs/parent (shell/in-dir path)))
-  (spit (shell/in-dir path) content))
-
 (defn- delete-file [path]
   (fs/delete-if-exists (shell/in-dir path)))
 
 (defn- read-package []
-  (when-not (exists? "package.json")
+  (when-not (shell/exists? "package.json")
     (throw (outcome/usage-error "no package.json in the current directory")))
-  (read-json "package.json"))
+  (shell/read-json "package.json"))
 
 (defn- project
   "package.json and the package manager it settles on."
   []
   (let [package (read-package)]
     {:package package
-     :manager (pkg/detect-manager package (filter exists? pkg/lockfiles))
-     :tsconfig? (exists? "tsconfig.json")}))
+     :manager (pkg/detect-manager package (filter shell/exists? pkg/lockfiles))
+     :tsconfig? (shell/exists? "tsconfig.json")}))
 
 (defn- run-tool [{:keys [manager]} tool-args]
   (let [[command & args] (pkg/exec-command manager tool-args)]
@@ -115,7 +104,7 @@ manager comes from packageManager in package.json, else from the lockfile.
     (let [status (run-tool proj (commands/coverage-args runner args))]
       (cond
         (not (zero? status)) outcome/exit-findings
-        (not (exists? commands/coverage-report))
+        (not (shell/exists? commands/coverage-report))
         (throw (outcome/usage-error (str "no " commands/coverage-report " after the coverage run")))
         :else (do (println (str "coverage written to " commands/coverage-report)) outcome/exit-ok)))))
 
@@ -123,14 +112,14 @@ manager comes from packageManager in package.json, else from the lockfile.
   "Runs ESLint's complexity rule with sf-js's own config over `files`; fails
   when ESLint could not analyze them."
   [proj files root]
-  (write-file eslint/config-path (eslint/config))
+  (shell/write-file eslint/config-path (eslint/config))
   (delete-file eslint/report-path)
   (let [status (run-tool proj (eslint/args eslint/config-path eslint/report-path files))]
     (when (= eslint/exit-failed status)
       (throw (outcome/usage-error (str "eslint exited " status))))
-    (when-not (exists? eslint/report-path)
+    (when-not (shell/exists? eslint/report-path)
       (throw (outcome/usage-error (str "eslint exited " status " without " eslint/report-path))))
-    (let [report (read-json eslint/report-path)]
+    (let [report (shell/read-json eslint/report-path)]
       (when-let [fatal (seq (eslint/fatal-messages report root))]
         (throw (outcome/usage-error (str/join "\n" (map #(str "eslint could not analyze " %) fatal)))))
       report)))
@@ -149,7 +138,7 @@ manager comes from packageManager in package.json, else from the lockfile.
   hide a function from CRAP."
   [files]
   (doseq [file (linted-sources files)
-          :when (exists? file)
+          :when (shell/exists? file)
           line (oxlint/hiding-lines (slurp (shell/in-dir file)))]
     (shell/warn "sf-js" (str file ":" line " has an oxlint-disable directive that can hide a function from CRAP"))))
 
@@ -158,8 +147,8 @@ manager comes from packageManager in package.json, else from the lockfile.
   oxlint's stdout goes to stderr when it is not a report. Fails when oxlint
   could not analyze them."
   [proj files root]
-  (write-file oxlint/config-path (oxlint/config))
-  (write-file oxlint/ignore-path "")
+  (shell/write-file oxlint/config-path (oxlint/config))
+  (shell/write-file oxlint/ignore-path "")
   (let [{:keys [exit out]} (capture-tool proj (oxlint/args oxlint/config-path files))
         parsed (oxlint/report out)]
     (when-not parsed
@@ -181,16 +170,16 @@ manager comes from packageManager in package.json, else from the lockfile.
 (defn- cmd-crap [{:keys [opts]}]
   (let [dir (or (:report opts) commands/coverage-dir)
         coverage (str (fs/path dir commands/coverage-file))]
-    (when-not (exists? coverage)
+    (when-not (shell/exists? coverage)
       (throw (outcome/usage-error (str "no " commands/coverage-file " under " dir "; run sf-js coverage first"))))
     (let [proj (project)
           root (git/repo-root)
           changed (changed-for opts)
           files (if changed (commands/production-sources (keys changed)) ["."])
           functions (if (seq files)
-                      (jscrap/score (complexity proj files root) (read-json coverage) root)
+                      (jscrap/score (complexity proj files root) (shell/read-json coverage) root)
                       [])]
-      (shell/emit (crap/review (jscrap/select functions changed) crap/format-row "function" changed)))))
+      (shell/emit (crap/review crap/crap-limit (crap/select functions changed) crap/format-row "function" changed)))))
 
 (defn- cmd-dry [{:keys [opts]}]
   (when-not (:report-only opts)
@@ -198,11 +187,11 @@ manager comes from packageManager in package.json, else from the lockfile.
     (delete-file commands/jscpd-report)
     (let [[command & args] (commands/jscpd-args (or (:min-tokens opts) 50))
           status (shell/run command args)]
-      (when (and (not (zero? status)) (not (exists? commands/jscpd-report)))
+      (when (and (not (zero? status)) (not (shell/exists? commands/jscpd-report)))
         (throw (outcome/usage-error (str "jscpd exited " status " without " commands/jscpd-report))))))
-  (when-not (exists? commands/jscpd-report)
+  (when-not (shell/exists? commands/jscpd-report)
     (throw (outcome/usage-error (str commands/jscpd-report " not found"))))
-  (let [clones (jscpd/parse-clones (read-json commands/jscpd-report))
+  (let [clones (jscpd/parse-clones (shell/read-json commands/jscpd-report))
         changed (changed-for opts)]
     (shell/emit (jscpd/review clones changed (when changed (git/repo-root))))))
 
@@ -222,11 +211,11 @@ manager comes from packageManager in package.json, else from the lockfile.
     (if (and files (empty? files))
       (do (println "no changed source files to mutate") false)
       (do
-        (write-file mutate/config-path (mutate/stryker-config))
+        (shell/write-file mutate/config-path (mutate/stryker-config))
         (delete-file mutate/report-path)
         (let [status (run-tool proj (mutate/stryker-args {:runner runner :tsconfig? tsconfig?
                                                            :files files :extra extra}))]
-          (when-not (exists? mutate/report-path)
+          (when-not (shell/exists? mutate/report-path)
             (throw (outcome/usage-error (str "stryker exited " status " without " mutate/report-path)))))
         true))))
 
@@ -235,9 +224,9 @@ manager comes from packageManager in package.json, else from the lockfile.
     (if (and (not (:report-only opts)) (not (run-stryker files extra)))
       outcome/exit-ok
       (do
-        (when-not (exists? mutate/report-path)
+        (when-not (shell/exists? mutate/report-path)
           (throw (outcome/usage-error (str mutate/report-path " not found"))))
-        (let [mutants (stryker/parse-mutants (read-json mutate/report-path))]
+        (let [mutants (stryker/parse-mutants (shell/read-json mutate/report-path))]
           (shell/emit (stryker/review (mutate/in-scope mutants files (when files (git/repo-root))))))))))
 
 (def ^:private commands

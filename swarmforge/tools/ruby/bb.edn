@@ -1,0 +1,12 @@
+{:paths ["src" "resources" "test" "property" "../core/src" "../core/property"]
+ :tasks
+ {test {:doc "Run the sf-rb unit tests"
+        :task (let [namespaces '[sfrb.commands-test sfrb.rubocop-test sfrb.flog-test sfrb.crap-test sfrb.flay-test sfrb.mutant-test sfrb.cli-test]]
+                (apply require 'clojure.test namespaces)
+                (let [{:keys [fail error]} (apply clojure.test/run-tests namespaces)]
+                  (System/exit (+ fail error))))}
+  property {:doc "Run the sf-rb property tests"
+            :task (let [namespaces '[sfrb.sfrb-property]]
+                    (apply require 'clojure.test namespaces)
+                    (let [{:keys [fail error]} (apply clojure.test/run-tests namespaces)]
+                      (System/exit (+ fail error))))}}}

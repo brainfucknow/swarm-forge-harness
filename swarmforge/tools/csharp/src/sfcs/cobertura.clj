@@ -86,7 +86,7 @@
         line
         (recur (dec line))))))
 
-(defn format-method [{:keys [class-name signature-line first-line name] :as method}]
-  (crap/format-row (assoc method
+(defn format-method [limit {:keys [class-name signature-line first-line name] :as method}]
+  (crap/format-row limit (assoc method
                           :line (or signature-line first-line)
                           :name (str (last (str/split class-name #"\.")) "." name))))
