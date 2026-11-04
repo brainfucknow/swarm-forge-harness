@@ -1,7 +1,6 @@
 (ns sfcs.cli
   "Shared .NET tool wrapper for SwarmForge roles."
   (:require [babashka.fs :as fs]
-            [cheshire.core :as json]
             [clojure.string :as str]
             [sfcore.changes :as changes]
             [sfcore.command :as command]
@@ -53,12 +52,6 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
 (defn- changed-for [opts]
   (git/changed-since-base opts [(str "*" (:extension *language*))]))
 
-(defn- exists? [path]
-  (fs/exists? (shell/in-dir path)))
-
-(defn- read-json [path]
-  (json/parse-string (slurp (shell/in-dir path))))
-
 (defn- require-tool-run [command args]
   (let [status (shell/run command args)]
     (when-not (zero? status)
@@ -70,9 +63,9 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
       (throw (outcome/usage-error (str "missing on PATH: " (str/join ", " missing))))))
   (when-not (:no-mutation *language*)
     (let [manifest (str (fs/path ".config" "dotnet-tools.json"))]
-      (when-not (exists? manifest)
+      (when-not (shell/exists? manifest)
         (require-tool-run "dotnet" ["new" "tool-manifest"]))
-      (when-not (get-in (read-json manifest) ["tools" "dotnet-stryker"])
+      (when-not (get-in (shell/read-json manifest) ["tools" "dotnet-stryker"])
         (require-tool-run "dotnet" ["tool" "install" "dotnet-stryker"]))
       (require-tool-run "dotnet" ["tool" "restore"])))
   (shell/run "npx" ["--yes" "jscpd@4" "--version"]))
@@ -215,7 +208,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
           selected (->> methods
                         (keep (partial select-method root changed read-source))
                         (sort-by (juxt (comp - :crap) :file :first-line)))]
-      (shell/emit (crap/review selected cob/format-method "method" changed)))))
+      (shell/emit (crap/review crap/crap-limit selected cob/format-method "method" changed)))))
 
 (defn- cmd-dry [{:keys [opts]}]
   (let [report-path (str (fs/path jscpd-dir "jscpd-report.json"))
@@ -230,9 +223,9 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
                                                 "--ignore" "**/bin/**,**/obj/**,**/*.g.cs,**/*.Designer.cs,**/*.Designer.vb,**/Migrations/**,**/tmp/**"
                                                 "."])))))]
     (cond
-      (and (not (zero? status)) (not (exists? report-path))) status
-      (not (exists? report-path)) (throw (outcome/usage-error (str report-path " not found")))
-      :else (let [clones (jscpd/parse-clones (read-json report-path))
+      (and (not (zero? status)) (not (shell/exists? report-path))) status
+      (not (shell/exists? report-path)) (throw (outcome/usage-error (str report-path " not found")))
+      :else (let [clones (jscpd/parse-clones (shell/read-json report-path))
                   changed (changed-for opts)]
               (shell/emit (jscpd/review clones changed (when changed (git/repo-root))))))))
 
@@ -249,9 +242,9 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
                                         (not (:all opts)) (conj (str "--since:" (git/base-ref opts))))
                                       extra))))]
     (cond
-      (and (not (zero? status)) (not (exists? report-path))) status
-      (not (exists? report-path)) (throw (outcome/usage-error (str report-path " not found")))
-      :else (shell/emit (stryker/review (stryker/parse-mutants (read-json report-path)))))))
+      (and (not (zero? status)) (not (shell/exists? report-path))) status
+      (not (shell/exists? report-path)) (throw (outcome/usage-error (str report-path " not found")))
+      :else (shell/emit (stryker/review (stryker/parse-mutants (shell/read-json report-path)))))))
 
 (def ^:private commands
   {"tools" cmd-tools "test" cmd-test "property" cmd-property "coverage" cmd-coverage

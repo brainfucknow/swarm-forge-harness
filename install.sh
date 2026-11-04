@@ -32,7 +32,7 @@ for module in "$HERE"/swarmforge/tools/*; do
     fi
   done
 done
-for module in csharp javascript; do
+for module in csharp javascript ruby; do
   cp "$HERE/swarmforge/tools/$module/bb.edn" "$target/swarmforge/tools/$module/bb.edn"
 done
 copy_tree "$HERE/.claude/skills" "$target/.claude/skills"
