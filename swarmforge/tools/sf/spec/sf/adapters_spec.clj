@@ -5,7 +5,7 @@
             [clojure.string :as str]
             [sf.repo-support :refer [*dir* with-repo write-conf! captured git]]))
 
-(def paths [".claude/agents/coder.md" ".github/agents/coder.agent.md" ".codex/agents/coder.toml"])
+(def paths [".claude/agents/coder.md" ".github/agents/coder.agent.md" ".codex/agents/coder.toml" ".kilo/agent/coder.md"])
 
 (defn write-agent [path text]
   (let [file (fs/path *dir* path)]
@@ -13,7 +13,7 @@
     (spit (str file) text)))
 
 (defn snapshot []
-  (into {} (for [dir [".claude/agents" ".github/agents" ".codex/agents"]
+  (into {} (for [dir [".claude/agents" ".github/agents" ".codex/agents" ".kilo/agent"]
                  file (fs/glob (fs/path *dir* dir) "*")]
              [(str file) (slurp (str file))])))
 
@@ -33,12 +33,12 @@
   (around [it] (with-repo (fn [] (it))))
 
   (it "preserves unrelated agents in every shared directory"
-    (doseq [path [".claude/agents/specialist.md" ".github/agents/specialist.agent.md" ".codex/agents/specialist.toml"]]
+    (doseq [path [".claude/agents/specialist.md" ".github/agents/specialist.agent.md" ".codex/agents/specialist.toml" ".kilo/agent/specialist.md"]]
       (write-agent path "project-owned bytes\n"))
     (adapters/adapters [])
     (doseq [file (filter #(re-find #"specialist" (str %)) (keys (snapshot)))]
       (should= "project-owned bytes\n" (slurp file)))
-    (should= 12 (count (snapshot))))
+    (should= 16 (count (snapshot))))
 
   (it "generates optional reviewers through the same provider tier mappings"
     (write-conf! *dir* "roles.conf" "coder strong subagent\nsecurity-reviewer strong subagent optional\n")
@@ -47,11 +47,20 @@
     (adapters/adapters [])
     (doseq [[path model] [[".claude/agents/security-reviewer.md" "model: opus"]
                           [".github/agents/security-reviewer.agent.md" "model: gpt-5"]
-                          [".codex/agents/security-reviewer.toml" "model_reasoning_effort = \"medium\""]]]
+                          [".codex/agents/security-reviewer.toml" "model_reasoning_effort = \"medium\""]
+                          [".kilo/agent/security-reviewer.md" "model: kilo/strong-model"]]]
       (should-contain model (slurp (str (fs/path *dir* path)))))
     (let [before (snapshot)]
       (adapters/adapters [])
       (should= before (snapshot))))
+
+  (it "omits the Kilo model when the tier inherits the session model"
+    (write-conf! *dir* "tiers.conf" "frontier inherit high gpt inherit\nstrong opus medium gpt-5 inherit\nfast sonnet low gpt-mini inherit\n")
+    (adapters/adapters [])
+    (doseq [role ["specifier" "coder" "cleaner"]]
+      (let [text (slurp (str (fs/path *dir* ".kilo/agent" (str role ".md"))))]
+        (should-contain "mode: subagent" text)
+        (should-not-contain "model:" text))))
 
   (it "refuses an unowned collision before writing any harness"
     (write-agent ".codex/agents/coder.toml" "project-owned")
@@ -87,7 +96,7 @@
     (write-conf! *dir* "roles.conf" "specifier frontier session\ncoder fast subagent\ncleaner fast subagent\n")
     (should= 0 (:status (captured #(adapters/adapters []))))
     (should-not (fs/exists? (fs/path *dir* ".codex/agents/specifier.toml")))
-    (should-contain "model_reasoning_effort = \"low\"" (slurp (str (fs/path *dir* (last paths))))))
+    (should-contain "model_reasoning_effort = \"low\"" (slurp (str (fs/path *dir* (nth paths 2))))))
 
   (it "refreshes stale ownership after clean checkouts and fast-forward pulls"
     (stale-checkout)
@@ -115,7 +124,7 @@
       (with-repo
         (fn []
           (stale-checkout)
-          (let [path (last paths)
+          (let [path (nth paths 2)
                 original (slurp (str (fs/path *dir* path)))]
             (write-agent path (change original))
             (let [before (snapshot)]
@@ -124,7 +133,7 @@
 
   (it "refuses staged edits even when the working file equals its clean canonical version"
     (stale-checkout)
-    (let [path (last paths)
+    (let [path (nth paths 2)
           canonical (slurp (str (fs/path *dir* path)))]
       (write-agent path (str/replace canonical "model_reasoning_effort = \"medium\"" "model_reasoning_effort = \"low\""))
       (git *dir* "add" path)
@@ -135,8 +144,8 @@
 
   (it "does not claim an unknown tracked file when ownership is stale"
     (stale-checkout)
-    (write-agent (last paths) "project agent instructions")
-    (git *dir* "add" (last paths))
+    (write-agent (nth paths 2) "project agent instructions")
+    (git *dir* "add" (nth paths 2))
     (git *dir* "commit" "-q" "-m" "Install project agent")
     (let [before (snapshot)]
       (should= 1 (:status (captured #(adapters/adapters []))))
@@ -144,7 +153,7 @@
 
   (it "does not claim an untracked canonical-looking file through stale ownership"
     (stale-checkout)
-    (let [path (last paths)
+    (let [path (nth paths 2)
           canonical (slurp (str (fs/path *dir* path)))]
       (git *dir* "rm" "-q" path)
       (git *dir* "commit" "-q" "-m" "Remove old adapter")
@@ -166,14 +175,14 @@
     (write-conf! *dir* "tiers.conf" "frontier inherit high gpt\nstrong ultra high new-model\nfast sonnet low gpt-mini\n")
     (should= 0 (:status (captured #(adapters/adapters []))))
     (should-contain "model: ultra" (slurp (str (fs/path *dir* (first paths)))))
-    (should-contain "model_reasoning_effort = \"high\"" (slurp (str (fs/path *dir* (last paths))))))
+    (should-contain "model_reasoning_effort = \"high\"" (slurp (str (fs/path *dir* (nth paths 2))))))
 
   (it "preserves symbolic links at adapter targets"
     (write-agent "project-agent" "keep")
     (fs/create-dirs (fs/path *dir* ".codex/agents"))
-    (fs/create-sym-link (fs/path *dir* (last paths)) (fs/path *dir* "project-agent"))
+    (fs/create-sym-link (fs/path *dir* (nth paths 2)) (fs/path *dir* "project-agent"))
     (should= 1 (:status (captured #(adapters/adapters []))))
-    (should (fs/sym-link? (fs/path *dir* (last paths))))
+    (should (fs/sym-link? (fs/path *dir* (nth paths 2))))
     (should= "keep" (slurp (str (fs/path *dir* "project-agent")))))
 
   (it "refuses symbolic links in the shared agent directories"

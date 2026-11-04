@@ -7,7 +7,7 @@
             [sf.shell :as shell]))
 
 (def ^:private targets
-  [".claude/agents" ".github/agents" ".codex/agents"])
+  [".claude/agents" ".github/agents" ".codex/agents" ".kilo/agent"])
 
 (defn- role-summary
   "The first non-blank line after the title of the role prompt."
@@ -15,6 +15,11 @@
   (let [file (fs/path (config/conf-dir) "roles" (str role ".md"))]
     (when-not (fs/exists? file) (shell/die "missing role prompt " file))
     (first (remove str/blank? (rest (str/split-lines (slurp (str file))))))))
+
+(defn- kilo-model [tier]
+  (let [model (config/tier-field tier 5)]
+    (when (and model (not= "inherit" model))
+      (str "model: " model "\n"))))
 
 (defn- agent-files [role tier]
   (let [body (str/replace (shell/template "adapter.md") "{{role}}" role)
@@ -29,7 +34,11 @@
 
      (str ".codex/agents/" role ".toml")
      (str "name = \"" role "\"\ndescription = \"" description "\"\nmodel_reasoning_effort = \""
-          (config/tier-field tier 3) "\"\ndeveloper_instructions = \"\"\"\n" body "\"\"\"\n")}))
+          (config/tier-field tier 3) "\"\ndeveloper_instructions = \"\"\"\n" body "\"\"\"\n")
+
+     (str ".kilo/agent/" role ".md")
+     (str "---\ndescription: " description "\nmode: subagent\n" (kilo-model tier)
+          "---\n\n" body)}))
 
 (defn- digest [text]
   (let [bytes (.digest (java.security.MessageDigest/getInstance "SHA-256")
@@ -38,7 +47,7 @@
 
 (defn- adapter-path? [path]
   (boolean (and (string? path)
-                (re-matches #"\.(?:claude/agents/[a-z][a-z0-9-]*\.md|github/agents/[a-z][a-z0-9-]*\.agent\.md|codex/agents/[a-z][a-z0-9-]*\.toml)" path))))
+                (re-matches #"\.(?:claude/agents/[a-z][a-z0-9-]*\.md|github/agents/[a-z][a-z0-9-]*\.agent\.md|codex/agents/[a-z][a-z0-9-]*\.toml|kilo/agent/[a-z][a-z0-9-]*\.md)" path))))
 
 (defn- read-ownership [file]
   (when (or (fs/sym-link? file) (fs/sym-link? (fs/parent file)))
@@ -56,10 +65,10 @@
       owned)))
 
 (defn- legacy-shape [path text]
-  (str/replace-first text
-                     (if (str/ends-with? path ".toml")
-                       #"(?m)^model_reasoning_effort = \"[^\r\n]*\"\n"
-                       #"(?m)^model: [^\r\n]*\n") ""))
+  (str/replace text
+               (if (str/ends-with? path ".toml")
+                 #"(?m)^model_reasoning_effort = \"[^\r\n]*\"\n"
+                 #"(?m)^(?:model|mode): [^\r\n]*\n") ""))
 
 (defn- legacy-ownership [root owned]
   (into {} (for [prompt (fs/glob (fs/path (config/conf-dir) "roles") "*.md")

@@ -1,15 +1,15 @@
 # swarm-forge-harness
 
 A harness-integrated [SwarmForge](https://github.com/brainfucknow/swarm-forge).
-Run its roles in Claude Code, Codex, or Copilot CLI. Roles pass work through
-Git task branches; the operator handles questions and approvals in chat.
+Run its roles in Kilo, Claude Code, Codex, or Copilot CLI. Roles pass work
+through Git task branches; the operator handles questions and approvals in chat.
 
 ## Prerequisites
 
 - `git`, and `bash` for `install.sh`, the commit-msg hook, and the tool wrappers
 - [Babashka](https://babashka.org) (`bb`) for `sf`, the C#, F#, VB.NET and JavaScript
   tool wrappers, and the Clojure constitution tools
-- One of Claude Code, Codex CLI, or Copilot CLI
+- One of Kilo, Claude Code, Codex CLI, or Copilot CLI
 
 ## Install into a project
 
@@ -56,6 +56,7 @@ and sharing rules.
 
 | Harness | Session entry | Subagent roles | Model tier |
 |---|---|---|---|
+| Kilo | `/swarm` from `.kilo/command/` | `.kilo/agent/<role>.md` | `model:` `provider/model`, or the session model when `inherit` |
 | Claude Code | `/swarm` from `.claude/skills/swarm/` | `.claude/agents/<role>.md` | `model: opus` or `sonnet` |
 | Codex CLI | `$swarm` from `.agents/skills/swarm/` | `.codex/agents/<role>.toml` | `model_reasoning_effort` high / medium / low |
 | Copilot CLI | `/swarm` from `.agents/skills/swarm/` | `.github/agents/<role>.agent.md` | `model: gpt-6.1-sol` or `gpt-6.1-terra` |

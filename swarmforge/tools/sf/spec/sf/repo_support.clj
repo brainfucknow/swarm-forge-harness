@@ -9,7 +9,7 @@
 
 (def default-conf
   {"roles.conf" "specifier frontier subagent\ncoder strong subagent audit\ncleaner fast subagent\n"
-   "tiers.conf" "frontier inherit high gpt\nstrong opus medium gpt-5\nfast sonnet low gpt-mini\n"
+   "tiers.conf" "frontier inherit high gpt kilo/frontier-model\nstrong opus medium gpt-5 kilo/strong-model\nfast sonnet low gpt-mini kilo/fast-model\n"
    "routes.conf" "feature specifier,coder,cleaner\nquick coder\n"
    "tools.conf" ""})
 

@@ -13,16 +13,18 @@ Feature: sf adapters preserve project agents
     When I run "<command>" in the scratch project
     Then the exit status is 0
     And "<path>" still contains exactly "<contents>"
-    And adapters exist for the configured subagent roles in all three harnesses
+    And adapters exist for the configured subagent roles in all four harnesses
 
     Examples:
       | command     | path                                      | contents          |
       | sf adapters | .claude/agents/project-specialist.md       | project specialist |
       | sf adapters | .github/agents/project-specialist.agent.md | repository reviewer |
       | sf adapters | .codex/agents/project-specialist.toml      | custom specialist |
+      | sf adapters | .kilo/agent/project-specialist.md          | project specialist |
       | install.sh  | .claude/agents/project-specialist.md       | project specialist |
       | install.sh  | .github/agents/project-specialist.agent.md | repository reviewer |
       | install.sh  | .codex/agents/project-specialist.toml      | custom specialist |
+      | install.sh  | .kilo/agent/project-specialist.md          | project specialist |
 
   # sf adapters preserve project agents 2
   Scenario: sf adapters preserve project agents 2: managed adapters follow configuration changes
@@ -44,16 +46,18 @@ Feature: sf adapters preserve project agents
     When I run "<command>" in the scratch project
     Then the exit status is 1
     And the error output identifies "<path>" as a conflicting project agent
-    And no file in the three harness agent directories was created, changed or removed
+    And no file in the four harness agent directories was created, changed or removed
 
     Examples:
       | command     | path                                | contents        |
       | sf adapters | .claude/agents/specialist.md         | project owner   |
       | sf adapters | .github/agents/specialist.agent.md   | private reviewer |
       | sf adapters | .codex/agents/specialist.toml        | local specialist |
+      | sf adapters | .kilo/agent/specialist.md            | project owner   |
       | install.sh  | .claude/agents/specifier.md          | project owner   |
       | install.sh  | .github/agents/specifier.agent.md    | private reviewer |
       | install.sh  | .codex/agents/specifier.toml         | local specialist |
+      | install.sh  | .kilo/agent/specifier.md             | project owner   |
 
   # sf adapters preserve project agents 4
   Scenario: sf adapters preserve project agents 4: existing generated adapters remain updatable without local ownership state
@@ -61,5 +65,5 @@ Feature: sf adapters preserve project agents
     And no local adapter ownership state is present
     When I run "sf adapters" in the scratch project
     Then the exit status is 0
-    And adapters exist for the configured subagent roles in all three harnesses
+    And adapters exist for the configured subagent roles in all four harnesses
     And a second "sf adapters" run succeeds without changing agent files
