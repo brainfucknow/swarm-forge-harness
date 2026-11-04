@@ -59,3 +59,13 @@ Acceptance Pipeline Specification tools and the project's runtime/handlers.
   `Security code scanner absent: <reason>` to `project.md`.
 - Dependency audit: as in [csharp.md](csharp.md#security-scanners), restore
   included, with `*.fsproj` in place of `*.csproj` among the dependency files.
+
+## Code-smell check
+
+FSharpLint 0.27.0 (MIT) with only the size and nesting rules in
+`swarmforge/tools/csharp/resources/fsharplint.json`, installed under `./tmp`
+(needs nuget.org) and run on the enclosing project or solution:
+`mkdir -p tmp && { [ -x tmp/fsharplint/dotnet-fsharplint ] || dotnet tool install dotnet-fsharplint --version 0.27.0 --tool-path tmp/fsharplint; }`
+`tmp/fsharplint/dotnet-fsharplint lint --format msbuild --lint-config swarmforge/tools/csharp/resources/fsharplint.json <project> > tmp/fsharplint.log`
+It exits non-zero on any warning, so read the log, keeping only warnings in
+changed `.fs` files. A "Lint failed" line leaves that file Not-tested.

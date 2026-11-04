@@ -38,3 +38,7 @@ Acceptance Pipeline Specification tools and the project's runtime/handlers.
 
 As in [csharp.md](csharp.md#security-scanners), reading warnings in changed
 `.vb` files, with `*.vbproj` in place of `*.csproj` among the dependency files.
+
+## Code-smell check
+
+As in [csharp.md](csharp.md#code-smell-check), reading changed `.vb` files.
