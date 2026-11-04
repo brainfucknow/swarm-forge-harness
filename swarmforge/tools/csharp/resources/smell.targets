@@ -1,0 +1,5 @@
+<Project>
+  <ItemGroup>
+    <EditorConfigFiles Include="$(MSBuildThisFileDirectory)smell.globalconfig" />
+  </ItemGroup>
+</Project>
