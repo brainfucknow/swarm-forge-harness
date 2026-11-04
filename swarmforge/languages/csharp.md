@@ -65,6 +65,16 @@ means no test reaches the line.
   (`dotnet package list ...` on .NET 10+). It needs the NuGet feeds. Read its
   output, not only its exit status.
 
+## Code-smell check
+
+The SDK's CA1501 (inheritance depth over 5), CA1505 (maintainability index
+under 10) and CA1506 (class coupling over 95 per type, 40 per member) are off
+by default; `swarmforge/tools/csharp/resources/smell.targets` turns them on
+without changing the project. Build the enclosing project or solution:
+`mkdir -p tmp && dotnet build <project> --no-incremental -p:CustomAfterMicrosoftCommonTargets="$PWD/swarmforge/tools/csharp/resources/smell.targets" > tmp/smell-build.log`
+Read only CA1501, CA1505 and CA1506 lines in changed `.cs` files; a project
+that treats warnings as errors reports them as errors.
+
 ## Conventions the tools rely on
 
 - Test projects reference `coverlet.collector` so `--collect "XPlat Code Coverage"` works.
