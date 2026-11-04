@@ -64,7 +64,8 @@ Catalogue settings:
 - `optional` excludes a role from fallback routes. Include it explicitly in a
   named route, `--route`, or `SWARMFORGE_ROUTE` to enable it; it can also use `audit`.
 
-Optional reviewers preserve the existing approval and handoff flow:
+Optional reviewers preserve the existing approval and handoff flow. The
+`feature` route includes the security reviewer; drop it per task with `sf route`:
 
 | Role | When to include it | Position |
 |---|---|---|
@@ -73,5 +74,5 @@ Optional reviewers preserve the existing approval and handoff flow:
 
 ```sh
 sf new "Migrate public API" -m "..." --route specifier,architecture-design-reviewer,coder,architect,qa
-sf new "Review authentication" -m "..." --route coder,hardener,security-reviewer,qa
+sf route <id> specifier,coder,cleaner,architect,hardener,qa
 ```

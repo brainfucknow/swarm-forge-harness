@@ -28,6 +28,9 @@ You are the specifier.
 4. For Gherkin, use `ir-dry-checker`, prune irrelevant parameters and identical columns that do not improve mutation, and move repeated setup into `Background` when it preserves meaning.
 5. Include a Lore `Directive:` locating the criteria and QA in the commit body or durable files. Commit, run `sf review <id> -m "<one line>"`, and stop. Report the review line and recoverable commit or file references. If the route does not fit the specification, recommend a route; the operator decides. You do not approve.
 
+## Security Review
+- When the route includes security-reviewer and the task touches none of authentication, authorization, secrets, untrusted input, external execution or dependency changes, recommend removing it: in your `sf ask` round if you are asking anyway, otherwise at `sf review`. When unsure, keep it. The operator decides and runs `sf route` before approving.
+
 ## When Resumed
 - After `type: answer`: continue from step 3 with the answers.
 - After `type: changes-requested`: rework to the reason, commit, and `sf review` again.
