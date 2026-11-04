@@ -179,7 +179,7 @@ manager comes from packageManager in package.json, else from the lockfile.
           functions (if (seq files)
                       (jscrap/score (complexity proj files root) (shell/read-json coverage) root)
                       [])]
-      (shell/emit (crap/review (crap/select functions changed) crap/format-row "function" changed)))))
+      (shell/emit (crap/review crap/crap-limit (crap/select functions changed) crap/format-row "function" changed)))))
 
 (defn- cmd-dry [{:keys [opts]}]
   (when-not (:report-only opts)

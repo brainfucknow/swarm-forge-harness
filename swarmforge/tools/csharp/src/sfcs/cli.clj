@@ -208,7 +208,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
           selected (->> methods
                         (keep (partial select-method root changed read-source))
                         (sort-by (juxt (comp - :crap) :file :first-line)))]
-      (shell/emit (crap/review selected cob/format-method "method" changed)))))
+      (shell/emit (crap/review crap/crap-limit selected cob/format-method "method" changed)))))
 
 (defn- cmd-dry [{:keys [opts]}]
   (let [report-path (str (fs/path jscpd-dir "jscpd-report.json"))

@@ -25,7 +25,7 @@ bundle add brakeman --version 8.1.0 --group "development,test"      # optional
 | `bundle exec rspec --exclude-pattern '**/*_property_spec.rb'` | Unit and acceptance tests. |
 | `bundle exec rspec --pattern 'spec/**/*_property_spec.rb'` | Property tests (`*_property_spec.rb`; pbt suggested). |
 | `coverage [rspec args]` | Tests without property specs, with SimpleCov JSON in `tmp/coverage/`. sf-rb starts SimpleCov itself; do not start it in `spec_helper.rb`. Exit status is rspec's. |
-| `crap [--complexity cyclomatic\|perceived\|flog] [--all] [--base REF] [--report DIR]` | CRAP per changed method from `tmp/coverage/`; fails above 10. Complexity comes from RuboCop `Metrics/CyclomaticComplexity` (default), RuboCop `Metrics/PerceivedComplexity`, or flog's score. |
+| `crap [--complexity cyclomatic\|perceived\|flog] [--all] [--base REF] [--report DIR]` | CRAP per changed method from `tmp/coverage/`; fails above 10, or above 20 with `flog`. Complexity comes from RuboCop `Metrics/CyclomaticComplexity` (default), RuboCop `Metrics/PerceivedComplexity`, or flog's score. |
 | `dry [--tool jscpd\|flay] [--all] [--base REF] [--min-tokens N] [--mass N] [--report-only]` | Clones touching changed lines. jscpd (default) counts tokens; flay reports structural mass (`--mass`, default 16). |
 | `mutate [--base REF] [--all] [-- mutant args]` | `mutant run --jobs 4 --since <merge base>` without property specs; exit 1 on alive mutants. |
 

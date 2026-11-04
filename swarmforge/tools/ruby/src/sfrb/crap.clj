@@ -3,6 +3,11 @@
   (:require [sfcore.changes :as changes]
             [sfcore.crap :as crap]))
 
+(def limits
+  "The CRAP limit per complexity source; flog's ABC score runs higher than a
+  cyclomatic count."
+  {"cyclomatic" crap/crap-limit "perceived" crap/crap-limit "flog" 20})
+
 (defn- nested-in? [outer inner]
   (and (not= outer inner)
        (<= (:line outer) (:line inner))

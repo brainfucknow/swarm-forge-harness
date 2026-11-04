@@ -48,16 +48,15 @@ assert_status "coverage runs the unit specs, not the property specs" "$status" 0
 assert_match "coverage reports where it wrote" "$out" "coverage written to tmp/coverage/coverage.json"
 test -s tmp/coverage/coverage.json && pass "SimpleCov JSON exists" || fail "SimpleCov JSON missing"
 
-# flog's ABC score runs higher than the cyclomatic count: the two long
-# shipping methods pass the limit of 10 under flog only.
+# The two long shipping methods score 19 under flog, inside its limit of 20.
 for complexity in cyclomatic perceived flog; do
-  expected=0; [ "$complexity" = flog ] && expected=1
   run "$SF_RB" crap --complexity "$complexity"
-  assert_status "crap --complexity $complexity" "$status" "$expected"
+  assert_status "crap --complexity $complexity" "$status" 0
   for method in letter passing light_cost heavy_cost; do
     assert_match "crap --complexity $complexity scores $method" "$out" "$method"
   done
 done
+assert_match "crap --complexity flog names its limit" "$out" "over CRAP 20"
 
 for tool in jscpd flay; do
   run "$SF_RB" dry --tool "$tool"

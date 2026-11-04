@@ -24,7 +24,8 @@
 
   coverage [rspec args]       rspec without *_property_spec.rb; SimpleCov JSON in " commands/coverage-dir "/
   crap [--complexity cyclomatic|perceived|flog] [--all] [--base REF] [--report DIR]
-                              CRAP per changed method (default cyclomatic); exit 1 over " crap/crap-limit "
+                              CRAP per changed method (default cyclomatic);
+                              exit 1 over " crap/crap-limit ", or over " (rbcrap/limits "flog") " with flog
   dry [--tool jscpd|flay] [--all] [--base REF] [--min-tokens N] [--mass N] [--report-only]
                               clones touching changed lines (default jscpd); exit 1 if any
   mutate [--base REF] [--all] [-- mutant args]
@@ -103,7 +104,7 @@ bundle exec. --base defaults to SWARMFORGE_BASE, main, or master."))
 
 (defn- complexity-source [opts]
   (let [source (or (:complexity opts) "cyclomatic")]
-    (when-not (or (rubocop/cops source) (= "flog" source))
+    (when-not (rbcrap/limits source)
       (throw (outcome/usage-error (str "unknown --complexity '" source "'; use cyclomatic, perceived or flog"))))
     source))
 
@@ -123,7 +124,7 @@ bundle exec. --base defaults to SWARMFORGE_BASE, main, or master."))
           changed (changed-for opts)
           files (commands/production-sources (if changed (keys changed) (known-ruby-files)))
           scored (rbcrap/score (methods-of source files root) (shell/read-json coverage) root)]
-      (shell/emit (crap/review (crap/select scored changed) crap/format-row "method" changed)))))
+      (shell/emit (crap/review (rbcrap/limits source) (crap/select scored changed) crap/format-row "method" changed)))))
 
 (def ^:private dry-tools
   {"jscpd" {:report commands/jscpd-report :parse jscpd/parse-clones}

@@ -60,7 +60,7 @@
 - Before handoff, confirm the relevant local verification evidence is current for the affected targets.
 
 ## Source Quality Gates
-- CRAP must be 10 or below for the targets the role owns. A single `cond` or `case` answering one question may stay above 10. Split nested or mixed-duty functions over 10; extracts must own their inputs, not take booleans the caller already knew.
+- CRAP must be 10 or below for the targets the role owns (20 for Ruby's `sf-rb crap --complexity flog`, whose ABC score runs higher). A single `cond` or `case` answering one question may stay above 10. Split nested or mixed-duty functions over 10; extracts must own their inputs, not take booleans the caller already knew.
 - Scan changed and new files with the mutation tool's scan/count mode as a hint of mixed responsibilities. Without that mode, use the wrapper's CRAP complexity column as described in its language guide. Split multi-job files, not one-job files merely to lower site counts.
 - Preserve project manifests through splits. Move mutation cache files to match moved source paths under `.metrics/`; never hand-edit them or commit the cache.
 

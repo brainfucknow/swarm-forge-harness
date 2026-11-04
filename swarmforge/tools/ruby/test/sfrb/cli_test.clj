@@ -86,6 +86,7 @@
 
 (deftest help-and-unknown-commands
   (is (str/starts-with? (:out (run-sf-rb ok)) "usage: sf-rb"))
+  (is (str/includes? (:out (run-sf-rb ok)) "exit 1 over 10, or over 20 with flog"))
   (is (str/starts-with? (:out (run-sf-rb ok "crap" "--help")) "usage: sf-rb"))
   (is (str/includes? (usage-failure ok "frobnicate") "unknown command 'frobnicate'")))
 
@@ -150,7 +151,20 @@
     (let [{:keys [status out calls]} (run-sf-rb analyser "crap" "--complexity" "flog")]
       (is (= 1 status))
       (is (= ["bundle exec flog -a -- lib/ledger.rb"] calls))
-      (is (str/starts-with? out "OVER crap   20.8  cc 15.3  cov  71%  lib/ledger.rb:6 Ledger#balance")))))
+      (is (str/starts-with? out "OVER crap   20.8  cc 15.3  cov  71%  lib/ledger.rb:6 Ledger#balance"))
+      (is (str/ends-with? out "1 changed method(s), 1 over CRAP 20\n")))))
+
+(deftest crap-with-flog-fails-only-above-20
+  (with-coverage!)
+  (change-balance!)
+  (let [flog-12 (fn [line] (if (str/includes? line "flog")
+                             {:exit 0 :out (str/replace (fixture "flog.txt") "15.3: Ledger#balance" "12.0: Ledger#balance")}
+                             0))
+        {:keys [status out]} (run-sf-rb flog-12 "crap" "--complexity" "flog")]
+    (is (= 0 status))
+    (is (= ["ok   crap   15.4  cc  12  cov  71%  lib/ledger.rb:6 Ledger#balance"
+            "1 changed method(s), 0 over CRAP 20"]
+           (str/split-lines out)))))
 
 (deftest crap-lists-unchanged-methods-only-with-all
   (with-coverage!)

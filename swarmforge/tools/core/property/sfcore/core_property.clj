@@ -103,8 +103,8 @@
 
 (defspec crap-review-flags-exactly-the-units-over-the-limit trials
   (prop/for-all [units (gen/vector unit 0 8)]
-    (let [{:keys [lines status]} (crap/review units crap/format-row "function" nil)
-          over (filter crap/over? units)]
+    (let [{:keys [lines status]} (crap/review crap/crap-limit units crap/format-row "function" nil)
+          over (filter (partial crap/over? crap/crap-limit) units)]
       (and (= (inc (count units)) (count lines))
            (= (count over) (count (filter #(str/starts-with? % "OVER") lines)))
            (= (if (seq over) 1 0) status)

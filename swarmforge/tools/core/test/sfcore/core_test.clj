@@ -56,12 +56,19 @@
     (is (nil? (changes/to-changed-path "/elsewhere/src/c.js" changed "/repo")))))
 
 (deftest crap-thresholds-and-rows
-  (is (false? (crap/over? {:crap 10.0})))
-  (is (true? (crap/over? {:crap 10.01})))
+  (is (false? (crap/over? crap/crap-limit {:crap 10.0})))
+  (is (true? (crap/over? crap/crap-limit {:crap 10.01})))
   (is (= "ok   crap   10.0  cc   4  cov  25%  a.js:1 f"
-         (crap/format-row {:crap 10.0 :complexity 4 :coverage 0.25 :file "a.js" :line 1 :name "f"})))
+         (crap/format-row crap/crap-limit {:crap 10.0 :complexity 4 :coverage 0.25 :file "a.js" :line 1 :name "f"})))
   (is (= "OVER crap   12.0  cc 2.5  cov  67%  a.js:1 f"
-         (crap/format-row {:crap 12.0 :complexity 2.5 :coverage 0.666 :file "a.js" :line 1 :name "f"}))))
+         (crap/format-row crap/crap-limit {:crap 12.0 :complexity 2.5 :coverage 0.666 :file "a.js" :line 1 :name "f"}))))
+
+(deftest a-wrapper-may-set-its-own-crap-limit
+  (let [unit {:crap 15.0 :complexity 12 :coverage 0.5 :file "a.rb" :line 1 :name "f"}]
+    (is (= {:lines ["ok   crap   15.0  cc  12  cov  50%  a.rb:1 f" "1 method(s), 0 over CRAP 20"] :status 0}
+           (crap/review 20 [unit] crap/format-row "method" nil)))
+    (is (= {:lines ["OVER crap   20.5  cc  12  cov  50%  a.rb:1 f" "1 method(s), 1 over CRAP 20"] :status 1}
+           (crap/review 20 [(assoc unit :crap 20.5)] crap/format-row "method" nil)))))
 
 (deftest stryker-mutants-and-score
   (let [mutants (stryker/parse-mutants
