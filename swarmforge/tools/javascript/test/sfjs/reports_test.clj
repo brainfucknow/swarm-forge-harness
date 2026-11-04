@@ -30,5 +30,5 @@
     (is (= 1 (:status (jscpd/review [clone] nil nil)))))
   (let [unit {:crap 12.0 :complexity 4 :coverage 0.0 :file "a.ts" :line 3 :name "f"}]
     (is (= {:lines ["x" "1 function(s), 1 over CRAP 10"] :status 1}
-           (crap/review [unit] (constantly "x") "function" nil)))
-    (is (= 0 (:status (crap/review [(assoc unit :crap 4.0)] (constantly "x") "function" {}))))))
+           (crap/review crap/crap-limit [unit] (constantly "x") "function" nil)))
+    (is (= 0 (:status (crap/review crap/crap-limit [(assoc unit :crap 4.0)] (constantly "x") "function" {}))))))

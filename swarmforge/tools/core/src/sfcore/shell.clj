@@ -1,7 +1,9 @@
 (ns sfcore.shell
-  "Processes, PATH and the console: the IO edge every sf-* command runs through."
+  "Processes, PATH, project files and the console: the IO edge every sf-*
+  command runs through."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
+            [cheshire.core :as json]
             [clojure.string :as str]
             [sfcore.outcome :as outcome]))
 
@@ -17,19 +19,34 @@
     (str (.resolve (fs/path *dir*) (str path)))
     (str path)))
 
+(defn exists? [path]
+  (fs/exists? (in-dir path)))
+
+(defn read-json [path]
+  (json/parse-string (slurp (in-dir path))))
+
+(defn write-file
+  "Writes `content` to `path`, creating its directories."
+  [path content]
+  (fs/create-dirs (fs/parent (in-dir path)))
+  (spit (in-dir path) content))
+
 (defn- launch
-  "Prints the command line, then runs it with the process `options`."
+  "Prints the command line, then runs it with the process `options`; its
+  :extra-env assignments print ahead of the command."
   [options command args]
-  (println (str "$ " (str/join " " (cons command args))))
+  (let [env (map (fn [[k v]] (str k "=" v)) (:extra-env options))]
+    (println (str "$ " (str/join " " (concat env (cons command args))))))
   (try
     (apply p/shell (merge {:continue true :dir *dir*} options) command args)
     (catch java.io.IOException e
       (throw (ex-info (str command ": " (.getMessage e)) {})))))
 
 (defn run
-  "Runs a tool in the foreground, streaming its output; returns its exit status."
-  [command args]
-  (:exit (launch {} command args)))
+  "Runs a tool in the foreground, streaming its output; returns its exit status.
+  `env` adds environment variables."
+  ([command args] (run command args nil))
+  ([command args env] (:exit (launch (if env {:extra-env env} {}) command args))))
 
 (defn capture
   "Runs a tool with its stdout kept rather than shown and its stderr streamed;
