@@ -1,0 +1,9 @@
+{
+    "nestedStatements": { "enabled": true, "config": { "depth": 8 } },
+    "maxLinesInFunction": { "enabled": true, "config": { "maxLines": 100 } },
+    "maxLinesInMember": { "enabled": true, "config": { "maxLines": 100 } },
+    "maxNumberOfItemsInTuple": { "enabled": true, "config": { "maxItems": 4 } },
+    "maxNumberOfFunctionParameters": { "enabled": true, "config": { "maxItems": 5 } },
+    "maxNumberOfMembers": { "enabled": true, "config": { "maxItems": 32 } },
+    "maxNumberOfBooleanOperatorsInCondition": { "enabled": true, "config": { "maxItems": 4 } }
+}

@@ -90,6 +90,8 @@ for wrapper in sf-fs sf-vb; do
   assert_eq "installed $wrapper mutation fails explicitly" "$status" 2
 done
 test -f "$consumer/swarmforge/languages/vbnet.md" && pass "installed VB.NET guide" || fail "installed VB.NET guide missing"
+(cd "$consumer/swarmforge/tools/csharp/resources" && test -f smell.globalconfig && test -f smell.targets && test -f fsharplint.json) \
+  && pass "installed .NET code-smell configs" || fail "installed .NET code-smell configs missing"
 mkdir -p "$consumer/swarmforge/tools/sf/spec" "$consumer/.agents/skills/project"
 echo owned > "$consumer/swarmforge/tools/sf/spec/project.clj"
 echo owned > "$consumer/.agents/skills/project/SKILL.md"
