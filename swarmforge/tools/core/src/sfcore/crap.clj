@@ -1,6 +1,7 @@
 (ns sfcore.crap
   "crap4j scoring, the limit, and the report every sf-* crap command prints."
-  (:require [sfcore.outcome :as outcome]))
+  (:require [sfcore.changes :as changes]
+            [sfcore.outcome :as outcome]))
 
 (def crap-limit 10)
 
@@ -27,6 +28,14 @@
 
 (defn sort-worst-first [units]
   (sort-by (juxt (comp - :crap) :file :line) units))
+
+(defn select
+  "The scored units whose :line to :last-line span touches a changed line
+  (every one when `changed` is nil), worst first."
+  [units changed]
+  (->> units
+       (filter #(or (nil? changed) (changes/overlaps? (:file %) (:line %) (:last-line %) changed)))
+       sort-worst-first))
 
 (defn format-summary
   "`noun` names the unit, such as \"method\"; `changed?` says whether the list

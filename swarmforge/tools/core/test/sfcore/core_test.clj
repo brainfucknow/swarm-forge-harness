@@ -82,6 +82,20 @@
         [touching] (jscpd/clones-touching-changes [clone] {"a" #{1} "b" #{9}} "/r")]
     (is (= [true false] (map :changed (:sides touching))))))
 
+(deftest clones-print-their-size-and-every-side
+  (is (= "60 tokens  a:1-2 (changed)  ==  b:5-6"
+         (jscpd/format-clone {:tokens 60 :sides [{:file "a" :start 1 :end 2 :changed true} {:file "b" :start 5 :end 6}]})))
+  (is (= "34 mass  a:1-2  ==  b:5-6  ==  c:7-9 (changed)"
+         (jscpd/format-clone {:mass 34 :sides [{:file "a" :start 1 :end 2} {:file "b" :start 5 :end 6}
+                                               {:file "c" :start 7 :end 9 :changed true}]}))))
+
+(deftest selection-keeps-units-touching-changes-worst-first
+  (let [units [{:file "a" :line 1 :last-line 3 :crap 2.0}
+               {:file "a" :line 5 :last-line 9 :crap 8.0}
+               {:file "b" :line 1 :last-line 9 :crap 30.0}]]
+    (is (= [8.0 2.0] (map :crap (crap/select units {"a" #{3 6}}))))
+    (is (= [30.0 8.0 2.0] (map :crap (crap/select units nil))))))
+
 (deftest outcomes
   (is (true? (:usage (ex-data (outcome/usage-error "m")))))
   (is (= [0 1 2] [outcome/exit-ok outcome/exit-findings outcome/exit-usage])))
@@ -96,6 +110,10 @@
   (is (= 0 (with-out-str-status #(shell/run "true" []))))
   (is (true? (shell/available? "bb")))
   (is (false? (shell/available? "no-such-command-xyz"))))
+
+(deftest run-adds-and-shows-environment-variables
+  (let [printed (with-out-str (is (= 4 (shell/run "bash" ["-c" "exit $SFX"] {"SFX" "4"}))))]
+    (is (= "$ SFX=4 bash -c exit $SFX\n" printed))))
 
 (deftest capture-shows-the-command-and-keeps-its-output
   (let [printed (with-out-str (is (= {:exit 3 :out "report\n"}

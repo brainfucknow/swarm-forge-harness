@@ -201,8 +201,8 @@
   (prop/for-all [functions (gen/vector eslint-function 0 8) lines (gen/set (gen/choose 1 80))]
     (let [scored (crap/score functions {} "/repo")
           changed {"src/a.ts" lines}
-          selected (crap/select scored changed)]
-      (and (= (set (crap/select scored nil)) (set scored))
+          selected (core-crap/select scored changed)]
+      (and (= (set (core-crap/select scored nil)) (set scored))
            (= (set selected) (set (filter #(some lines (range (:line %) (inc (:last-line %)))) scored)))
            (= selected (core-crap/sort-worst-first selected))))))
 

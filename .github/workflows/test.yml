@@ -39,3 +39,5 @@ jobs:
         run: |
           swarmforge/bin/sf tool ensure gherkin-parser
           bb --config swarmforge/tools/javascript/bb.edn acceptance
+      - name: Test sf-rb
+        run: bb --config swarmforge/tools/ruby/bb.edn test

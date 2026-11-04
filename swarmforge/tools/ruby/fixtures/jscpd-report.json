@@ -1,0 +1,39 @@
+{
+ "duplicates": [
+  {
+   "format": "ruby",
+   "lines": 11,
+   "tokens": 166,
+   "firstFile": {
+    "name": "lib/a.rb",
+    "start": 2,
+    "end": 12,
+    "startLoc": {
+     "line": 2,
+     "column": 3,
+     "position": 5
+    },
+    "endLoc": {
+     "line": 12,
+     "column": 4,
+     "position": 171
+    }
+   },
+   "secondFile": {
+    "name": "lib/b.rb",
+    "start": 2,
+    "end": 12,
+    "startLoc": {
+     "line": 2,
+     "column": 3,
+     "position": 5
+    },
+    "endLoc": {
+     "line": 12,
+     "column": 4,
+     "position": 171
+    }
+   }
+  }
+ ]
+}

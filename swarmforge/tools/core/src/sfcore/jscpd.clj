@@ -1,7 +1,8 @@
 (ns sfcore.jscpd
   "jscpd JSON reports: the clones, which of them touch changed lines, and the
   report every sf-* dry command prints."
-  (:require [sfcore.changes :as changes]
+  (:require [clojure.string :as str]
+            [sfcore.changes :as changes]
             [sfcore.outcome :as outcome]))
 
 (defn- side [fragment]
@@ -32,10 +33,13 @@
        (filter #(some :changed (:sides %)))
        vec))
 
-(defn format-clone [{:keys [tokens sides]}]
+(defn format-clone
+  "A clone's size, in :tokens or, from flay, :mass, then every side."
+  [{:keys [tokens mass sides]}]
   (let [one (fn [{:keys [file start end changed]}]
               (str file ":" start "-" end (when changed " (changed)")))]
-    (str tokens " tokens  " (one (first sides)) "  ==  " (one (second sides)))))
+    (str (if mass (str mass " mass") (str tokens " tokens")) "  "
+         (str/join "  ==  " (map one sides)))))
 
 (defn format-summary [shown clones changed?]
   (str (count shown) " of " (count clones) " clone(s)" (when changed? " touch changed lines")))
