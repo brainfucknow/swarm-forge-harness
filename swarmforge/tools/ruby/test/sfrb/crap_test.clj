@@ -22,15 +22,14 @@
       (is (= 0.4 (:coverage (by-name "label"))))
       (is (< (Math/abs (- 7.456 (:crap (by-name "label")))) 1e-9)))))
 
+(defn- coverages [& names]
+  (update-vals (select-keys (scored) names) :coverage))
+
 (deftest nested-methods-own-their-lines
-  (let [by-name (scored)]
-    (is (= 0.0 (:coverage (by-name "outer"))))
-    (is (= 0.0 (:coverage (by-name "inner"))))))
+  (is (= {"outer" 0.0 "inner" 0.0} (coverages "outer" "inner"))))
 
 (deftest a-method-without-body-lines-is-covered-when-called
-  (let [by-name (scored)]
-    (is (= 1.0 (:coverage (by-name "empty?"))))
-    (is (= 0.0 (:coverage (by-name "size"))))))
+  (is (= {"empty?" 1.0 "size" 0.0} (coverages "empty?" "size"))))
 
 (deftest a-method-outside-the-coverage-report-is-uncovered
   (let [[method] (crap/score [{:file "lib/other.rb" :line 1 :last-line 5 :name "go" :complexity 3}]
@@ -42,3 +41,27 @@
   (let [report {"coverage" {"/work/lib/a.rb" {"lines" [nil 1 0] "methods" []}}}
         [method] (crap/score [{:file "lib/a.rb" :line 1 :last-line 3 :name "go" :complexity 1}] report "/work")]
     (is (= 0.5 (:coverage method)))))
+
+(defn- coverage-of [methods lines & [simplecov-methods]]
+  (let [report {"coverage" {"/work/lib/a.rb" {"lines" lines "methods" (or simplecov-methods [])}}}]
+    (into {} (map (juxt :name :coverage)
+                  (crap/score (map #(merge {:file "lib/a.rb" :complexity 1} %) methods) report "/work")))))
+
+(deftest a-method-sharing-the-last-line-of-its-outer-method-is-nested
+  (is (= {"outer" 1.0 "inner" 0.0}
+         (coverage-of [{:name "outer" :line 1 :last-line 5} {:name "inner" :line 3 :last-line 5}]
+                      [nil 1 0 0 0]))))
+
+(deftest a-method-sharing-the-first-line-of-its-outer-method-is-nested
+  (is (= {"outer" 0.0 "inner" 1.0}
+         (coverage-of [{:name "outer" :line 1 :last-line 5} {:name "inner" :line 1 :last-line 3}]
+                      [nil 1 1 0 0]))))
+
+(deftest a-nested-one-line-method-takes-its-line-from-its-outer-method
+  (is (= {"outer" 0.0 "inner" 0.0}
+         (coverage-of [{:name "outer" :line 1 :last-line 4} {:name "inner" :line 3 :last-line 3}]
+                      [nil 0 1 0]))))
+
+(deftest a-method-count-without-coverage-is-not-called
+  (is (= {"go" 0.0}
+         (coverage-of [{:name "go" :line 1 :last-line 1}] [nil] [{"start_line" 1}]))))

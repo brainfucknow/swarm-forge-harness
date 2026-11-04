@@ -47,3 +47,13 @@
                                        "message" "Cyclomatic complexity for `go` is too high. [3/0]"
                                        "location" {"start_line" 1 "last_line" 4}}]}]}]
     (is (= ["lib/a.rb"] (map :file (rubocop/parse-report report "Metrics/CyclomaticComplexity" "/work"))))))
+
+(deftest a-fatal-offense-from-any-cop-is-an-analysis-error
+  (let [offense (fn [severity cop] {"severity" severity "cop_name" cop "message" "bad"
+                                    "location" {"start_line" 3 "last_line" 3}})
+        report (fn [& offenses] {"files" [{"path" "/work/lib/a.rb" "offenses" (vec offenses)}]})]
+    (is (= ["rubocop could not parse lib/a.rb:3: bad"]
+           (rubocop/analysis-errors (report (offense "fatal" "Lint/Other")) "/work")))
+    (is (= ["rubocop could not parse lib/a.rb:3: bad"]
+           (rubocop/analysis-errors (report (offense "error" "Lint/Syntax")) "/work")))
+    (is (= [] (rubocop/analysis-errors (report (offense "error" "Lint/Other")) "/work")))))

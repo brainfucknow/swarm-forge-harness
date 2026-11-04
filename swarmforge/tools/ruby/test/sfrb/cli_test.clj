@@ -210,6 +210,15 @@
     (is (= ["166 tokens  lib/a.rb:2-12 (changed)  ==  lib/b.rb:2-12 (changed)" "1 of 1 clone(s) touch changed lines"]
            (str/split-lines out)))))
 
+(deftest dry-matches-absolute-report-paths-to-the-changes
+  (add-clones!)
+  (let [report (-> (fixture "jscpd-report.json")
+                   (str/replace "\"lib/a.rb\"" (str "\"" (project-file "lib/a.rb") "\""))
+                   (str/replace "\"lib/b.rb\"" (str "\"" (project-file "lib/b.rb") "\"")))
+        {:keys [status out]} (run-sf-rb (writes-report "tmp/jscpd/jscpd-report.json" report) "dry")]
+    (is (= 1 status))
+    (is (str/includes? out "1 of 1 clone(s) touch changed lines"))))
+
 (deftest dry-with-flay-runs-the-reporter-over-every-ruby-file
   (add-clones!)
   (write! "vendor/bundle/gem.rb" "x\n")
