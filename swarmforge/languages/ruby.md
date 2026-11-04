@@ -65,9 +65,8 @@ usage` and continue.
 
 ## Code-smell check
 
-reek (MIT) is recommended; it honours the project's `.reek.yml` and inline
-`:reek:` comments. Run it from the task worktree on the changed `.rb` files
-since the merge base, specs included, deleted files left out:
+reek is recommended; it honours `.reek.yml` and inline `:reek:` comments. Run
+it on the changed `.rb` files, specs included, deleted files left out:
 `mkdir -p tmp && bundle exec reek --no-progress --no-color -s --force-exclusion <changed .rb files> > tmp/reek.log 2>&1`
-It exits 2 on smells and 0 when clean; ignore IrresponsibleModule. A file the
-log reports as "cannot be processed" is Not-tested, not clean, even on exit 0.
+Exit 2 means smells; ignore IrresponsibleModule. A file the log reports as
+"cannot be processed" is Not-tested, even on exit 0.
