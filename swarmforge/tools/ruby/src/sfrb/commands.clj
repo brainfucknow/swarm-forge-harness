@@ -6,7 +6,6 @@
 (def coverage-dir "tmp/coverage")
 (def coverage-file "coverage.json")
 (def coverage-report (str coverage-dir "/" coverage-file))
-(def rubocop-dir "tmp/rubocop")
 (def jscpd-dir "tmp/jscpd")
 (def jscpd-report (str jscpd-dir "/jscpd-report.json"))
 (def flay-dir "tmp/flay")

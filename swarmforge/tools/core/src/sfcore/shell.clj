@@ -1,5 +1,6 @@
 (ns sfcore.shell
-  "Processes, PATH and the console: the IO edge every sf-* command runs through."
+  "Processes, PATH, project files and the console: the IO edge every sf-*
+  command runs through."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [cheshire.core :as json]

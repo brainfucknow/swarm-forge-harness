@@ -1,6 +1,8 @@
 (ns sfcore.jscpd
   "jscpd JSON reports: the clones, which of them touch changed lines, and the
-  report every sf-* dry command prints."
+  report every sf-* dry command prints. A clone is {:tokens or :mass, :sides
+  [{:file :start :end}]}; other duplicate finders (sf-rb's flay) read their
+  reports into the same shape."
   (:require [clojure.string :as str]
             [sfcore.changes :as changes]
             [sfcore.outcome :as outcome]))

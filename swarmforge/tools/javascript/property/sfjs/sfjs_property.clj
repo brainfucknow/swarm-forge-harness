@@ -5,7 +5,6 @@
             [property-support :refer [defspec]]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
-            [sfcore.crap :as core-crap]
             [sfjs.commands :as commands]
             [sfjs.crap :as crap]
             [sfjs.eslint :as eslint]
@@ -196,15 +195,6 @@
                 [file line end-line 0.0 (double (+ (* complexity complexity) complexity))])
               functions)
          (map (juxt :file :line :last-line :coverage :crap) scored)))))
-
-(defspec selection-keeps-changed-functions-worst-first trials
-  (prop/for-all [functions (gen/vector eslint-function 0 8) lines (gen/set (gen/choose 1 80))]
-    (let [scored (crap/score functions {} "/repo")
-          changed {"src/a.ts" lines}
-          selected (core-crap/select scored changed)]
-      (and (= (set (core-crap/select scored nil)) (set scored))
-           (= (set selected) (set (filter #(some lines (range (:line %) (inc (:last-line %)))) scored)))
-           (= selected (core-crap/sort-worst-first selected))))))
 
 ;; Stryker command line
 

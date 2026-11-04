@@ -41,3 +41,5 @@ jobs:
           bb --config swarmforge/tools/javascript/bb.edn acceptance
       - name: Test sf-rb
         run: bb --config swarmforge/tools/ruby/bb.edn test
+      - name: Property-test sf-rb
+        run: bb --config swarmforge/tools/ruby/bb.edn property
