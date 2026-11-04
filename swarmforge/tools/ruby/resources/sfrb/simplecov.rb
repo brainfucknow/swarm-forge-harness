@@ -1,6 +1,5 @@
-# Required through RUBYOPT by `sf-rb coverage`. The `bundle` process loads it
-# before Bundler exists and skips it; rspec, exec'd with bundler/setup first,
-# starts SimpleCov from the project's bundle.
+# Required through RUBYOPT by `sf-rb coverage`; the bundle process loads it
+# before Bundler exists, so only the exec'd rspec starts SimpleCov.
 return unless defined?(Bundler)
 
 require "simplecov"

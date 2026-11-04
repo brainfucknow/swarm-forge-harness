@@ -2,6 +2,7 @@
   "Processes, PATH and the console: the IO edge every sf-* command runs through."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
+            [cheshire.core :as json]
             [clojure.string :as str]
             [sfcore.outcome :as outcome]))
 
@@ -16,6 +17,18 @@
   (if *dir*
     (str (.resolve (fs/path *dir*) (str path)))
     (str path)))
+
+(defn exists? [path]
+  (fs/exists? (in-dir path)))
+
+(defn read-json [path]
+  (json/parse-string (slurp (in-dir path))))
+
+(defn write-file
+  "Writes `content` to `path`, creating its directories."
+  [path content]
+  (fs/create-dirs (fs/parent (in-dir path)))
+  (spit (in-dir path) content))
 
 (defn- launch
   "Prints the command line, then runs it with the process `options`; its

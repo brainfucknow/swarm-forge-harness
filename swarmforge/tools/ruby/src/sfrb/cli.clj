@@ -41,18 +41,8 @@ bundle exec. --base defaults to SWARMFORGE_BASE, main, or master."))
 (defn- changed-for [opts]
   (git/changed-since-base opts commands/source-pathspecs))
 
-(defn- exists? [path]
-  (fs/exists? (shell/in-dir path)))
-
-(defn- read-json [path]
-  (json/parse-string (slurp (shell/in-dir path))))
-
-(defn- write-file [path content]
-  (fs/create-dirs (fs/parent (shell/in-dir path)))
-  (spit (shell/in-dir path) content))
-
 (defn- require-gemfile []
-  (when-not (exists? "Gemfile")
+  (when-not (shell/exists? "Gemfile")
     (throw (outcome/usage-error "no Gemfile in the current directory"))))
 
 (defn- resource
@@ -71,7 +61,7 @@ bundle exec. --base defaults to SWARMFORGE_BASE, main, or master."))
 (defn- known-ruby-files
   "Every Ruby file git tracks or would add, relative to the current directory."
   []
-  (filter exists?
+  (filter shell/exists?
           (str/split-lines (git/git (into ["ls-files" "--cached" "--others" "--exclude-standard" "--"]
                                           commands/source-pathspecs)))))
 
@@ -85,7 +75,7 @@ bundle exec. --base defaults to SWARMFORGE_BASE, main, or master."))
                             (commands/coverage-env (System/getenv "RUBYOPT") setup))]
       (cond
         (not (zero? status)) status
-        (not (exists? commands/coverage-report))
+        (not (shell/exists? commands/coverage-report))
         (throw (outcome/usage-error (str "no " commands/coverage-report " after the coverage run; is simplecov in the bundle?")))
         :else (do (println (str "coverage written to " commands/coverage-report)) outcome/exit-ok)))))
 
@@ -95,7 +85,7 @@ bundle exec. --base defaults to SWARMFORGE_BASE, main, or master."))
 (defn- rubocop-methods [source files root]
   (let [cop (rubocop/cops source)
         config (rubocop/config-path source)]
-    (write-file config (rubocop/config cop))
+    (shell/write-file config (rubocop/config cop))
     (let [{:keys [exit out]} (capture-bundle (rubocop/args config files))
           report (when-not (= rubocop/exit-failed exit)
                    (try (json/parse-string out) (catch Exception _ nil)))]
@@ -127,12 +117,12 @@ bundle exec. --base defaults to SWARMFORGE_BASE, main, or master."))
   (let [source (complexity-source opts)
         dir (or (:report opts) commands/coverage-dir)
         coverage (str (fs/path dir commands/coverage-file))]
-    (when-not (exists? coverage)
+    (when-not (shell/exists? coverage)
       (throw (outcome/usage-error (str "no " commands/coverage-file " under " dir "; run sf-rb coverage first"))))
     (let [root (git/repo-root)
           changed (changed-for opts)
           files (commands/production-sources (if changed (keys changed) (known-ruby-files)))
-          scored (rbcrap/score (methods-of source files root) (read-json coverage) root)]
+          scored (rbcrap/score (methods-of source files root) (shell/read-json coverage) root)]
       (shell/emit (crap/review (crap/select scored changed) crap/format-row "method" changed)))))
 
 (def ^:private dry-tools
@@ -155,7 +145,7 @@ bundle exec. --base defaults to SWARMFORGE_BASE, main, or master."))
   [tool report opts]
   (fs/delete-if-exists (shell/in-dir report))
   (let [status (if (= "flay" tool) (run-flay opts) (run-jscpd opts))]
-    (when-not (exists? report)
+    (when-not (shell/exists? report)
       (throw (outcome/usage-error (str tool " exited " status " without " report))))))
 
 (defn- cmd-dry [{:keys [opts]}]
@@ -163,15 +153,15 @@ bundle exec. --base defaults to SWARMFORGE_BASE, main, or master."))
         {:keys [report parse]} (or (dry-tools tool)
                                    (throw (outcome/usage-error (str "unknown --tool '" tool "'; use jscpd or flay"))))]
     (if (:report-only opts)
-      (when-not (exists? report)
+      (when-not (shell/exists? report)
         (throw (outcome/usage-error (str report " not found"))))
       (refresh-report tool report opts))
-    (let [clones (parse (read-json report))
+    (let [clones (parse (shell/read-json report))
           changed (changed-for opts)]
       (shell/emit (jscpd/review clones changed (when changed (git/repo-root)))))))
 
 (defn- usage-declared? []
-  (some #(and (exists? %) (mutant/declares-usage? (slurp (shell/in-dir %)))) mutant/config-files))
+  (some #(and (shell/exists? %) (mutant/declares-usage? (slurp (shell/in-dir %)))) mutant/config-files))
 
 (defn- cmd-mutate [{:keys [opts extra]}]
   (require-gemfile)

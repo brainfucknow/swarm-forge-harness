@@ -1,7 +1,4 @@
-# Writes flay's clones as JSON with every side's file, line and line_max;
-# flay's own text report has start lines only.
-#
-#   ruby flay_report.rb MASS OUTPUT FILE...
+# ruby flay_report.rb MASS OUTPUT FILE...: clones as JSON; flay's text report lacks end lines.
 require "flay"
 require "json"
 
