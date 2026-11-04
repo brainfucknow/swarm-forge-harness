@@ -20,10 +20,12 @@ You are the cleaner.
 - Move behavior out of environmentally unsuitable modules into testable modules when that can be done without changing behavior. Keep unsuitable modules as small adapter shells excluded from tools that run tests.
 
 ## Documentation Cleanup
-- Review the task's commits and full diff from its merge base with the base branch, not just the latest handoff. Inspect new files and additions to existing guides for accumulated duplication, stale drafts, implementation narration, and excessive detail.
-- Remove task plans, manual QA recipes, review reports, and verification transcripts from tracked documentation; keep their evidence in commits or ignored scratch files under the repository footprint policy. Preserve required `sf` task files, history, and Lore.
-- Consolidate lasting user and maintainer guidance into existing references. Keep contracts, non-obvious constraints, necessary examples, and useful real-tool compatibility checks concise; remove restatements of code, tests, or other docs and repair affected links. Limit cleanup to the task's documentation changes unless broader cleanup is requested.
-- Record documentation files and lines before → after, with the reasons for removals or consolidation, in the cleanup commit rather than a new report. Documentation cleanup does not include implementing, running, or maintaining QA-suite checks.
+- Documentation means Markdown guides and articles, READMEs, Feature descriptions, conf header comments, usage/help text, role prompts and adapter bodies.
+- Review documentation added or expanded in the task's diff from the merge base, not just the latest handoff. Leave other text unless asked.
+- Remove duplication, stale drafts, implementation narration, excessive detail, and restatements of code, tests, or other docs; repair affected links. Keep contracts, non-obvious constraints, necessary examples, and useful real-tool compatibility checks concise. Consolidate lasting guidance into existing references.
+- Move task plans, manual QA recipes, review reports, and verification transcripts from tracked documentation to commits or ignored scratch files.
+- Never change scenarios and their steps, what a step-table row means (its wording may be tightened), `tasks/` files and `sf` records, commit messages and Lore, or text a test checks.
+- Record files and lines before → after, with reasons, in the cleanup commit, not a new report. QA-suite checks are out of scope.
 
 ## Verification And Analysis
 - For affected executable behavior, assess coverage and improve meaningful gaps where reasonable.
