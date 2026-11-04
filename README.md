@@ -106,7 +106,8 @@ opt-in design and security review. Model mappings live in
 - Language tools: [Clojure](swarmforge/languages/clojure.md),
   [C#](swarmforge/languages/csharp.md), [F#](swarmforge/languages/fsharp.md),
   [VB.NET](swarmforge/languages/vbnet.md),
-  [JavaScript/TypeScript](swarmforge/languages/javascript.md).
+  [JavaScript/TypeScript](swarmforge/languages/javascript.md),
+  [Ruby](swarmforge/languages/ruby.md).
 
 ## Tests
 
@@ -123,6 +124,7 @@ bb --config swarmforge/tools/csharp/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn property
 bb --config swarmforge/tools/javascript/bb.edn acceptance
+bb --config swarmforge/tools/ruby/bb.edn test
 ```
 
 These suites exercise the CLI with scratch Git repositories and test the

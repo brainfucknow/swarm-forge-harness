@@ -108,8 +108,8 @@
 
 (deftest method-rows-name-the-signature-line-when-known
   (let [method {:class-name "A.B" :name "M" :first-line 7 :crap 1.0 :complexity 1.0 :coverage 1.0 :file "a.cs"}]
-    (is (= "ok   crap    1.0  cc   1  cov 100%  a.cs:7 B.M" (cob/format-method method)))
-    (is (= "ok   crap    1.0  cc   1  cov 100%  a.cs:5 B.M" (cob/format-method (assoc method :signature-line 5))))))
+    (is (= "ok   crap    1.0  cc   1  cov 100%  a.cs:7 B.M" (cob/format-method crap/crap-limit method)))
+    (is (= "ok   crap    1.0  cc   1  cov 100%  a.cs:5 B.M" (cob/format-method crap/crap-limit (assoc method :signature-line 5))))))
 
 (deftest signature-start
   (let [source (str/split-lines (fixture "Ledger.cs.txt"))]
