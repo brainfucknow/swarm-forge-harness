@@ -36,8 +36,9 @@ Acceptance Pipeline Specification tools and the project's runtime/handlers.
 
 ## Security scanners
 
-As in [csharp.md](csharp.md#security-scanners), reading warnings in changed
-`.vb` files, with `*.vbproj` in place of `*.csproj` among the dependency files.
+As in [csharp.md](csharp.md#security-scanners), without the Semgrep extra
+(Semgrep does not read VB.NET), reading warnings in changed `.vb` files, with
+`*.vbproj` in place of `*.csproj` among the dependency files.
 
 ## Code-smell check
 
