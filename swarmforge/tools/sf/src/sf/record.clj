@@ -150,6 +150,7 @@
      "route" [["route" route]]
      "handoff" [["to" stage] ["branch" (branch task)] ["commit" commit] ["files" files] ["summary" text]]
      "finished" [["merged-into" merged-into]]
+     "moved" [["path" text]]
      [])))
 
 (defn block

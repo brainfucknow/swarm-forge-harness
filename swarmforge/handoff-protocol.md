@@ -11,6 +11,7 @@ edit task files or write `SwarmForge-*` trailers by hand.
 | `<id>` | Title slug plus seven random hex digits, e.g. `add-login-3f9a2c1`. Commands also accept the suffix or a unique prefix. |
 | `tasks/<id>.md` | Operator request, title, ID, and creation date; unchanged while open. |
 | `tasks/done/<id>.md` | Archive created at `done`, with stage, route, and all records; presence in main checkout HEAD marks the task finished. |
+| `swarmforge/project.conf` | `tasks-dir <dir>` puts the task files under `<dir>/` instead of `tasks/`; sf reads the main checkout's. |
 | `.worktrees/<id>` | Role checkout, created by `sf start` and removed by `sf finish`. |
 | `swarmforge/verify.conf` | Optional project verification commands, one per line; blank lines and `#` comments are ignored. |
 
@@ -21,8 +22,10 @@ Needs is `none`, `operator` while a question awaits an answer, or `approval`
 while a reviewed specification awaits a decision. `sf show <id>` prints the
 records; use it rather than reconstructing them from trailers.
 
-Records change no files except `created` (adds the request) and handoff to
-`done` (archives it). `finished` is the base branch's `--no-ff` merge commit.
+Paths here use the default `tasks/`; read them as the configured `tasks-dir`.
+
+Records change no files except `created` (adds the request), handoff to
+`done` (archives it), and `moved` (see [Moving the task files](#moving-the-task-files)). `finished` is the base branch's `--no-ff` merge commit.
 The hook rejects reserved `SwarmForge-*` trailers in role commits. Git's
 `user.name` and `user.email` supply the author, with `SWARMFORGE_USER` and
 `SWARMFORGE_EMAIL` as fallbacks.
@@ -92,6 +95,18 @@ rerun `sf finish`. It verifies that committed merge before recording and
 cleaning up. If verification fails, fix it with `git commit --amend` and retry;
 a new commit on top of the merge is refused as finished. Nobody writes the
 finished-record trailers manually.
+
+## Moving the task files
+
+To change `tasks-dir`, edit it in the main checkout's `swarmforge/project.conf`,
+then run `sf move-tasks <old-dir>`. On each open task branch it records a
+`moved` record that moves the task file and keeps the stage, route, and needs,
+so a task waiting on the operator keeps waiting. It refuses before moving
+anything when a task worktree has uncommitted changes, and brings each clean
+task worktree to the new tip. In the main checkout it stages a `git mv` of the
+archives under `<old-dir>/done/`; commit them with `project.conf`. Only files
+named `<id>.md` and `done/<id>.md` move; other files under `<old-dir>/` stay.
+The next review or handoff lists the moved paths among its files.
 
 ## Sharing
 

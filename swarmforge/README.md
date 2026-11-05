@@ -21,6 +21,7 @@ repository.
 | `bin/sf-rb`, `languages/ruby.md` | Ruby tool wrapper: SimpleCov coverage, CRAP from RuboCop or flog, DRY from jscpd or flay, and optional mutant. |
 | `tools/core/` | Report readers shared by the language tool wrappers: changed lines, CRAP, jscpd, Stryker. |
 | `handoff-protocol.md` | The task branch, task file, record commits, and lifecycle. |
+| `project.conf` | Project settings, kept on reinstall: `tasks-dir`, the directory of the task files (default `tasks`). Change it with `sf move-tasks`; see the [handoff protocol](handoff-protocol.md#moving-the-task-files). |
 | `verify.conf` | Optional, written by the project: one shell command per line that `sf finish` runs on the merge before it merges, for example `make test`. |
 
 The [handoff protocol](handoff-protocol.md) covers task state, approval, merge
@@ -49,7 +50,7 @@ operator.
 
 After editing `roles.conf`, `routes.conf`, or `tiers.conf`, run `sf adapters`
 to regenerate the agent files under `.claude/agents/`, `.codex/agents/`, and
-`.github/agents/`. `sf check` validates the configuration files and the role
+`.github/agents/`. `sf check` validates the configuration files, `project.conf` included, and the role
 prompts; `sf init` and `sf adapters` run it first and refuse a broken setup.
 `sf check`, `sf adapters`, `sf roles`, `sf routes` and `sf tool` read the
 checkout they run in; `sf init` and task bookkeeping read the main checkout's.

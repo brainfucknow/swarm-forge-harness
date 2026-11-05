@@ -1,9 +1,11 @@
 (ns sf.store
   "Tasks in plain git. A task is its branch swarm/<id>; its first commit adds
-  tasks/<id>.md, and every sf action is a record commit whose trailers hold the
-  state. A task is finished when tasks/done/<id>.md is in the main checkout's
-  HEAD. git runs in the main checkout."
+  <tasks-dir>/<id>.md, and every sf action is a record commit whose trailers
+  hold the state. A task is finished when <tasks-dir>/done/<id>.md is in the
+  main checkout's HEAD. tasks-dir is set in the main checkout's
+  swarmforge/project.conf (default tasks). git runs in the main checkout."
   (:require [clojure.string :as str]
+            [sf.config :as config]
             [sf.git :as git]
             [sf.record :as record]
             [sf.shell :as shell]))
@@ -11,16 +13,27 @@
 (defn ref-of [id]
   (str "refs/heads/" (record/branch id)))
 
-(defn open-path [id] (str "tasks/" id ".md"))
-(defn done-path [id] (str "tasks/done/" id ".md"))
+(defn open-path
+  ([id] (open-path (config/tasks-dir) id))
+  ([dir id] (str dir "/" id ".md")))
+
+(defn done-path
+  ([id] (done-path (config/tasks-dir) id))
+  ([dir id] (str dir "/done/" id ".md")))
 
 (defn branch-ids []
   (shell/lines (git/git "for-each-ref" "--format=%(refname:lstrip=3)" "refs/heads/swarm/")))
 
-(defn done-ids []
-  (let [result (git/run {} "ls-tree" "--name-only" "HEAD" "tasks/done/")]
-    (when (shell/ok? result)
-      (keep #(second (re-matches #"tasks/done/(.+)\.md" %)) (shell/lines (:out result))))))
+(defn done-ids
+  "The ids of the archives under dir/done/ in the main checkout's HEAD; dir is
+  tasks-dir when not given."
+  ([] (done-ids (config/tasks-dir)))
+  ([dir]
+   (let [prefix (str dir "/done/")
+         pattern (re-pattern (str (java.util.regex.Pattern/quote prefix) "(.+)\\.md"))
+         result (git/run {} "ls-tree" "--name-only" "HEAD" prefix)]
+     (when (shell/ok? result)
+       (keep #(second (re-matches pattern %)) (shell/lines (:out result)))))))
 
 (defn finished? [id]
   (boolean (some #{id} (done-ids))))
@@ -80,8 +93,13 @@
   (let [result (git/run {} "show" (str rev ":" path))]
     (when (shell/ok? result) (:out result))))
 
+(defn task-path-at
+  "The path of the task file of id under dir on rev, open or archived, or nil."
+  [rev dir id]
+  (first (filter #(show-file rev %) [(open-path dir id) (done-path dir id)])))
+
 (defn task-file
-  "The task file: tasks/done/<id>.md in HEAD once finished, else from the branch."
+  "The task file: <tasks-dir>/done/<id>.md in HEAD once finished, else from the branch."
   [id]
   (record/read-task-file
    (or (if (finished? id)
@@ -107,7 +125,8 @@
 (defn write!
   "Appends the record that (make records) returns to the task branch, records
   being the branch's records, oldest first. A record with :archive moves the
-  task file to tasks/done/ with that text; any other record changes no file.
+  task file to <tasks-dir>/done/ with that text; one with :move [from to]
+  moves the file at from to to; any other record changes no file.
   The branch moves only when its tip is still the one read; otherwise sf
   reads it again and retries once. No worktree is touched. Returns the record."
   [id make]
@@ -116,8 +135,13 @@
                       (fn [tip]
                         (let [tip (or tip (shell/die "no branch " (record/branch id)))
                               rec (assoc (make (records-at tip id)) :task id)
-                              tree (if-let [text (:archive rec)]
-                                     (git/tree-with tip [(open-path id)] {(done-path id) text})
+                              [from to] (:move rec)
+                              tree (cond
+                                     (:archive rec)
+                                     (git/tree-with tip [(open-path id)] {(done-path id) (:archive rec)})
+                                     from
+                                     (git/tree-with tip [from] {to (or (show-file tip from) (shell/die "no " from " on " (record/branch id)))})
+                                     :else
                                      (git/git "rev-parse" (str tip "^{tree}")))]
                           {:rec rec :commit (git/commit-tree tree [tip] (record/message rec))})))]
     (when error (shell/die error))
