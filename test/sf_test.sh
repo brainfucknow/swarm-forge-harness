@@ -56,7 +56,8 @@ assert_eq "init writes no git-bug data" "$(git for-each-ref refs/bugs refs/ident
 id="$(sf new "Add login" -m "Users can log in with email and password.")"
 assert_match "new prints a slug and hex id" "$id" '^add-login-[0-9a-f]{7}$'
 assert_eq "new puts the task at the first stage" "$(sf stage "$id")" "specifier"
-full="specifier,coder,cleaner,architect,hardener,qa"
+full="specifier,coder,cleaner,architect,hardener,security-reviewer,qa"
+fallback="specifier,coder,cleaner,architect,hardener,qa"
 assert_eq "new defaults to the feature route" "$(sf route "$id")" "$full"
 assert_eq "new creates the task branch" "$(git branch --list "swarm/$id" | tr -d ' *')" "swarm/$id"
 assert_match "show prints the body" "$(sf show "$id")" "email and password"
@@ -210,9 +211,9 @@ assert_match "existing architect still hands off to QA" "$(sf handoff "$idr")" "
 assert_eq "environment route can opt in" "$(SWARMFORGE_ROUTE=architecture-design-reviewer,coder sf new "Review migration" -m x | xargs sf route)" "architecture-design-reviewer,coder"
 cp swarmforge/routes.conf "$scratch/routes.conf"
 rm swarmforge/routes.conf
-assert_eq "implicit catalogue fallback skips optional reviewer" "$(sf new "Legacy fallback" -m x | xargs sf route)" "$full"
+assert_eq "implicit catalogue fallback skips optional reviewer" "$(sf new "Legacy fallback" -m x | xargs sf route)" "$fallback"
 printf 'quick coder\n' > swarmforge/routes.conf
-assert_eq "fallback without feature also skips optional reviewer" "$(sf new "Missing feature fallback" -m x | xargs sf route)" "$full"
+assert_eq "fallback without feature also skips optional reviewer" "$(sf new "Missing feature fallback" -m x | xargs sf route)" "$fallback"
 mv "$scratch/routes.conf" swarmforge/routes.conf
 
 # Optional review uses the existing route and handoff machinery.

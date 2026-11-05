@@ -1,5 +1,5 @@
 (ns sfcore.core-property
-  "Properties of the report readers shared by sf-cs and sf-js."
+  "Properties of the report readers and reports shared by the sf-* wrappers."
   (:require [clojure.string :as str]
             [property-support :refer [defspec]]
             [clojure.test.check.generators :as gen]
@@ -101,14 +101,38 @@
                :file "src/a.ts" :line line :name "f"})
             (gen/tuple (gen/choose 1 30) coverage (gen/choose 1 500))))
 
-(defspec crap-review-flags-exactly-the-units-over-the-limit trials
-  (prop/for-all [units (gen/vector unit 0 8)]
-    (let [{:keys [lines status]} (crap/review units crap/format-row "function" nil)
-          over (filter crap/over? units)]
+(def limit (gen/one-of [(gen/return crap/crap-limit) (gen/choose 1 60)]))
+
+(defspec crap-review-flags-exactly-the-units-over-any-limit trials
+  (prop/for-all [units (gen/vector unit 0 8) limit limit]
+    (let [{:keys [lines status]} (crap/review limit units crap/format-row "function" nil)
+          over (filter #(> (:crap %) limit) units)]
       (and (= (inc (count units)) (count lines))
-           (= (count over) (count (filter #(str/starts-with? % "OVER") lines)))
+           (= (map #(> (:crap %) limit) units)
+              (map #(str/starts-with? % "OVER") (butlast lines)))
+           (= (str (count units) " function(s), " (count over) " over CRAP " limit) (last lines))
            (= (if (seq over) 1 0) status)
            (= (map :crap (crap/sort-worst-first units)) (sort > (map :crap units)))))))
+
+(defspec a-unit-over-a-limit-is-over-every-lower-limit trials
+  (prop/for-all [u unit a limit b limit]
+    (let [[low high] (sort [a b])]
+      (and (= (> (:crap u) high) (crap/over? high u))
+           (or (not (crap/over? high u)) (crap/over? low u))))))
+
+(def spanned-unit
+  (gen/fmap (fn [[file line length crap]] {:file file :line line :last-line (+ line length) :crap crap})
+            (gen/tuple (gen/elements ["a.rb" "b.rb"]) (gen/choose 1 60) (gen/choose 0 10)
+                       (gen/double* {:min 1.0 :max 900.0 :NaN? false :infinite? false}))))
+
+(defspec selection-keeps-the-units-touching-changes-worst-first trials
+  (prop/for-all [units (gen/vector spanned-unit 0 8) lines (gen/set (gen/choose 1 80))]
+    (let [changed {"a.rb" lines}
+          selected (crap/select units changed)]
+      (and (= (frequencies (crap/select units nil)) (frequencies units))
+           (= (frequencies selected)
+              (frequencies (filter #(and (= "a.rb" (:file %)) (some lines (range (:line %) (inc (:last-line %))))) units)))
+           (= selected (crap/sort-worst-first selected))))))
 
 ;; Stryker
 
@@ -164,3 +188,16 @@
            (every? (fn [clone] (= (map touches? (:sides clone)) (map :changed (:sides clone)))) shown)
            (= (if (seq shown) 1 0) (:status (jscpd/review clones changed "/repo")))
            (= (count clones) (dec (count (:lines (jscpd/review clones nil nil)))))))))
+
+(def clone-side
+  (gen/fmap (fn [[file start length changed]] {:file file :start start :end (+ start length) :changed changed})
+            (gen/tuple (gen/elements ["a.rb" "b.rb" "c.rb"]) (gen/choose 1 50) (gen/choose 0 20) gen/boolean)))
+
+(defspec a-clone-prints-its-size-then-every-side-in-order trials
+  (prop/for-all [sides (gen/vector clone-side 2 5) size (gen/choose 1 999) mass? gen/boolean]
+    (let [clone (assoc {:sides sides} (if mass? :mass :tokens) size)
+          [head & shown] (str/split (jscpd/format-clone clone) #"  ==  |  (?=[^ ])")]
+      (and (= head (str size (if mass? " mass" " tokens")))
+           (= shown (map (fn [{:keys [file start end changed]}]
+                           (str file ":" start "-" end (when changed " (changed)")))
+                         sides))))))

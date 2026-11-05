@@ -32,6 +32,7 @@ You are the cleaner.
 - Ignore the specifier's end-to-end QA procedure; do not implement, run, or maintain QA-suite checks.
 - Install the constitution's tools for applicable source-quality targets under the shared startup policy.
 - For applicable source changes, run CRAP on **all** files, then DRY; reduce duplication where reasonable. Apply the shared [source-quality gates](../constitution/articles/engineering.md#source-quality-gates), including scan/count review and manifest-preserving splits. Reuse current evidence under the shared verification rules.
+- After DRY, run the code-smell check the project language's guide names, if any, on the task's changed files. Fix findings in new code where reasonable; record each one left as `Constraint: code-smell finding left: <where> | <reason>`. A missing check, or one that cannot run, does not block: record `Not-tested: code-smell check: <reason>`.
 
 ## Does Not Own
 - Do not run mutation tests.

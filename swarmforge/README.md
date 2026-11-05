@@ -18,6 +18,7 @@ this repository.
 | `bin/sf-vb`, `languages/vbnet.md` | VB.NET tests, coverage, compiled-method CRAP and DRY; mutation unsupported. |
 | `languages/clojure.md` | How to run clj-mutate, crap4clj and dry4clj on Babashka code. |
 | `bin/sf-js`, `languages/javascript.md` | JavaScript and TypeScript tool wrapper: the same commands for Vitest or Jest, oxlint or ESLint complexity with Istanbul coverage, jscpd, and StrykerJS. |
+| `bin/sf-rb`, `languages/ruby.md` | Ruby tool wrapper: SimpleCov coverage, CRAP from RuboCop or flog, DRY from jscpd or flay, and optional mutant. |
 | `tools/core/` | Report readers shared by the language tool wrappers: changed lines, CRAP, jscpd, Stryker. |
 | `handoff-protocol.md` | The task branch, task file, record commits, and lifecycle. |
 | `verify.conf` | Optional, written by the project: one shell command per line that `sf finish` runs on the merge before it merges, for example `make test`. |
@@ -64,7 +65,8 @@ Catalogue settings:
 - `optional` excludes a role from fallback routes. Include it explicitly in a
   named route, `--route`, or `SWARMFORGE_ROUTE` to enable it; it can also use `audit`.
 
-Optional reviewers preserve the existing approval and handoff flow:
+Optional reviewers keep the usual approval and handoff flow. The `feature`
+route includes the security reviewer; drop it per task with `sf route`:
 
 | Role | When to include it | Position |
 |---|---|---|
@@ -73,5 +75,5 @@ Optional reviewers preserve the existing approval and handoff flow:
 
 ```sh
 sf new "Migrate public API" -m "..." --route specifier,architecture-design-reviewer,coder,architect,qa
-sf new "Review authentication" -m "..." --route coder,hardener,security-reviewer,qa
+sf route <id> specifier,coder,cleaner,architect,hardener,qa
 ```

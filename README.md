@@ -87,7 +87,7 @@ subset of the catalogue in `swarmforge/roles.conf` order:
 
 | Route | Roles |
 |---|---|
-| `feature` (default) | specifier, coder, cleaner, architect, hardener, qa |
+| `feature` (default) | specifier, coder, cleaner, architect, hardener, security-reviewer, qa |
 | `bugfix` | specifier, coder, cleaner, qa |
 | `refactor` | cleaner, architect, hardener |
 | `harden` | hardener, qa |
@@ -96,7 +96,7 @@ subset of the catalogue in `swarmforge/roles.conf` order:
 The [role catalogue](swarmforge/roles.conf) assigns tiers and supports
 `subagent`, `session`, `audit`, and `optional` settings. See
 [configuration](swarmforge/README.md#configuration) for these settings and
-opt-in design and security review. Model mappings live in
+the optional reviewers. Model mappings live in
 [`swarmforge/tiers.conf`](swarmforge/tiers.conf); regenerate agents with
 `sf adapters` after changing roles, routes, or tiers.
 
@@ -107,7 +107,8 @@ opt-in design and security review. Model mappings live in
 - Language tools: [Clojure](swarmforge/languages/clojure.md),
   [C#](swarmforge/languages/csharp.md), [F#](swarmforge/languages/fsharp.md),
   [VB.NET](swarmforge/languages/vbnet.md),
-  [JavaScript/TypeScript](swarmforge/languages/javascript.md).
+  [JavaScript/TypeScript](swarmforge/languages/javascript.md),
+  [Ruby](swarmforge/languages/ruby.md).
 
 ## Tests
 
@@ -124,6 +125,7 @@ bb --config swarmforge/tools/csharp/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn property
 bb --config swarmforge/tools/javascript/bb.edn acceptance
+bb --config swarmforge/tools/ruby/bb.edn test
 ```
 
 These suites exercise the CLI with scratch Git repositories and test the

@@ -1,0 +1,133 @@
+{
+ "metadata": {
+  "rubocop_version": "1.92.2",
+  "ruby_engine": "ruby",
+  "ruby_version": "3.3.6",
+  "ruby_patchlevel": "108",
+  "ruby_platform": "x86_64-linux"
+ },
+ "files": [
+  {
+   "path": "lib/ledger.rb",
+   "offenses": [
+    {
+     "severity": "refactor",
+     "message": "Cyclomatic complexity for `initialize` is too high. [1/0]",
+     "cop_name": "Metrics/CyclomaticComplexity",
+     "corrected": false,
+     "correctable": false,
+     "location": {
+      "start_line": 2,
+      "start_column": 3,
+      "last_line": 4,
+      "last_column": 5,
+      "length": 52,
+      "line": 2,
+      "column": 3
+     }
+    },
+    {
+     "severity": "refactor",
+     "message": "Cyclomatic complexity for `balance` is too high. [5/0]",
+     "cop_name": "Metrics/CyclomaticComplexity",
+     "corrected": false,
+     "correctable": false,
+     "location": {
+      "start_line": 6,
+      "start_column": 3,
+      "last_line": 16,
+      "last_column": 5,
+      "length": 252,
+      "line": 6,
+      "column": 3
+     }
+    },
+    {
+     "severity": "refactor",
+     "message": "Cyclomatic complexity for `label` is too high. [4/0]",
+     "cop_name": "Metrics/CyclomaticComplexity",
+     "corrected": false,
+     "correctable": false,
+     "location": {
+      "start_line": 18,
+      "start_column": 3,
+      "last_line": 25,
+      "last_column": 5,
+      "length": 134,
+      "line": 18,
+      "column": 3
+     }
+    },
+    {
+     "severity": "refactor",
+     "message": "Cyclomatic complexity for `outer` is too high. [1/0]",
+     "cop_name": "Metrics/CyclomaticComplexity",
+     "corrected": false,
+     "correctable": false,
+     "location": {
+      "start_line": 27,
+      "start_column": 3,
+      "last_line": 30,
+      "last_column": 5,
+      "length": 51,
+      "line": 27,
+      "column": 3
+     }
+    },
+    {
+     "severity": "refactor",
+     "message": "Cyclomatic complexity for `inner` is too high. [1/0]",
+     "cop_name": "Metrics/CyclomaticComplexity",
+     "corrected": false,
+     "correctable": false,
+     "location": {
+      "start_line": 28,
+      "start_column": 5,
+      "last_line": 28,
+      "last_column": 21,
+      "length": 17,
+      "line": 28,
+      "column": 5
+     }
+    },
+    {
+     "severity": "refactor",
+     "message": "Cyclomatic complexity for `size` is too high. [1/0]",
+     "cop_name": "Metrics/CyclomaticComplexity",
+     "corrected": false,
+     "correctable": false,
+     "location": {
+      "start_line": 32,
+      "start_column": 3,
+      "last_line": 32,
+      "last_column": 26,
+      "length": 24,
+      "line": 32,
+      "column": 3
+     }
+    },
+    {
+     "severity": "refactor",
+     "message": "Cyclomatic complexity for `empty?` is too high. [1/0]",
+     "cop_name": "Metrics/CyclomaticComplexity",
+     "corrected": false,
+     "correctable": false,
+     "location": {
+      "start_line": 34,
+      "start_column": 3,
+      "last_line": 34,
+      "last_column": 44,
+      "length": 42,
+      "line": 34,
+      "column": 3
+     }
+    }
+   ]
+  }
+ ],
+ "summary": {
+  "offense_count": 7,
+  "target_file_count": 1,
+  "inspected_file_count": 1
+ }
+}

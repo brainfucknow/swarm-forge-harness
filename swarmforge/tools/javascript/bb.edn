@@ -1,4 +1,4 @@
-{:paths ["src" "test" "property" "acceptance/src" "../core/src" "../core/test"]
+{:paths ["src" "test" "property" "acceptance/src" "../core/src" "../core/test" "../core/property"]
  :tasks
  {test {:doc "Run the sf-js unit tests"
         :task (let [namespaces '[sfjs.package-test sfjs.cli-test sfjs.commands-test sfjs.crap-test sfjs.eslint-test sfjs.oxlint-test sfjs.mutate-test sfjs.reports-test sfjs.acceptance-test sfjs.architecture-test]]

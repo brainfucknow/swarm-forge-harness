@@ -1,0 +1,10 @@
+    30.3: flog total
+     4.3: flog/method average
+
+    15.3: Ledger#balance                   lib/ledger.rb:6-16
+     6.0: Ledger::define_method#empty?     lib/ledger.rb:34-34
+     4.3: Ledger#label                     lib/ledger.rb:18-25
+     2.5: Ledger#outer                     lib/ledger.rb:27-30
+     1.0: Ledger#initialize                lib/ledger.rb:2-4
+     1.0: Ledger#size                      lib/ledger.rb:32-32
+     0.2: Ledger#inner                     lib/ledger.rb:28-28

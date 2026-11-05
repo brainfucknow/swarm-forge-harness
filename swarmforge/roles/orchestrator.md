@@ -14,7 +14,7 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 3. Dispatch the first role of the route (`sf stage <id>`).
 
 ## Dispatching A Role
-- Delegate to the agent named after the role (`specifier`, `coder`, `cleaner`, `architect`, `hardener`, `qa`). Each harness defines them: `.claude/agents/<role>.md`, `.github/agents/<role>.agent.md`, `.codex/agents/<role>.toml`, `.kilo/agent/<role>.md`. The agent file carries the role's model tier; do not override it.
+- Delegate to the agent named after the role, for every role in `swarmforge/roles.conf`. Each harness defines them: `.claude/agents/<role>.md`, `.github/agents/<role>.agent.md`, `.codex/agents/<role>.toml`, `.kilo/agent/<role>.md`. The agent file carries the role's model tier; do not override it.
 - The whole prompt is: `Task <id>. Run: swarmforge/bin/sf start <id>` plus anything the operator said since the last dispatch that the role needs.
 - Wait for it to return. Then run `sf stage <id>` and `sf ls --needs`.
 - If the stage advanced, dispatch the new stage's role. Do not re-dispatch a role that just finished.
