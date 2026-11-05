@@ -10,8 +10,8 @@ branches, each task on its own route through the role catalogue. Read
 - Every role, the specifier included, is defined in `.codex/agents/*.toml`,
   `.claude/agents/*.md`, and `.github/agents/*.agent.md`. Delegate to them by
   role name; do not do their work in the session.
-- All task bookkeeping goes through `swarmforge/bin/sf`. Never edit a task
-  file or write a `SwarmForge-*` trailer by hand.
+- All task bookkeeping goes through `swarmforge/bin/sf`. Never write a
+  `SwarmForge-*` trailer by hand.
 - Roles that need a decision stop and ask in chat. Do not guess.
 
 Do not test the text of prompts with an automated unit or acceptance test.

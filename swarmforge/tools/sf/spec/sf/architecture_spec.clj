@@ -41,7 +41,7 @@
     sf.tool #{sf.catalogue sf.clone sf.entry-point sf.shell sf.wrapper}
     sf.adapters #{sf.config sf.shell}
     sf.git #{sf.shell}
-    sf.store #{sf.config sf.git sf.record sf.shell}
+    sf.store #{sf.git sf.record sf.shell}
     sf.metrics #{sf.git sf.shell}
     sf.verify #{sf.shell}
     sf.feature-block #{}

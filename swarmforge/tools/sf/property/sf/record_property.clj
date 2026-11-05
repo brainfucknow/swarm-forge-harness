@@ -105,25 +105,20 @@
                                :else (= (concat (take 40 paths) [(str "+" (- n 40) " more")]) listed))))))))
 
 (def ^:private request
-  (gen/fmap #(str/join "\n\n" %) (gen/not-empty (gen/vector sentence 1 3))))
+  "Paragraphs separated by one or more blank lines."
+  (gen/let [paragraphs (gen/not-empty (gen/vector sentence 1 3))
+            gaps (gen/vector (gen/elements ["\n\n" "\n\n\n"]) (count paragraphs))]
+    (apply str (first paragraphs) (interleave (rest gaps) (rest paragraphs)))))
 
-(def ^:private block
-  (gen/fmap #(str/join "\n" %) (gen/not-empty (gen/vector (gen/fmap (fn [[k v]] (str k ": " v)) (gen/tuple word sentence)) 1 4))))
-
-(describe "task files"
-  (it "read back the id, title and request they were written with"
-    (should (passes? (prop/for-all [id value title sentence req request]
-                       (let [file (record/read-task-file (record/task-file {:id id :date "2026-10-27" :title title :request req}))]
-                         (= [id title req []]
-                            [(get-in file [:front "id"]) (:title file) (:request file) (:blocks file)]))))))
-
-  (it "keep the request and every record block once archived"
-    (should (passes? (prop/for-all [id value title sentence req request route value blocks (gen/vector block 0 4)]
-                       (let [text (record/task-file {:id id :date "2026-10-27" :title title :request req})
-                             file (record/read-task-file (record/archive text route blocks))]
-                         (= [id title req blocks {:stage "done" :route route :needs "none"}]
-                            [(get-in file [:front "id"]) (:title file) (:request file) (:blocks file)
-                             (record/archived-state file)])))))))
+(describe "title and request"
+  (it "read back from the parsed created message, blank lines in the request kept"
+    (should (passes? (prop/for-all [title sentence req request]
+                       (let [message (record/message {:task "t-1" :record "created" :from "operator"
+                                                      :text (record/created-text title req)
+                                                      :stage "coder" :route "coder" :needs "none"})
+                             parsed (record/parse {:sha "s" :parents ["p"] :message message
+                                                   :trailers (trailer-lines message)})]
+                         (= {:title title :request req} (record/title-and-request (:text parsed)))))))))
 
 (def ^:private kept-kinds #{"question" "answer" "changes-requested"})
 

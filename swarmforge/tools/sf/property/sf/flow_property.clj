@@ -87,3 +87,26 @@
                                 (= explicit (config/resolve-route explicit))
                                 (= (mapv #(boolean (audited %)) catalogue)
                                    (mapv config/role-audits? catalogue))))))))))
+
+(def ^:private finish-facts
+  "What sf finish knows of a task: [recorded? tip head-parents tip-merged?],
+  with HEAD containing the tip whenever it merges it as its second parent."
+  (gen/let [recorded? gen/boolean
+            tip (gen/elements [nil "t1"])
+            head-parents (gen/elements [["m0"] ["m0" "t1"] ["t1" "m0"] ["m0" "t2"]])
+            tip-merged? gen/boolean]
+    [recorded? tip head-parents (or tip-merged? (and (some? tip) (= tip (second head-parents))))]))
+
+(describe "finish-action"
+  (it "refuses only a task without a branch, and merges only a tip that HEAD has no trace of"
+    (should (passes? (prop/for-all [[recorded? tip parents merged? :as facts] finish-facts]
+                       (let [action (apply flow/finish-action facts)]
+                         (and (= (nil? action) (nil? tip))
+                              (= (= :merge action) (and (some? tip) (not recorded?) (not merged?)))))))))
+
+  (it "completes a merge already in HEAD only when HEAD contains the tip"
+    (should (passes? (prop/for-all [[recorded? tip parents merged? :as facts] finish-facts]
+                       (let [action (apply flow/finish-action facts)]
+                         (and (= (#{:keep :reword} action) (when (and tip merged?) action))
+                              (= (= :unmerged action) (and (some? tip) recorded? (not merged?)))
+                              (or (not= :reword action) (and (not recorded?) (= tip (second parents)))))))))))

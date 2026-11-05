@@ -243,13 +243,26 @@
       (should (fs/exists? (str dir "/late")))
       (should-not= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
 
-  (it "refuses a finished task whose branch tip HEAD does not merge"
-    (let [id (new-id "Quick" "--route" "coder")]
-      (task/handoff [id "--to" "done"] {:audit-passed? true})
+  (it "merges and records a squash-merged task whose branch remains"
+    (let [id (done-task)
+          tip (git *dir* "rev-parse" (str "swarm/" id))]
       (git *dir* "merge" "-q" "--squash" (str "swarm/" id))
       (git *dir* "commit" "-q" "--no-verify" "-m" "Squash")
-      (should= {:status 1 :err (str "task " id " is finished")}
-               (select-keys (captured #(task/finish [id])) [:status :err]))))
+      (should= (str id "\tdone\t\tcoder\tQuick") (out task/ls []))
+      (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id]))
+      (should= tip (git *dir* "rev-parse" "HEAD^2"))
+      (should= (str "sf finished: " id) (git *dir* "log" "-1" "--format=%s"))
+      (should-contain "STATUS: finished" (out task/show [id]))))
+
+  (it "keeps a merge of the branch tip that the host made, below later commits"
+    (let [id (done-task)]
+      (git *dir* "merge" "-q" "--no-ff" "--no-edit" (str "swarm/" id))
+      (commit-on-main "later" "x")
+      (let [head (git *dir* "rev-parse" "HEAD")]
+        (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id]))
+        (should= head (git *dir* "rev-parse" "HEAD")))
+      (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))
+      (should-not (fs/exists? (worktree id)))))
 
   (it "refuses to finish while the worktree has uncommitted changes, and keeps them"
     (let [id (done-task)
