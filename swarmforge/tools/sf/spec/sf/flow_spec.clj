@@ -104,23 +104,23 @@
   (it "finds the commit of the newest created, review or handoff record"
     (should= "r1" (flow/last-milestone-commit records))))
 
-(describe "a finished task that sf finish resumes"
+(describe "what sf finish does with a done task"
+  (it "merges a branch that HEAD neither contains nor has the finished record of"
+    (should= :merge (flow/finish-action false "t1" ["m0"] false))
+    (should= :merge (flow/finish-action false "t1" ["m0" "t2"] false)))
+
   (it "keeps HEAD when HEAD's history has the finished record and the branch tip"
-    (should= :keep (flow/resume-action true "t1" ["m0"] true)))
+    (should= :keep (flow/finish-action true "t1" ["m0"] true)))
 
   (it "stops when the branch moved after the recorded merge"
-    (should= :unmerged (flow/resume-action true "t1" ["m0"] false)))
+    (should= :unmerged (flow/finish-action true "t1" ["m0"] false)))
 
   (it "rewords HEAD when it is the merge of the branch tip without the record"
-    (should= :reword (flow/resume-action false "t1" ["m0" "t1"] true)))
+    (should= :reword (flow/finish-action false "t1" ["m0" "t1"] true)))
 
   (it "refuses a task without a branch"
-    (should-be-nil (flow/resume-action true nil ["m0" "t1"] false)))
+    (should-be-nil (flow/finish-action true nil ["m0" "t1"] false)))
 
   (it "keeps HEAD when it contains the branch tip some other way and has no record"
-    (should= :keep (flow/resume-action false "t1" ["t1" "m0"] true))
-    (should= :keep (flow/resume-action false "t1" ["m0"] true)))
-
-  (it "refuses a HEAD that does not merge the branch tip"
-    (should-be-nil (flow/resume-action false "t1" ["m0"] false))
-    (should-be-nil (flow/resume-action false "t1" ["m0" "t2"] false))))
+    (should= :keep (flow/finish-action false "t1" ["t1" "m0"] true))
+    (should= :keep (flow/finish-action false "t1" ["m0"] true))))

@@ -267,20 +267,19 @@
     (shell/die "merge of " (record/branch id) " into " target " stopped on conflicts: " (str/join " " files)
                "; resolve them, commit, then run: sf finish " id)))
 
-(defn- resume!
-  "Verifies the merge committed into target and gives it the finished record
-  when it is the merge of the branch tip without one, or stops when the task
-  is finished."
-  [id state target]
-  (let [tip (store/tip id)
-        action (flow/resume-action (store/finished? id)
-                                   tip (store/head-parents) (boolean (and tip (store/in-head? tip))))]
-    (case action
-      (:keep :reword) (verified! id target (shell/repo-root))
-      :unmerged (shell/die (record/branch id) " has commits that HEAD does not contain; merge them, then run: sf finish " id)
-      (shell/die "task " id " is finished"))
-    (when (= :reword action)
-      (store/reword-head! (finished-message id state target)))))
+(defn- finish-by!
+  "Does what flow/finish-action decided for the task and target: merges the
+  branch, verifies the merge already in HEAD and rewords it with the finished
+  record when it lacks one, or stops."
+  [id state target action]
+  (case action
+    :merge (do (verify-candidate! id target)
+               (merge-task! id state target))
+    :keep (verified! id target (shell/repo-root))
+    :reword (do (verified! id target (shell/repo-root))
+                (store/reword-head! (finished-message id state target)))
+    :unmerged (shell/die (record/branch id) " has commits that HEAD does not contain; merge them, then run: sf finish " id)
+    (shell/die "task " id " is finished")))
 
 (defn finish
   "Verifies the merge of a done task into its target, merges it, and removes
@@ -296,12 +295,11 @@
         root (shell/repo-root)
         dir (worktree-of id)
         current (git root "rev-parse" "--abbrev-ref" "HEAD")
-        resuming? (or (store/finished? id) (some-> (store/tip id) store/in-head?))
-        target (if resuming? current (or (not-empty target) current))]
-    (if resuming?
-      (resume! id state target)
-      (do (verify-candidate! id target)
-          (merge-task! id state target)))
+        tip (store/tip id)
+        action (flow/finish-action (store/finished? id) tip (store/head-parents)
+                                   (boolean (and tip (store/in-head? tip))))
+        target (if (= :merge action) (or (not-empty target) current) current)]
+    (finish-by! id state target action)
     (when (fs/directory? dir) (git root "worktree" "remove" dir))
     (git root "branch" "-D" (record/branch id))
     (println (str "FINISHED: " id " merged into " target))))
