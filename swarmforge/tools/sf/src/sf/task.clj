@@ -355,6 +355,12 @@
         (git root "mv" path target)
         (println (str "MOVED: " path " -> " target " (staged; commit it)"))))))
 
+(defn- nested?
+  "Whether one of the directories a and b lies inside the other."
+  [a b]
+  (let [inside? (fn [x y] (str/starts-with? (str x "/") (str y "/")))]
+    (or (inside? a b) (inside? b a))))
+
 (defn move-tasks
   "Moves the task files from the directory from to tasks-dir: on each open
   task's branch as a moved record, and in the main checkout as a staged git mv
@@ -366,6 +372,9 @@
     (refuse (config/tasks-dir-problem from))
     (when (= from to)
       (shell/die "tasks-dir is " to "; set the new directory in swarmforge/project.conf first"))
+    (when (nested? from to)
+      (shell/die "cannot move task files between nested directories " from " and " to
+                 "; a path under one would also be a task path under the other"))
     (when (store/merging?) (shell/die "a merge is in progress; commit the merge first"))
     (let [finished (set (concat (store/done-ids from) (store/done-ids to)))
           moves (for [id (store/branch-ids)

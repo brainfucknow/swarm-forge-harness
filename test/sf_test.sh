@@ -389,6 +389,12 @@ idq="$(sf new "Not started" -m y --route coder)"
 tip_before="$(git rev-parse "swarm/$ido")"
 
 assert_fails "move-tasks refuses while tasks-dir is unchanged" sf move-tasks tasks
+assert_fails "move-tasks refuses an old directory inside tasks-dir" sf move-tasks tasks/old
+sed -i 's/^tasks-dir tasks$/tasks-dir tasks\/done/' swarmforge/project.conf
+assert_fails "move-tasks refuses a tasks-dir inside the old directory" sf move-tasks tasks
+assert_eq "a refused nested move records nothing" "$(git rev-parse "swarm/$ido")" "$tip_before"
+assert_eq "a refused nested move stages nothing" "$(git diff --cached --name-only)" ""
+sed -i 's/^tasks-dir tasks\/done$/tasks-dir tasks/' swarmforge/project.conf
 sed -i 's/^tasks-dir tasks$/tasks-dir swarmforge\/tasks/' swarmforge/project.conf
 assert_match "check accepts a nested tasks-dir" "$(sf check)" "^CHECK: ok"
 assert_eq "an unmoved open task is not listed with its title" "$(sf ls | grep "^$ido" | cut -f5)" ""

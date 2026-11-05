@@ -102,7 +102,8 @@ To change `tasks-dir`, edit it in the main checkout's `swarmforge/project.conf`,
 then run `sf move-tasks <old-dir>`. On each open task branch it records a
 `moved` record that moves the task file and keeps the stage, route, and needs,
 so a task waiting on the operator keeps waiting. It refuses before moving
-anything when a task worktree has uncommitted changes, and brings each clean
+anything when a task worktree has uncommitted changes or when one directory
+lies inside the other, and brings each clean
 task worktree to the new tip. In the main checkout it stages a `git mv` of the
 archives under `<old-dir>/done/`; commit them with `project.conf`. Only files
 named `<id>.md` and `done/<id>.md` move; other files under `<old-dir>/` stay.
