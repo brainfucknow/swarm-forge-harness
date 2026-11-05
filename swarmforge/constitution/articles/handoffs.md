@@ -2,7 +2,7 @@
 
 A task is its branch, `swarm/<id>`. Roles pass work by committing on the task
 branch, and `sf` records each handoff as a commit on it. All task bookkeeping
-goes through `swarmforge/bin/sf`; never edit a task file under `tasks/` and
+goes through `swarmforge/bin/sf`; never edit a task file under the tasks directory (`tasks/`, or `tasks-dir` in `swarmforge/project.conf`) and
 never write a `SwarmForge-*` trailer by hand. `sf start` and `sf show` print the
 records; `swarmforge/handoff-protocol.md` describes the task branch.
 

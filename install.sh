@@ -19,8 +19,13 @@ copy_tree() {
 
 mkdir -p "$target/swarmforge"
 # verify.conf holds this repository's own checks; a project writes its own.
+# project.conf holds the project's settings; a reinstall keeps them.
 for file in "$HERE"/swarmforge/*.md "$HERE"/swarmforge/*.conf; do
-  [ "$(basename "$file")" = verify.conf ] || cp "$file" "$target/swarmforge/"
+  case "$(basename "$file")" in
+    verify.conf) ;;
+    project.conf) [ -e "$target/swarmforge/project.conf" ] || cp "$file" "$target/swarmforge/" ;;
+    *) cp "$file" "$target/swarmforge/" ;;
+  esac
 done
 for directory in bin constitution languages roles; do
   copy_tree "$HERE/swarmforge/$directory" "$target/swarmforge/$directory"
@@ -68,6 +73,7 @@ Installed SwarmForge into $target.
   swarmforge/roles.conf       role catalogue (edit, then: swarmforge/bin/sf adapters)
   swarmforge/routes.conf      named routes a task can take
   swarmforge/tiers.conf       model per tier per harness
+  swarmforge/project.conf     project settings such as tasks-dir (kept on reinstall)
   .claude/agents, .codex/agents, .github/agents   generated role agents
   /swarm <request>            start a task from Claude Code, Codex, or Copilot
 EOF

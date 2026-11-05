@@ -165,7 +165,9 @@
 (defn- archive
   "The task file moved to done, with every record and the handoff rec."
   [id records rec]
-  (record/archive (store/show-file (store/ref-of id) (store/open-path id))
+  (record/archive (or (store/show-file (store/ref-of id) (store/open-path id))
+                      (shell/die "no " (store/open-path id) " on " (record/branch id)
+                                 "; if tasks-dir changed, run: sf move-tasks <old-dir>"))
                   (:route rec)
                   (map record/block (store/with-files (concat records [(assoc rec :task id)])))))
 
@@ -313,3 +315,73 @@
     (when (fs/directory? dir) (git root "worktree" "remove" dir))
     (git root "branch" "-D" (record/branch id))
     (println (str "FINISHED: " id " merged into " target))))
+
+;; sf move-tasks
+
+(def ^:private task-file-name
+  "A task file's path below a tasks directory: <id>.md or done/<id>.md."
+  #"(done/)?[a-z0-9-]+-[0-9a-f]{7}\.md")
+
+(defn- branch-move
+  "[old new] when the branch of task id has its task file under from and none
+  under to, else nil."
+  [id from to]
+  (let [rev (store/ref-of id)
+        old (store/task-path-at rev from id)]
+    (when (and old (not (store/task-path-at rev to id)))
+      [old (str to (subs old (count from)))])))
+
+(defn- move-branch!
+  "Records the move of the task file on the task branch and brings a clean
+  worktree of the task to the new tip."
+  [id [old new]]
+  (store/write! id (fn [records]
+                     (assoc (flow/follow (last records) "moved" "operator" {:text (str old " -> " new)})
+                            :move [old new])))
+  (when (fs/directory? (worktree-of id))
+    (git (worktree-of id) "reset" "--quiet" "--hard"))
+  (println (str "MOVED: " id " " old " -> " new)))
+
+(defn- move-checkout!
+  "Stages, with git mv in the main checkout, the move of the task files under
+  from in HEAD to the same place under to."
+  [from to]
+  (let [root (shell/repo-root)]
+    (doseq [path (shell/lines (git root "ls-tree" "-r" "--name-only" "HEAD" "--" (str from "/")))
+            :let [below (subs path (inc (count from)))]
+            :when (re-matches task-file-name below)]
+      (let [target (str to "/" below)]
+        (fs/create-dirs (fs/parent (fs/path root target)))
+        (git root "mv" path target)
+        (println (str "MOVED: " path " -> " target " (staged; commit it)"))))))
+
+(defn- nested?
+  "Whether one of the directories a and b lies inside the other."
+  [a b]
+  (let [inside? (fn [x y] (str/starts-with? (str x "/") (str y "/")))]
+    (or (inside? a b) (inside? b a))))
+
+(defn move-tasks
+  "Moves the task files from the directory from to tasks-dir: on each open
+  task's branch as a moved record, and in the main checkout as a staged git mv
+  of the archives that the operator commits."
+  [[from]]
+  (when (str/blank? from) (shell/die "move-tasks needs the old tasks directory"))
+  (let [from (str/replace from #"/+$" "")
+        to (config/tasks-dir)]
+    (refuse (config/tasks-dir-problem from))
+    (when (= from to)
+      (shell/die "tasks-dir is " to "; set the new directory in swarmforge/project.conf first"))
+    (when (nested? from to)
+      (shell/die "cannot move task files between nested directories " from " and " to
+                 "; a path under one would also be a task path under the other"))
+    (when (store/merging?) (shell/die "a merge is in progress; commit the merge first"))
+    (let [finished (set (concat (store/done-ids from) (store/done-ids to)))
+          moves (for [id (store/branch-ids)
+                      :when (not (finished id))
+                      :let [move (branch-move id from to)]
+                      :when move]
+                  [id move])]
+      (doseq [[id] moves] (check-worktree! id))
+      (doseq [[id move] moves] (move-branch! id move)))
+    (move-checkout! from to)))
