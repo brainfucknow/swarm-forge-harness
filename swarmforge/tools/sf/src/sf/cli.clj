@@ -79,14 +79,14 @@ Environment
    "approve" task/approve
    "reject" task/reject
    "finish" task/finish
-   "roles" print-roles
-   "pipeline" print-roles
-   "routes" (fn [_] (doseq [[name route] (config/named-routes)]
-                      (println (format "%-10s %s" name (str route)))))
+   "roles" (config/in-checkout print-roles)
+   "pipeline" (config/in-checkout print-roles)
+   "routes" (config/in-checkout (fn [_] (doseq [[name route] (config/named-routes)]
+                                          (println (format "%-10s %s" name (str route))))))
    "dispatch" dispatch/dispatch
    "run" dispatch/run
-   "adapters" adapters/adapters
-   "check" (fn [_] (config/check))
+   "adapters" (config/in-checkout adapters/adapters)
+   "check" (config/in-checkout (fn [_] (config/check)))
    "commit-msg" hook/commit-msg})
 
 (defn main [[command & args]]

@@ -204,6 +204,16 @@
     (should= "project-owned file" (slurp (str (fs/path *dir* ".claude"))))
     (should-not (fs/exists? (fs/path *dir* ".codex/agents"))))
 
+  (it "refuses a dangling ownership link in a worktree before generating adapters"
+    (let [wt (fs/path *dir* "wt")
+          state (fs/path wt ".swarmforge/adapters.edn")]
+      (fs/create-dirs (fs/parent state))
+      (fs/create-sym-link state (fs/path *dir* "outside.edn"))
+      (with-redefs [sf.shell/checkout-root (constantly (str wt))]
+        (should= 1 (:status (captured #(adapters/adapters [])))))
+      (should-not (fs/exists? (fs/path *dir* "outside.edn")))
+      (should-not (fs/exists? (fs/path wt ".claude")))))
+
   (it "does not generate through a symbolic link at the harness root"
     (fs/create-dirs (fs/path *dir* "project-claude"))
     (fs/create-sym-link (fs/path *dir* ".claude") (fs/path *dir* "project-claude"))
