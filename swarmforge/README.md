@@ -51,8 +51,8 @@ After editing `roles.conf`, `routes.conf`, or `tiers.conf`, run `sf adapters`
 to regenerate the agent files under `.claude/agents/`, `.codex/agents/`, and
 `.github/agents/`. `sf check` validates the configuration files and the role
 prompts; `sf init` and `sf adapters` run it first and refuse a broken setup.
-These commands and `sf tool` read the checkout they run in; task bookkeeping
-reads the main checkout's.
+`sf check`, `sf adapters`, `sf roles`, `sf routes` and `sf tool` read the
+checkout they run in; `sf init` and task bookkeeping read the main checkout's.
 
 Adapter ownership is recorded in ignored `.swarmforge/adapters.edn` in the
 checkout where `sf adapters` runs. Regeneration preserves unrelated agents and
