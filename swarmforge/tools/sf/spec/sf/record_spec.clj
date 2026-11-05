@@ -113,7 +113,11 @@
 
   (it "lists at most 40 paths"
     (should= (str (clojure.string/join "," (map str (range 40))) ",+2 more")
-             (record/files-value (map str (range 42))))))
+             (record/files-value (map str (range 42)))))
+
+  (it "lists exactly 40 paths in full"
+    (should= (clojure.string/join "," (map str (range 40)))
+             (record/files-value (map str (range 40))))))
 
 (describe "block"
   (it "renders the keys of the record type, later lines of a value indented"

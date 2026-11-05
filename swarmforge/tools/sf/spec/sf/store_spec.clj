@@ -46,7 +46,33 @@
     (create! "t-1")
     (repo/git *dir* "merge" "-q" "--squash" "swarm/t-1")
     (repo/git *dir* "commit" "-q" "--allow-empty" "-m" (str "Squash\n\n" (finished-message "t-1" "main")))
+    (should= [] (store/finished-ids)))
+
+  (it "do not include a merge whose finished lines are not in its trailer block"
+    (create! "t-1")
+    (repo/git *dir* "merge" "-q" "--no-ff" "-m"
+              (str "Merge\n\nSwarmForge-Record: finished\nSwarmForge-Task: t-1\n\nnot trailers: the end")
+              "swarm/t-1")
     (should= [] (store/finished-ids))))
+
+(defn- tree-files [id]
+  (set (clojure.string/split-lines (repo/git *dir* "ls-tree" "-r" "--name-only" (str "swarm/" id)))))
+
+(describe "write! on a task made before records changed no file"
+  (around [it] (with-repo it))
+
+  (it "removes the task file of that task only when the record is at done"
+    (.mkdirs (java.io.File. (str *dir* "/tasks")))
+    (doseq [f ["t-1.md" "tasks/t-1.md" "tasks/xt-1.md" "tasks/t-2.md"]]
+      (repo/git *dir* "add" "--" (do (spit (str *dir* "/" f) "x") f)))
+    (repo/git *dir* "commit" "-q" "-m" "Add task files")
+    (create! "t-1")
+    (let [rec {:record "handoff" :from "coder" :route "coder" :needs "none"}
+          files (tree-files "t-1")]
+      (store/write! "t-1" (fn [_] (assoc rec :stage "qa")))
+      (should= files (tree-files "t-1"))
+      (store/write! "t-1" (fn [_] (assoc rec :stage "done")))
+      (should= (disj files "t-1.md" "tasks/t-1.md") (tree-files "t-1")))))
 
 (describe "title-and-request"
   (around [it] (with-repo it))
