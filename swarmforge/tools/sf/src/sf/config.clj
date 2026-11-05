@@ -6,8 +6,17 @@
             [sf.flow :as flow]
             [sf.shell :as shell]))
 
+(def ^:dynamic *root*
+  "The checkout whose swarmforge/ is read; nil reads the main checkout's."
+  nil)
+
 (defn conf-dir []
-  (str (fs/path (shell/repo-root) "swarmforge")))
+  (str (fs/path (or *root* (shell/repo-root)) "swarmforge")))
+
+(defn in-checkout
+  "The command f, reading the config of the checkout it runs in."
+  [f]
+  (fn [args] (binding [*root* (shell/checkout-root)] (f args))))
 
 (defn conf-file [name]
   (str (fs/path (conf-dir) name)))
