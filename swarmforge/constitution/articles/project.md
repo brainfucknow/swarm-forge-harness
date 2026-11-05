@@ -6,7 +6,7 @@
 - Existing code: refactor freely. The opt-in value is `ask before refactoring`, which turns on the engineering article's Existing Code section; a project opts in by changing this line. A missing line means `refactor freely`.
 
 ## Local Configuration
-- Keep SwarmForge configuration under `swarmforge/`, task worktrees under `.worktrees/`, and task state in the `swarm/*` branches and the tasks directory: `tasks/`, or `tasks-dir` in `swarmforge/project.conf` (its `done/` once a task is done). The orphan branch `swarmforge/metrics` caches mutation manifests. Nothing else is swarm state.
+- Keep SwarmForge configuration under `swarmforge/`, task worktrees under `.worktrees/`, and task state in the `swarm/*` branches and the `sf finish` merges. The orphan branch `swarmforge/metrics` caches mutation manifests. Nothing else is swarm state.
 - `.worktrees/` and `./tmp/` are ignored by git and never committed.
 
 ## Verification

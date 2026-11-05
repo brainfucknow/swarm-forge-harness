@@ -12,10 +12,14 @@ Feature: sf task state
   operator or an approval. sf next <role> prints the ids of the tasks at that
   stage that need nothing, or NO_TASK.
 
-  A task is finished when tasks/done/<id>.md is in the HEAD of the main
-  checkout, whatever branch still has swarm/<id>, also after a squash merge.
-  sf ls and sf next skip a finished task; sf start and every command that
-  writes a record refuse it with "task <id> is finished" and exit status 1.
+  A task is finished when the history of the HEAD of the main checkout, any
+  parent included, has its finished record (the merge of sf finish), whatever
+  branch still has swarm/<id>. sf ls and sf next skip a finished task; sf
+  start and every command that writes a record refuse it with "task <id> is
+  finished" and exit status 1. sf reads only local branches: a remote
+  swarm/<id> that could not be deleted never lists or reopens a task. A task
+  that was squash-merged while its branch remains is not finished; it stays
+  at its stage until sf finish merges it.
 
   Background:
     Given a project with swarmforge initialized
@@ -73,24 +77,24 @@ Feature: sf task state
     And the output is "$A\tspecifier\t\tspecifier,coder\tAdd login"
 
   # sf task state 7
-  Scenario Outline: sf task state 7: a squash-merged task is finished although its branch remains
+  Scenario Outline: sf task state 7: a squash-merged task whose branch remains is still listed at done
     Given task "B" was handed off to done and squash-merged into main
     When I run "<command>"
     Then the exit status is 0
     And the output is "<output>"
 
     Examples:
-      | command          | output                                      |
-      | sf ls            | $A\tspecifier\t\tspecifier,coder\tAdd login |
-      | sf next coder    | NO_TASK                                     |
+      | command       | output                                                                 |
+      | sf ls         | $A\tspecifier\t\tspecifier,coder\tAdd login\n$B\tdone\t\tcoder,qa\tFix bug |
+      | sf next coder | NO_TASK                                                                |
 
   # sf task state 8
   Scenario Outline: sf task state 8: a command that writes a record refuses a finished task
-    Given task "B" was handed off to done and squash-merged into main
+    Given task "B" was finished
     When I run "<command>"
     Then the exit status is 1
     And the error output has the line "sf: task $B is finished"
-    And the branch of task "B" did not move
+    And the branch "swarm/$B" does not exist
 
     Examples:
       | command           |
@@ -100,16 +104,16 @@ Feature: sf task state
 
   # sf task state 9
   Scenario: sf task state 9: sf ask refuses a finished task
-    Given task "B" was handed off to done and squash-merged into main
+    Given task "B" was finished
     When I run "sf ask $B Which"
     Then the exit status is 1
     And the error output has the line "sf: task $B is finished"
-    And the branch of task "B" did not move
+    And the branch "swarm/$B" does not exist
 
   # sf task state 10
   Scenario: sf task state 10: sf answer refuses a finished task
-    Given task "B" was handed off to done and squash-merged into main
+    Given task "B" was finished
     When I run "sf answer $B yes"
     Then the exit status is 1
     And the error output has the line "sf: task $B is finished"
-    And the branch of task "B" did not move
+    And the branch "swarm/$B" does not exist

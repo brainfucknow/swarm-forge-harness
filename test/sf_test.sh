@@ -64,6 +64,8 @@ assert_match "show prints the body" "$(sf show "$id")" "email and password"
 assert_match "new records the branch point" "$(sf show "$id")" "type: created"
 assert_match "created names its own commit" "$(sf show "$id")" "commit: $(git rev-parse --short "swarm/$id")"
 assert_eq "the created commit sits on main" "$(git rev-parse "swarm/$id^")" "$(git rev-parse main)"
+assert_eq "the created commit changes no file" "$(git diff-tree --no-commit-id -r "swarm/$id")" ""
+assert_match "the created commit holds the request" "$(git log -1 --format=%B "swarm/$id")" "^Users can log in with email and password\.$"
 
 # next
 assert_eq "next finds the task for its stage" "$(sf next specifier)" "$id"
@@ -159,7 +161,7 @@ assert_match "handoff honors -m" "$(sf show "$id")" "summary: skip ahead"
 out="$(sf handoff "$id")"
 assert_match "last stage hands off to done" "$out" "qa -> done"
 assert_eq "done is the terminal stage" "$(sf stage "$id")" "done"
-assert_eq "the handoff to done archives the task file" "$(git ls-tree --name-only -r "swarm/$id" tasks)" "tasks/done/$id.md"
+assert_eq "the handoff to done changes no file" "$(git diff-tree --no-commit-id -r "swarm/$id")" ""
 
 # finish
 assert_fails "finish an unknown task" sf finish "zzzzzzz"
@@ -173,6 +175,8 @@ assert_eq "finish removes the worktree" "$(test -d ".worktrees/$id" && echo pres
 assert_eq "finish deletes the branch" "$(git branch --list "swarm/$id")" ""
 assert_eq "finish leaves only unfinished tasks" "$(sf ls | cut -f1)" "$idn"
 assert_match "a finished task is still shown" "$(sf show "$id")" "^STATUS: finished$"
+assert_match "a finished task shows its request" "$(sf show "$id")" "^Users can log in with email and password\.$"
+assert_eq "no path in HEAD names the finished task" "$(git ls-tree -r --name-only HEAD | grep -c "$id" || true)" "0"
 assert_fails "a finished task cannot be started" sf start "$id"
 
 # routes
@@ -367,89 +371,76 @@ assert_match "adapters leaves main's agents" "$(cat .claude/agents/cleaner.md)" 
 sf adapters >/dev/null && pass "adapters in main still succeeds" || fail "adapters in main after a worktree run"
 assert_match "main's agents follow main's config" "$(cat .claude/agents/cleaner.md)" "^model: sonnet$"
 
-# tasks-dir in project.conf places the task files; sf move-tasks moves them.
-tdrepo="$scratch/tasks-dir"
-mkdir -p "$tdrepo" && cd "$tdrepo"
-git init -q . && copy_swarmforge .
-mkdir -p tasks/own && echo "project content" > tasks/own/notes.md
-git add -A && git commit -q -m seed
+# Tasks live in their record commits. Finished state is the finished merge in
+# HEAD's history, any parent included; only local swarm/* branches are read.
+store="$scratch/store"
+mkdir -p "$store/remote.git" "$store/project" && cd "$store/project"
+git init -q --bare ../remote.git
+git init -q . && copy_swarmforge . && git add -A && git commit -q -m seed
+git remote add origin ../remote.git && git push -q origin main
 sf init >/dev/null
-assert_eq "tasks-dir defaults to tasks" "$(sed -n 's/^tasks-dir //p' swarmforge/project.conf)" "tasks"
-idf="$(sf new "Old finished" -m x --route coder)"
-assert_eq "by default the created commit adds tasks/<id>.md" "$(git diff-tree --no-commit-id --name-only -r "swarm/$idf")" "tasks/$idf.md"
-sf start "$idf" >/dev/null
-git -C ".worktrees/$idf" commit -q --allow-empty -m "Work"
-sf handoff "$idf" >/dev/null && sf finish "$idf" >/dev/null
-assert_eq "by default finish leaves the archive in tasks/done" "$(git ls-tree --name-only HEAD tasks/done/)" "tasks/done/$idf.md"
-ido="$(sf new "Open question" -m "Keep this request." --route coder,qa)"
-sf start "$ido" >/dev/null
-git -C ".worktrees/$ido" commit -q --allow-empty -m "Coder work"
-sf ask "$ido" "Which store?" >/dev/null
-idq="$(sf new "Not started" -m y --route coder)"
-tip_before="$(git rev-parse "swarm/$ido")"
+done_task() { # <title>: a started task handed off to done with one commit
+  local tid; tid="$(sf new "$1" -m "Request of $1." --route coder)"
+  sf start "$tid" >/dev/null
+  git -C ".worktrees/$tid" commit -q --allow-empty -m "Work on $1"
+  sf handoff "$tid" >/dev/null
+  echo "$tid"
+}
 
-assert_fails "move-tasks refuses while tasks-dir is unchanged" sf move-tasks tasks
-assert_fails "move-tasks refuses an old directory inside tasks-dir" sf move-tasks tasks/old
-sed -i 's/^tasks-dir tasks$/tasks-dir tasks\/done/' swarmforge/project.conf
-assert_fails "move-tasks refuses a tasks-dir inside the old directory" sf move-tasks tasks
-assert_eq "a refused nested move records nothing" "$(git rev-parse "swarm/$ido")" "$tip_before"
-assert_eq "a refused nested move stages nothing" "$(git diff --cached --name-only)" ""
-sed -i 's/^tasks-dir tasks\/done$/tasks-dir tasks/' swarmforge/project.conf
-sed -i 's/^tasks-dir tasks$/tasks-dir swarmforge\/tasks/' swarmforge/project.conf
-assert_match "check accepts a nested tasks-dir" "$(sf check)" "^CHECK: ok"
-assert_eq "an unmoved open task is not listed with its title" "$(sf ls | grep "^$ido" | cut -f5)" ""
-echo dirty > ".worktrees/$ido/dirty.txt"
-assert_fails "move-tasks refuses a task worktree with changes" sf move-tasks tasks
-assert_eq "a refused move records nothing" "$(git rev-parse "swarm/$ido")" "$tip_before"
-rm ".worktrees/$ido/dirty.txt"
-out="$(sf move-tasks tasks/)"
-assert_match "move-tasks moves the open task's file on its branch" "$out" "^MOVED: $ido tasks/$ido.md -> swarmforge/tasks/$ido.md$"
-assert_match "move-tasks moves a task without a worktree" "$out" "^MOVED: $idq tasks/$idq.md -> swarmforge/tasks/$idq.md$"
-assert_match "move-tasks stages the archive move in the main checkout" "$out" "^MOVED: tasks/done/$idf.md -> swarmforge/tasks/done/$idf.md \(staged; commit it\)$"
-assert_eq "the branch has the file only under the new directory" \
-  "$(git ls-tree -r --name-only "swarm/$ido" tasks swarmforge/tasks | grep "$ido")" "swarmforge/tasks/$ido.md"
-assert_eq "the move keeps the task file's text" "$(git show "swarm/$ido:swarmforge/tasks/$ido.md")" "$(git show "$tip_before:tasks/$ido.md")"
-assert_match "the move is a record" "$(sf show "$ido")" "^path: tasks/$ido.md -> swarmforge/tasks/$ido.md$"
-assert_match "the move keeps the stage and the question" "$(sf ls --needs)" "^$ido	coder	operator	coder,qa	Open question$"
-assert_match "the question survives the move" "$(sf show "$ido")" "^question: Which store\?$"
-assert_eq "the task worktree follows the move" "$(git -C ".worktrees/$ido" status --porcelain)" ""
-assert_eq "the worktree has the moved file" "$(test -f ".worktrees/$ido/swarmforge/tasks/$ido.md" && echo yes)" "yes"
-assert_eq "project content under tasks/ stays" "$(git diff --cached --name-only -- tasks/own)" ""
-git commit -q -m "Move task files" -- swarmforge/project.conf tasks swarmforge/tasks
-assert_match "a finished task stays finished after the move" "$(sf show "$idf")" "^STATUS: finished$"
-assert_eq "a second move finds nothing to move" "$(sf move-tasks tasks)" ""
+idp="$(done_task "Via PR")"
+git push -q origin "swarm/$idp"
+git checkout -q -b pr
+assert_match "finish into a PR branch" "$(sf finish "$idp")" "^FINISHED: $idp merged into pr$"
+git checkout -q main && git merge -q --no-ff --no-edit pr && git fetch -q origin
+assert_match "a finish merged by the host shows as finished" "$(sf show "$idp")" "^STATUS: finished$"
+assert_eq "ls skips a task finished through a PR" "$(sf ls)" ""
+assert_eq "next skips a task finished through a PR" "$(sf next coder)" "NO_TASK"
+assert_match "start refuses a task finished through a PR" "$(sf start "$idp" 2>&1 || true)" "is finished"
+assert_eq "the remote branch is left in place" "$(git rev-parse --verify --quiet "origin/swarm/$idp" >/dev/null && echo kept)" "kept"
+assert_eq "no task path is in HEAD" "$(git ls-tree -r --name-only HEAD | grep -c "$idp" || true)" "0"
 
-idn="$(sf new "New place" -m "Lives in swarmforge/tasks." --route coder)"
-assert_eq "new adds the task file under tasks-dir" "$(git diff-tree --no-commit-id --name-only -r "swarm/$idn")" "swarmforge/tasks/$idn.md"
-assert_match "ls reads the title under tasks-dir" "$(sf ls)" "^$idn	coder		coder	New place$"
-assert_match "show reads the request under tasks-dir" "$(sf show "$idn")" "^Lives in swarmforge/tasks\.$"
-sf start "$idn" >/dev/null
-git -C ".worktrees/$idn" commit -q --allow-empty -m "Work"
-sf handoff "$idn" >/dev/null
-assert_eq "handoff to done archives under tasks-dir" \
-  "$(git ls-tree -r --name-only "swarm/$idn" tasks swarmforge/tasks | grep "$idn")" "swarmforge/tasks/done/$idn.md"
-assert_match "finish merges a task under tasks-dir" "$(sf finish "$idn")" "^FINISHED: $idn"
-assert_eq "the archive lands under tasks-dir" "$(git ls-tree --name-only HEAD swarmforge/tasks/done/ | grep -c "$idn")" "1"
-assert_match "the finished task is shown" "$(sf show "$idn")" "^STATUS: finished$"
-assert_eq "ls lists only the open tasks" "$(sf ls | cut -f1 | sort | paste -sd ' ' -)" "$(printf '%s\n' "$ido" "$idq" | sort | paste -sd ' ' -)"
-sf answer "$ido" "git" >/dev/null
-assert_match "a moved task hands off on" "$(sf handoff "$ido")" "coder -> qa"
-sf handoff "$ido" >/dev/null
-assert_match "a moved task finishes" "$(sf finish "$ido")" "^FINISHED: $ido"
-assert_eq "the moved task's archive is under tasks-dir" "$(git ls-tree --name-only HEAD swarmforge/tasks/done/ | grep -c "$ido")" "1"
-assert_eq "nothing is left in the old directory" "$(git ls-tree -r --name-only HEAD tasks | paste -sd ' ' -)" "tasks/own/notes.md"
+ids="$(done_task "Squash after")"
+git checkout -q -b pr2 && sf finish "$ids" >/dev/null
+git checkout -q main && git merge -q --squash pr2 >/dev/null && git commit -q --allow-empty -m "Squash pr2" && git branch -q -D pr2
+assert_eq "ls skips a task squash-merged after finish" "$(sf ls)" ""
+assert_match "show finds no task squash-merged after finish" "$(sf show "$ids" 2>&1 || true)" "no task '$ids'"
+assert_match "start finds no task squash-merged after finish" "$(sf start "$ids" 2>&1 || true)" "no task '$ids'"
 
-for value in "../up" ".hidden" "/abs" "a//b"; do
-  printf 'tasks-dir %s\n' "$value" > swarmforge/project.conf
-  assert_match "check rejects tasks-dir $value" "$(sf check 2>&1 || true)" "CHECK: project.conf: tasks-dir '$value' must be a relative path"
-  assert_fails "bookkeeping refuses tasks-dir $value" sf ls
-done
-printf 'tasks-dir a\ntasks-dir b\n' > swarmforge/project.conf
-assert_match "check rejects a repeated setting" "$(sf check 2>&1 || true)" "CHECK: project.conf: 'tasks-dir' listed twice"
-printf 'colour blue\n' > swarmforge/project.conf
-assert_match "check rejects an unknown setting" "$(sf check 2>&1 || true)" "CHECK: project.conf: unknown setting 'colour'"
+idb="$(done_task "Squash before")"
+git merge -q --squash "swarm/$idb" >/dev/null && git commit -q --allow-empty -m "Squash $idb"
+assert_match "a task squash-merged before finish is listed at done" "$(sf ls)" "^$idb	done		coder	Squash before$"
+assert_match "finish merges a squash-merged task" "$(sf finish "$idb")" "^FINISHED: $idb merged into main$"
+assert_match "the squash-merged task is finished" "$(sf show "$idb")" "^STATUS: finished$"
+
+idh="$(done_task "Host merge")"
+git merge -q --no-ff --no-edit "swarm/$idh" && git commit -q --allow-empty -m "After the host merge"
+assert_match "finish completes a host merge" "$(sf finish "$idh")" "^FINISHED: $idh merged into main$"
+assert_eq "finish removes the host-merged branch" "$(git branch --list "swarm/$idh")" ""
+
+idl="legacy-task-1234567"
+git checkout -q -b "swarm/$idl"
+mkdir -p tasks && printf -- '---\nid: %s\ncreated: 2026-10-27\n---\n\n# Legacy task\n\nOld request.\n' "$idl" > "tasks/$idl.md"
+git add "tasks/$idl.md"
+git commit -q --no-verify -m "$(printf 'sf created: %s\n\nLegacy task\n\nSwarmForge-Task: %s\nSwarmForge-Record: created\nSwarmForge-From: operator\nSwarmForge-Stage: coder\nSwarmForge-Route: coder\nSwarmForge-Needs: none' "$idl" "$idl")"
+git checkout -q main
+assert_match "ls reads the title of a legacy task" "$(sf ls)" "^$idl	coder		coder	Legacy task$"
+assert_match "show reads the request of a legacy task" "$(sf show "$idl")" "^Old request\.$"
+sf start "$idl" >/dev/null && sf handoff "$idl" >/dev/null
+assert_eq "the handoff to done deletes the legacy task file" "$(git diff-tree --no-commit-id --name-status -r "swarm/$idl")" "D	tasks/$idl.md"
+sf finish "$idl" >/dev/null
+assert_eq "a finished legacy task leaves no file" "$(git ls-tree -r --name-only HEAD | grep -c "$idl" || true)" "0"
+
+idt="$(sf new "$(printf 'Two\nlines')" -m x --route coder)"
+assert_match "a title with a line break is listed as one line" "$(sf ls)" "^$idt	coder		coder	Two lines$"
+
+assert_fails "move-tasks is gone" sf move-tasks tasks
+printf 'tasks-dir somewhere\n' > swarmforge/project.conf
+assert_match "check ignores a leftover project.conf" "$(sf check)" "^CHECK: ok"
+assert_match "ls ignores a leftover project.conf" "$(sf ls)" "^$idt	"
 rm swarmforge/project.conf
-assert_eq "without project.conf tasks-dir is tasks" "$(sf new "No conf" -m x | xargs -I{} git diff-tree --no-commit-id --name-only -r "swarm/{}")" "$(git for-each-ref --format='%(refname:lstrip=3)' 'refs/heads/swarm/no-conf-*' | sed 's|^|tasks/|; s|$|.md|')"
+mkdir -p tasks/done && echo archive > tasks/done/old-archive-7654321.md
+git add tasks && git commit -q -m "Old archive"
+assert_match "an old archive makes no task" "$(sf show old-archive-7654321 2>&1 || true)" "no task 'old-archive-7654321'"
 cd "$repo"
 
 for pair in ".claude/skills/swarm/SKILL.md .agents/skills/swarm/SKILL.md"; do

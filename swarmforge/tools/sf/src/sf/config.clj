@@ -1,6 +1,5 @@
 (ns sf.config
-  "The catalogue files under swarmforge/: roles, tiers, routes, tools, and the
-  project settings."
+  "The catalogue files under swarmforge/: roles, tiers, routes and tools."
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
             [sf.catalogue :as catalogue]
@@ -81,27 +80,6 @@
                   (when (empty? roles) (shell/die "empty route"))
                   (str/join "," roles)))))
 
-;; project.conf
-
-(def default-tasks-dir "tasks")
-
-(defn tasks-dir-problem
-  "Why dir cannot hold task files, or nil: it must be a relative path whose
-  parts are letters, digits, ., _ and - and do not start with a dot."
-  [dir]
-  (when-not (and (string? dir)
-                 (every? #(re-matches #"[A-Za-z0-9_][A-Za-z0-9._-]*" %) (str/split dir #"/" -1)))
-    (str "tasks-dir '" dir "' must be a relative path of names that do not start with a dot")))
-
-(defn tasks-dir
-  "The directory of the task files, relative to the repository root: the
-  tasks-dir setting of project.conf, else tasks."
-  []
-  (let [dir (or (field (rows "project.conf") "tasks-dir" 2) default-tasks-dir)]
-    (when-let [problem (tasks-dir-problem dir)]
-      (shell/die "project.conf: " problem))
-    dir))
-
 ;; sf check
 
 (defn- scan
@@ -163,20 +141,10 @@
 (defn- check-tools []
   (map #(str "tools.conf: " %) (catalogue/problems (map catalogue/tool (rows "tools.conf")))))
 
-(defn- check-project []
-  (scan (rows "project.conf")
-        (fn [[setting value :as row] seen]
-          (cond
-            (not= "tasks-dir" setting) [(str "project.conf: unknown setting '" setting "' (only tasks-dir)")]
-            (not= 2 (count row)) [(str "project.conf: '" setting "' needs exactly <setting> <value>")]
-            :else (cond-> []
-                    (seen setting) (conj (str "project.conf: '" setting "' listed twice"))
-                    (tasks-dir-problem value) (conj (str "project.conf: " (tasks-dir-problem value))))))))
-
 (defn check
   "Validates the catalogue files and prints a summary; stops on any problem."
   []
-  (let [problems (concat (check-tiers) (check-roles) (check-routes) (check-tools) (check-project))]
+  (let [problems (concat (check-tiers) (check-roles) (check-routes) (check-tools))]
     (when (seq problems)
       (binding [*out* *err*]
         (doseq [problem problems] (println (str "CHECK: " problem))))

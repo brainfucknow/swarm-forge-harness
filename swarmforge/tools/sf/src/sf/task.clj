@@ -96,12 +96,9 @@
   (let [{:keys [body route] :or {body title}}
         (options/parse "new" args {"-m" :body "-F" [:body options/read-file] "--route" :route} {})
         route (if route (config/resolve-route route) (config/default-route))
-        title (str/trim title)
+        title (record/one-line title)
         id (store/new-id title)]
-    (store/create! id
-                   (record/task-file {:id id :title title :request body
-                                      :date (str (java.time.LocalDate/now java.time.ZoneOffset/UTC))})
-                   (record/message (assoc (flow/created title route) :task id)))
+    (store/create! id (record/message (assoc (flow/created title body route) :task id)))
     (println id)))
 
 (defn route [[id-arg spec]]
@@ -114,16 +111,17 @@
       (println (str "ROUTE: " id " " route)))))
 
 (defn- open-ids []
-  (sort (remove (set (store/done-ids)) (store/branch-ids))))
+  (sort (remove (set (store/finished-ids)) (store/branch-ids))))
 
 (defn ls [args]
   (let [{:keys [stage needs]} (options/parse "ls" args {"--stage" :stage} {"--needs" :needs})]
     (doseq [id (open-ids)
-            :let [state (store/state id)]
+            :let [records (store/open-records id)
+                  state (last records)]
             :when (and (or (nil? stage) (= stage (:stage state)))
                        (or (not needs) (flow/waiting? state)))]
       (println (str/join "\t" [id (:stage state) (if (flow/waiting? state) (:needs state) "")
-                               (:route state) (:title (store/task-file id))])))))
+                               (:route state) (:title (store/title-and-request records))])))))
 
 (defn next-task [[role]]
   (when (str/blank? role) (shell/die "next needs a role"))
@@ -140,9 +138,9 @@
 
 (defn show [[id-arg]]
   (let [id (store/resolve-id id-arg)
-        {:keys [file status state] :as view} (history/view id)]
+        {:keys [title status state] :as view} (history/view id)]
     (println (str "TASK: " id))
-    (println (str "TITLE: " (:title file)))
+    (println (str "TITLE: " title))
     (println (str "STATUS: " status))
     (println (str "STAGE: " (:stage state)))
     (println (str "ROUTE: " (:route state)))
@@ -153,23 +151,14 @@
         dir (add-worktree id)]
     (hook/install (shell/repo-root))
     (metrics/load! dir)
-    (let [{:keys [file state] :as view} (history/view id)]
+    (let [{:keys [title state] :as view} (history/view id)]
       (println (str "TASK: " id))
-      (println (str "TITLE: " (:title file)))
+      (println (str "TITLE: " title))
       (println (str "STAGE: " (:stage state)))
       (println (str "ROUTE: " (:route state)))
       (println (str "BRANCH: " (record/branch id)))
       (println (str "DIR: " dir))
       (history/print-brief id view))))
-
-(defn- archive
-  "The task file moved to done, with every record and the handoff rec."
-  [id records rec]
-  (record/archive (or (store/show-file (store/ref-of id) (store/open-path id))
-                      (shell/die "no " (store/open-path id) " on " (record/branch id)
-                                 "; if tasks-dir changed, run: sf move-tasks <old-dir>"))
-                  (:route rec)
-                  (map record/block (store/with-files (concat records [(assoc rec :task id)])))))
 
 (defn handoff
   "Records HEAD and moves the task on. role overrides the acting role, and
@@ -189,7 +178,7 @@
                        (let [state (last records)
                              rec (flow/handoff state from to head summary)]
                          (refuse (flow/handoff-refusal state (role-head id)))
-                         (cond-> rec (= "done" to) (assoc :archive (archive id records rec))))))
+                         rec)))
     (metrics/save! id (worktree-of id))
     (when (and (= "done" to) (fs/directory? (worktree-of id)))
       (git (worktree-of id) "reset" "--quiet" "--hard"))
@@ -278,19 +267,19 @@
     (shell/die "merge of " (record/branch id) " into " target " stopped on conflicts: " (str/join " " files)
                "; resolve them, commit, then run: sf finish " id)))
 
-(defn- resume!
-  "Verifies the merge the operator committed into target and gives it the
-  finished record when it lacks it, or stops when the task is finished."
-  [id state target]
-  (let [tip (store/tip id)
-        action (flow/resume-action (some? (flow/finished-record (store/records-at "HEAD" id)))
-                                   tip (store/head-parents) (boolean (and tip (store/in-head? tip))))]
-    (case action
-      (:keep :reword) (verified! id target (shell/repo-root))
-      :unmerged (shell/die (record/branch id) " has commits that HEAD does not contain; merge them, then run: sf finish " id)
-      (shell/die "task " id " is finished"))
-    (when (= :reword action)
-      (store/reword-head! (finished-message id state target)))))
+(defn- finish-by!
+  "Does what flow/finish-action decided for the task and target: merges the
+  branch, verifies the merge already in HEAD and rewords it with the finished
+  record when it lacks one, or stops."
+  [id state target action]
+  (case action
+    :merge (do (verify-candidate! id target)
+               (merge-task! id state target))
+    :keep (verified! id target (shell/repo-root))
+    :reword (do (verified! id target (shell/repo-root))
+                (store/reword-head! (finished-message id state target)))
+    :unmerged (shell/die (record/branch id) " has commits that HEAD does not contain; merge them, then run: sf finish " id)
+    (shell/die "task " id " is finished")))
 
 (defn finish
   "Verifies the merge of a done task into its target, merges it, and removes
@@ -306,82 +295,11 @@
         root (shell/repo-root)
         dir (worktree-of id)
         current (git root "rev-parse" "--abbrev-ref" "HEAD")
-        resuming? (store/finished? id)
-        target (if resuming? current (or (not-empty target) current))]
-    (if resuming?
-      (resume! id state target)
-      (do (verify-candidate! id target)
-          (merge-task! id state target)))
+        tip (store/tip id)
+        action (flow/finish-action (store/finished? id) tip (store/head-parents)
+                                   (boolean (and tip (store/in-head? tip))))
+        target (if (= :merge action) (or (not-empty target) current) current)]
+    (finish-by! id state target action)
     (when (fs/directory? dir) (git root "worktree" "remove" dir))
     (git root "branch" "-D" (record/branch id))
     (println (str "FINISHED: " id " merged into " target))))
-
-;; sf move-tasks
-
-(def ^:private task-file-name
-  "A task file's path below a tasks directory: <id>.md or done/<id>.md."
-  #"(done/)?[a-z0-9-]+-[0-9a-f]{7}\.md")
-
-(defn- branch-move
-  "[old new] when the branch of task id has its task file under from and none
-  under to, else nil."
-  [id from to]
-  (let [rev (store/ref-of id)
-        old (store/task-path-at rev from id)]
-    (when (and old (not (store/task-path-at rev to id)))
-      [old (str to (subs old (count from)))])))
-
-(defn- move-branch!
-  "Records the move of the task file on the task branch and brings a clean
-  worktree of the task to the new tip."
-  [id [old new]]
-  (store/write! id (fn [records]
-                     (assoc (flow/follow (last records) "moved" "operator" {:text (str old " -> " new)})
-                            :move [old new])))
-  (when (fs/directory? (worktree-of id))
-    (git (worktree-of id) "reset" "--quiet" "--hard"))
-  (println (str "MOVED: " id " " old " -> " new)))
-
-(defn- move-checkout!
-  "Stages, with git mv in the main checkout, the move of the task files under
-  from in HEAD to the same place under to."
-  [from to]
-  (let [root (shell/repo-root)]
-    (doseq [path (shell/lines (git root "ls-tree" "-r" "--name-only" "HEAD" "--" (str from "/")))
-            :let [below (subs path (inc (count from)))]
-            :when (re-matches task-file-name below)]
-      (let [target (str to "/" below)]
-        (fs/create-dirs (fs/parent (fs/path root target)))
-        (git root "mv" path target)
-        (println (str "MOVED: " path " -> " target " (staged; commit it)"))))))
-
-(defn- nested?
-  "Whether one of the directories a and b lies inside the other."
-  [a b]
-  (let [inside? (fn [x y] (str/starts-with? (str x "/") (str y "/")))]
-    (or (inside? a b) (inside? b a))))
-
-(defn move-tasks
-  "Moves the task files from the directory from to tasks-dir: on each open
-  task's branch as a moved record, and in the main checkout as a staged git mv
-  of the archives that the operator commits."
-  [[from]]
-  (when (str/blank? from) (shell/die "move-tasks needs the old tasks directory"))
-  (let [from (str/replace from #"/+$" "")
-        to (config/tasks-dir)]
-    (refuse (config/tasks-dir-problem from))
-    (when (= from to)
-      (shell/die "tasks-dir is " to "; set the new directory in swarmforge/project.conf first"))
-    (when (nested? from to)
-      (shell/die "cannot move task files between nested directories " from " and " to
-                 "; a path under one would also be a task path under the other"))
-    (when (store/merging?) (shell/die "a merge is in progress; commit the merge first"))
-    (let [finished (set (concat (store/done-ids from) (store/done-ids to)))
-          moves (for [id (store/branch-ids)
-                      :when (not (finished id))
-                      :let [move (branch-move id from to)]
-                      :when move]
-                  [id move])]
-      (doseq [[id] moves] (check-worktree! id))
-      (doseq [[id move] moves] (move-branch! id move)))
-    (move-checkout! from to)))

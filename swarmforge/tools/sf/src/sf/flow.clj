@@ -49,9 +49,9 @@
     (str "route '" route "' does not contain the current stage '" stage "'")))
 
 (defn created
-  "The first record of a task on route."
-  [title route]
-  {:record "created" :from "operator" :text title
+  "The first record of a task on route; its free text holds the title and the request."
+  [title request route]
+  {:record "created" :from "operator" :text (record/created-text title request)
    :stage (first (route-list route)) :route route :needs "none"})
 
 (defn follow
@@ -73,16 +73,20 @@
   {:record "finished" :from "operator" :stage "done" :route (:route state) :needs "none"
    :merged-into target})
 
-(defn resume-action
-  "What sf finish does with a task whose archive is in HEAD: :keep HEAD when
-  recorded? (HEAD's history has the finished record) and HEAD contains the
-  branch tip (tip-merged?), :unmerged when the branch moved after that merge,
-  :reword HEAD when it is the merge of the branch tip without that record,
-  else nil: the task is finished. tip is nil when the task has no branch."
+(defn finish-action
+  "What sf finish does with a done task, from whether HEAD's history has its
+  finished record (recorded?), its branch tip (nil when it has no branch),
+  HEAD's parents and whether HEAD contains the tip (tip-merged?): :merge the
+  branch when HEAD has neither, :keep HEAD when it contains the tip,
+  :unmerged when the branch moved after the recorded merge, :reword HEAD when
+  it is the merge of the tip without the record, else nil: the task is
+  finished."
   [recorded? tip head-parents tip-merged?]
   (cond (nil? tip) nil
         recorded? (if tip-merged? :keep :unmerged)
-        (and (= 2 (count head-parents)) (= tip (second head-parents))) :reword))
+        (and (= 2 (count head-parents)) (= tip (second head-parents))) :reword
+        tip-merged? :keep
+        :else :merge))
 
 (defn role-commit
   "The role's commit at the branch tip: the tip itself, or the commit under the
@@ -99,6 +103,3 @@
   "The role's commit of the newest created, review or handoff record."
   [records]
   (:commit (last (filter record/milestone? records))))
-
-(defn finished-record [records]
-  (last (filter #(= "finished" (:record %)) records)))

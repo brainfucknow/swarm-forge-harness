@@ -1,6 +1,7 @@
 (ns sf.record
   "Tasks as plain values: ids, record commit messages and their trailers, the
-  task file, and the key: value blocks that sf start and sf show print."
+  title and request of a task, and the key: value blocks that sf start and sf
+  show print."
   (:refer-clojure :exclude [resolve])
   (:require [clojure.string :as str])
   (:import (java.text Normalizer Normalizer$Form)))
@@ -159,44 +160,28 @@
   (str/join "\n" (for [[key value] (fields rec)]
                    (str key ": " (str/replace (str value) "\n" "\n  ")))))
 
-(defn task-file [{:keys [id date title request]}]
-  (str "---\nid: " id "\ncreated: " date "\n---\n\n# " title "\n\n" (str/trim request) "\n"))
+(defn one-line
+  "text with each run of whitespace, line breaks included, as one space, trimmed."
+  [text]
+  (str/join " " (str/split (str/trim text) #"\s+")))
 
-(def ^:private records-heading "\n## Records\n")
+(defn created-text
+  "The free text of a created record: the title, a blank line, the request."
+  [title request]
+  (str title "\n\n" (str/trim request)))
 
-(defn archive
-  "The task file at done: stage and route in the front matter, and the record
-  blocks, each fenced, in a Records section."
-  [text route blocks]
-  (str (str/replace-first (str/trimr text) "\n---\n" (str "\nstage: done\nroute: " route "\n---\n"))
-       "\n" records-heading "\n"
-       (str/join "\n\n" (for [b blocks] (str "```text\n" b "\n```")))
-       "\n"))
+(defn title-and-request
+  "The :title and :request in the free text of a created record."
+  [text]
+  (let [[title request] (str/split (or text "") #"\n\n" 2)]
+    {:title title :request (str/trim (or request ""))}))
 
 (defn read-task-file
-  "The front matter, title, request and archived record blocks of a task file.
-  Only an archived file (one with a stage) has a Records section; in an open
-  task the heading is part of the request."
+  "The :title and :request of a task file, as tasks created before sf kept
+  them in the created record have it."
   [text]
-  (let [[_ front rest] (re-matches #"(?s)---\n(.*?)\n---\n(.*)" text)
-        [_ title body] (re-matches #"(?s)\s*# ([^\n]*)\n?(.*)" (or rest ""))
-        front (into {} (for [line (str/split-lines (or front ""))
-                             :let [[_ k v] (re-matches #"([^:]+): ?(.*)" line)]
-                             :when k]
-                         [k v]))
-        cut (when (contains? front "stage") (str/last-index-of body records-heading))]
-    {:front front
-     :title title
-     :request (str/trim (if cut (subs body 0 cut) (or body "")))
-     :blocks (if cut
-               (mapv second (re-seq #"(?s)```text\n(.*?)\n```" (subs body cut)))
-               [])}))
-
-(defn archived-state
-  "The stage and route in the front matter of an archived task file, which
-  waits on no one."
-  [{:keys [front]}]
-  {:stage (get front "stage") :route (get front "route") :needs "none"})
+  (let [[_ title request] (re-matches #"(?s)---\n.*?\n---\n\s*# ([^\n]*)\n?(.*)" text)]
+    {:title title :request (str/trim (or request ""))}))
 
 (defn record-trailer
   "The first key that starts with SwarmForge-, in any letter case, or nil."

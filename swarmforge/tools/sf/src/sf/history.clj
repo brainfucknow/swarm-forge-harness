@@ -16,34 +16,29 @@
     (lore/read-log (shell/must {:dir (shell/repo-root)} "git" "log" "--reverse" "--first-parent"
                                (str "--format=" lore/log-format) (str base ".." rev)))))
 
-(defn- record-history [rev records]
-  {:records (store/with-files records) :commits (lore-commits rev records)})
-
-(defn- branch-history [rev id]
-  (record-history rev (store/records-at rev id)))
+(defn- record-history
+  "The task's :title and :request, its :records with their files and the
+  :commits after the created record, on the first-parent history of rev."
+  [rev records]
+  (merge (store/title-and-request records)
+         {:records (store/with-files records) :commits (lore-commits rev records)}))
 
 (defn- finished-history
-  "From the merge of sf finish when HEAD has it, else from the archive, with
-  the LORE: lines of the branch while it exists."
-  [id file]
-  (if-let [finished (flow/finished-record (store/records-at "HEAD" id))]
-    (update (branch-history (str (:sha finished) "^2") id) :records concat [finished])
-    {:blocks (:blocks file)
-     :commits (when (store/has-branch? id) (:commits (branch-history (store/ref-of id) id)))}))
+  "From the merge of sf finish: the records of its second parent, then the
+  finished record."
+  [finished]
+  (let [rev (str (:sha finished) "^2")]
+    (update (record-history rev (store/records-at rev (:task finished))) :records concat [finished])))
 
 (defn view
-  "The task's :file, :status, :state, and :records or archived :blocks, with
-  the :commits whose Lore trailers make its LORE: lines."
+  "The task's :title, :request, :status, :state, :records and the :commits
+  whose Lore trailers make its LORE: lines."
   [id]
-  (let [file (store/task-file id)]
-    (if (store/finished? id)
-      (merge {:file file :status "finished" :state (record/archived-state file)}
-             (finished-history id file))
-      (let [rev (store/ref-of id)
-            records (store/records-at rev id)
-            state (or (last records) (shell/die "swarm/" id " has no records"))]
-        (merge {:file file :status "open" :state state}
-               (record-history rev records))))))
+  (if-let [finished (store/finished-record id)]
+    (merge {:status "finished" :state finished} (finished-history finished))
+    (let [records (store/open-records id)]
+      (merge {:status "open" :state (last records)}
+             (record-history (store/ref-of id) records)))))
 
 (def ^:private brief-records
   "How many records that are not question, answer or changes-requested sf start prints."
@@ -63,19 +58,19 @@
 
 (defn print-body
   "Prints a --- line, the request, the record blocks and the LORE: lines."
-  [{:keys [file records blocks commits]}]
-  (print-sections (:request file)
-                  (str/join "\n\n" (or blocks (map record/block records)))
+  [{:keys [request records commits]}]
+  (print-sections request
+                  (str/join "\n\n" (map record/block records))
                   (str/join "\n" (lore/lines commits))))
 
 (defn print-brief
   "print-body for sf start of task id: only the records that record/brief
   keeps and the lines that lore/brief keeps, each section led by a line that
   counts what it left out."
-  [id {:keys [file records commits]}]
+  [id {:keys [request records commits]}]
   (let [{shown :records omitted :omitted} (record/brief records brief-records)
         {lore :lines lore-omitted :omitted} (lore/brief commits)]
-    (print-sections (:request file)
+    (print-sections request
                     (omitted-line "RECORDS" omitted "earlier records omitted" id)
                     (str/join "\n\n" (map record/block shown))
                     (str/join "\n" (remove nil? (cons (omitted-line "LORE-OMITTED" lore-omitted "superseded or evidence lines" id)
