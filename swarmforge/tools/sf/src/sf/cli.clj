@@ -45,6 +45,7 @@ Catalogue commands
   adapters                        regenerate .claude/.codex/.github agent files
   tool require|ensure|list|bin    install constitution tools project-locally (sf tool --help)
   check                           validate roles.conf, tiers.conf, routes.conf, tools.conf, role prompts
+  roles, routes, adapters, tool and check read the config of the checkout sf runs in
 
 Hook commands
   commit-msg <role> <file>        add the byline and a Lore-id to a commit message (the commit-msg hook runs this)
@@ -79,14 +80,14 @@ Environment
    "approve" task/approve
    "reject" task/reject
    "finish" task/finish
-   "roles" print-roles
-   "pipeline" print-roles
-   "routes" (fn [_] (doseq [[name route] (config/named-routes)]
-                      (println (format "%-10s %s" name (str route)))))
+   "roles" (config/in-checkout print-roles)
+   "pipeline" (config/in-checkout print-roles)
+   "routes" (config/in-checkout (fn [_] (doseq [[name route] (config/named-routes)]
+                                          (println (format "%-10s %s" name (str route))))))
    "dispatch" dispatch/dispatch
    "run" dispatch/run
-   "adapters" adapters/adapters
-   "check" (fn [_] (config/check))
+   "adapters" (config/in-checkout adapters/adapters)
+   "check" (config/in-checkout (fn [_] (config/check)))
    "commit-msg" hook/commit-msg})
 
 (defn main [[command & args]]

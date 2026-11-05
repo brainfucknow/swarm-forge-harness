@@ -344,6 +344,29 @@ assert_fails "adapters refuse a broken configuration" sf adapters
 copy_swarmforge .
 sf adapters >/dev/null
 
+# Config commands read the checkout they run in; bookkeeping reads main's.
+idc="$(sf new "Config change" -m x --route coder)"
+sf start "$idc" >/dev/null
+wt="$repo/.worktrees/$idc"
+echo "quick coder" >> "$wt/swarmforge/routes.conf"
+sed -i '/^security-reviewer /d' "$wt/swarmforge/roles.conf"
+assert_match "routes reads the worktree's routes.conf" "$(cd "$wt" && sf routes)" "^quick +coder$"
+assert_eq "routes in main reads main's routes.conf" "$(sf routes | grep -c '^quick' || true)" "0"
+assert_eq "roles reads the worktree's roles.conf" "$(cd "$wt" && sf roles | grep -c '^security-reviewer$' || true)" "0"
+assert_match "check names the worktree's swarmforge" "$(cd "$wt" && sf check 2>&1 || true)" "problem\(s\) in .*/\.worktrees/$idc/swarmforge$"
+assert_match "check in main reads main's config" "$(sf check)" "^CHECK: ok"
+git -C "$wt" checkout -q -- swarmforge/roles.conf
+assert_fails "new from a worktree resolves routes from main" sh -c "cd '$wt' && sf new Y -m x --route quick"
+assert_eq "route from a worktree is unchanged" "$(cd "$wt" && sf route "$idc")" "coder"
+cp -R .claude .codex .github "$wt/"
+sed -i 's/^cleaner   fast /cleaner   strong /' "$wt/swarmforge/roles.conf"
+sed -i '3s/.*/Cleans up after the coder./' "$wt/swarmforge/roles/cleaner.md"
+(cd "$wt" && sf adapters >/dev/null) && pass "adapters in a worktree take over main's adapters" || fail "adapters in a worktree"
+assert_match "adapters writes the worktree's agents" "$(cat "$wt/.claude/agents/cleaner.md")" "^model: opus$"
+assert_match "adapters leaves main's agents" "$(cat .claude/agents/cleaner.md)" "^model: sonnet$"
+sf adapters >/dev/null && pass "adapters in main still succeeds" || fail "adapters in main after a worktree run"
+assert_match "main's agents follow main's config" "$(cat .claude/agents/cleaner.md)" "^model: sonnet$"
+
 for pair in ".claude/skills/swarm/SKILL.md .agents/skills/swarm/SKILL.md"; do
   set -- $pair
   cmp -s "$HERE/$1" "$HERE/$2" && pass "$1 matches $2" || fail "$1 differs from $2"
