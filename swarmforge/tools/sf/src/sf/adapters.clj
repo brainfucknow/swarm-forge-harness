@@ -109,7 +109,8 @@
         desired (into {} (mapcat (fn [[role tier]] (agent-files role tier)) roles))
         state (fs/path root ".swarmforge" "adapters.edn")
         main-state (fs/path (shell/repo-root) ".swarmforge" "adapters.edn")
-        recorded (read-ownership (if (fs/exists? state) state main-state))
+        local (read-ownership state)
+        recorded (if (fs/exists? state) local (read-ownership main-state))
         owned (merge (legacy-ownership root recorded) (refreshed-ownership root desired recorded))]
     (preflight root (distinct (concat (keys desired) (keys owned))) owned)
     (doseq [path (remove (set (keys desired)) (keys owned))]
