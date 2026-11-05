@@ -2,13 +2,13 @@
 
 A task is its branch, `swarm/<id>`. Roles pass work by committing on the task
 branch, and `sf` records each handoff as a commit on it. All task bookkeeping
-goes through `swarmforge/bin/sf`; never edit a task file under `tasks/` and
-never write a `SwarmForge-*` trailer by hand. See `swarmforge/handoff-protocol.md` for the
-record formats.
+goes through `swarmforge/bin/sf`; never edit a task file under the tasks directory (`tasks/`, or `tasks-dir` in `swarmforge/project.conf`) and
+never write a `SwarmForge-*` trailer by hand. `sf start` and `sf show` print the
+records; `swarmforge/handoff-protocol.md` describes the task branch.
 
 ## Receiving Work
 - `sf next <role>` prints the ids of tasks waiting at `stage:<role>`, or `NO_TASK`. If it prints `NO_TASK`, stop; there is nothing for your role.
-- `sf start <id>` prints the task: title, stage, branch, `DIR:`, the request body, every record so far, and then one `LORE:` line per Lore trailer on the task branch's commits. The latest `type: handoff` record is the work you received, and its `files:` header names what that role changed; the `answer` records settle earlier questions; the `LORE:` lines carry the earlier roles' constraints, rejected alternatives, directives, and verification. Read them with the request and the records, and follow a `Directive:`. Use only that printed information as the task.
+- `sf start <id>` prints the request, stage, branch, `DIR:`, recent records, all operator questions/answers/change requests, and decision Lore. Use this as the task; the latest handoff's `files:` names the received changes. Follow answers and `Directive:` trailers. `RECORDS:` and `LORE-OMITTED:` mark omissions; use `sf show <id>` for full history and evidence. The [protocol](../../handoff-protocol.md#what-sf-start-leaves-out) defines the brief.
 - Work in the printed `DIR:`. The branch already carries every earlier role's commits.
 - If you were given a task id in your prompt, start that task. Do not take another.
 

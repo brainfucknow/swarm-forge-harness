@@ -13,7 +13,7 @@ Feature: sf tool catalogue location
   Background:
     Given a project with swarmforge initialized
     And a task worktree
-    And the task worktree's tools.conf adds the line "probe local swarmforge/bin/probe - - -"
+    And the task worktree's tools.conf adds the line "probe local swarmforge/bin/probe - - - -"
     And the task worktree's "swarmforge/bin/probe" prints "probe"
 
   # sf tool catalogue location 1

@@ -1,7 +1,8 @@
 (ns sfjs.architecture-test
   "Dependency rules for the sf-* wrappers, read from the ns forms under
   swarmforge/tools: policy namespaces stay free of IO, shared core never
-  reaches into a language, and only the F# entrypoint delegates to the .NET CLI."
+  reaches into a language, languages stay apart, and only the F# and VB.NET
+  entrypoints delegate to the .NET CLI."
   (:require [babashka.fs :as fs]
             [clojure.set :as set]
             [clojure.string :as str]
@@ -10,7 +11,7 @@
 (def tools-dir (str (nth (iterate fs/parent (fs/canonicalize *file*)) 4)))
 
 (def source-roots
-  ["core/src" "javascript/src" "javascript/acceptance/src" "csharp/src"])
+  ["core/src" "javascript/src" "javascript/acceptance/src" "csharp/src" "ruby/src"])
 
 (defn- ns-form [file]
   (with-open [reader (java.io.PushbackReader. (java.io.FileReader. (str file)))]
@@ -34,10 +35,21 @@
 
 (def adapters
   "The namespaces that may touch processes, files, git, or the console."
-  '#{sfcore.shell sfcore.git sfjs.cli sfcs.cli sfcs.cobertura sffs.cli})
+  '#{sfcore.shell sfcore.git sfjs.cli sfcs.cli sfcs.cobertura sffs.cli sfvb.cli sfrb.cli})
+
+(def dotnet-entrypoints '#{sffs.cli sfvb.cli})
 
 (defn- in? [prefix sym]
   (str/starts-with? (str sym) prefix))
+
+(defn- dotnet? [sym]
+  (some #(in? % sym) ["sfcs." "sffs." "sfvb."]))
+
+(defn- language [sym]
+  (cond
+    (in? "sfjs." sym) :javascript
+    (dotnet? sym) :dotnet
+    (in? "sfrb." sym) :ruby))
 
 (defn- violations [pred]
   (into (sorted-map) (keep (fn [[from deps]] (when-let [bad (seq (filter #(pred from %) deps))] [from (vec (sort bad))])))
@@ -45,6 +57,7 @@
 
 (deftest the-graph-is-read
   (is (contains? graph 'sfjs.cli))
+  (is (contains? graph 'sfrb.cli))
   (is (contains? (graph 'sfjs.cli) 'sfcore.git)))
 
 (deftest policy-namespaces-stay-free-of-io
@@ -58,13 +71,13 @@
 
 (deftest languages-stay-apart
   (is (= {} (violations (fn [from dep]
-                          (or (and (in? "sfjs." from) (in? "sfcs." dep))
-                              (and (in? "sfcs." from) (in? "sfjs." dep))))))))
+                          (let [from-language (language from) dep-language (language dep)]
+                            (and from-language dep-language (not= from-language dep-language))))))))
 
 (deftest command-line-dependencies-are-limited-to-the-dotnet-entrypoint
   (is (= {} (violations (fn [from dep]
-                          (or (and (#{'sfjs.cli 'sfcs.cli 'sffs.cli} dep)
-                                   (not= ['sffs.cli 'sfcs.cli] [from dep]))
+                          (or (and (or (#{'sfjs.cli 'sfcs.cli 'sfrb.cli} dep) (dotnet-entrypoints dep))
+                                   (not (and (dotnet-entrypoints from) (= 'sfcs.cli dep))))
                               (and (not (in? "sfjs.acceptance." from)) (in? "sfjs.acceptance." dep))))))))
 
 (def complexity-sources
@@ -76,6 +89,15 @@
   (is (= {} (violations (fn [from dep]
                           (and (complexity-sources dep)
                                (or (= 'sfjs.crap from) (complexity-sources from))))))))
+
+(def ruby-analysers
+  "The tools sf-rb takes complexity or clones from; each reads its own report."
+  '#{sfrb.rubocop sfrb.flog sfrb.flay})
+
+(deftest ruby-crap-scoring-knows-no-analyser-and-the-analysers-stay-apart
+  (is (= {} (violations (fn [from dep]
+                          (and (ruby-analysers dep)
+                               (or (= 'sfrb.crap from) (ruby-analysers from))))))))
 
 (defn- reachable [start]
   (loop [seen #{} todo (vec (graph start))]

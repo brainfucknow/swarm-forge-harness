@@ -24,7 +24,7 @@
 
 (def ^:private pure
   "The high-level namespaces: plain values in and out, no IO."
-  '#{sf.lore sf.record sf.flow sf.feature-block sf.coverage-args})
+  '#{sf.lore sf.record sf.flow sf.feature-block sf.coverage-args sf.catalogue})
 
 (def ^:private allowed
   "The sf namespaces each sf namespace may require. Dependencies point from the
@@ -33,14 +33,17 @@
     sf.lore #{}
     sf.record #{}
     sf.flow #{sf.record}
-    sf.config #{sf.flow sf.shell}
+    sf.catalogue #{}
+    sf.config #{sf.catalogue sf.flow sf.shell}
     sf.entry-point #{}
     sf.wrapper #{sf.shell}
-    sf.tool #{sf.config sf.entry-point sf.shell sf.wrapper}
+    sf.clone #{sf.shell}
+    sf.tool #{sf.catalogue sf.clone sf.entry-point sf.shell sf.wrapper}
     sf.adapters #{sf.config sf.shell}
     sf.git #{sf.shell}
-    sf.store #{sf.git sf.record sf.shell}
+    sf.store #{sf.config sf.git sf.record sf.shell}
     sf.metrics #{sf.git sf.shell}
+    sf.verify #{sf.shell}
     sf.feature-block #{}
     sf.gherkin-cache #{sf.feature-block sf.shell}
     sf.coverage-args #{}
@@ -49,8 +52,8 @@
     sf.options #{sf.record sf.shell}
     sf.audit #{sf.config sf.flow sf.shell sf.store}
     sf.history #{sf.flow sf.lore sf.record sf.shell sf.store}
-    sf.dispatch #{sf.config sf.flow sf.shell sf.store}
-    sf.task #{sf.audit sf.config sf.flow sf.git sf.history sf.hook sf.metrics sf.options sf.record sf.shell sf.store}
+    sf.dispatch #{sf.config sf.flow sf.shell sf.store sf.task}
+    sf.task #{sf.audit sf.config sf.flow sf.git sf.history sf.hook sf.metrics sf.options sf.record sf.shell sf.store sf.verify}
     sf.cli #{sf.adapters sf.config sf.dispatch sf.hook sf.shell sf.task sf.tool}})
 
 (defn- source-namespaces []

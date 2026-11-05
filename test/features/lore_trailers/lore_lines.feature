@@ -11,7 +11,8 @@ Feature: sf Lore lines
   folded values joined to one line; trailers that are not Lore trailers are
   left out. When there are no Lore trailers, nothing is added to the output.
   sf show of a task finished with sf finish reads them from the merge's
-  second parent.
+  second parent. sf start prints only some of these lines, as
+  test/features/task_store/start_brief.feature specifies.
 
   Background:
     Given a project with swarmforge initialized
@@ -19,24 +20,19 @@ Feature: sf Lore lines
     And a task at stage "specifier" started with sf start
 
   # sf Lore lines 1
-  Scenario Outline: sf Lore lines 1: start and show print the Lore trailers of the branch, oldest first
+  Scenario: sf Lore lines 1: show prints the Lore trailers of the branch, oldest first
     Given role "specifier" committed "Spec\n\nConstraint: keep the\n byline" in the task worktree as C1
     And role "coder" committed "Code\n\nPlain body" in the task worktree as C2
     And role "qa" committed "Verify\n\nTested: placement\nNot-tested: Windows\nCo-Authored-By: A <a@b>" in the task worktree as C3
-    When I run "sf <command> ID" in the main checkout
+    When I run "sf show ID" in the main checkout
     Then the exit status is 0
     And the output ends with the lines "LORE: C1 specifier Lore-id: L1\nLORE: C1 specifier Constraint: keep the byline\nLORE: C3 qa Lore-id: L3\nLORE: C3 qa Tested: placement\nLORE: C3 qa Not-tested: Windows"
     And the output has no line containing "Tested: base"
 
-    Examples:
-      | command |
-      | start   |
-      | show    |
-
   # sf Lore lines 2
   Scenario: sf Lore lines 2: a commit without a byline shows the role as -
     Given "Fix\n\nTested: x" was committed in the task worktree with the hook skipped as C1
-    When I run "sf start ID" in the main checkout
+    When I run "sf show ID" in the main checkout
     Then the exit status is 0
     And the output ends with the lines "LORE: C1 - Tested: x"
 

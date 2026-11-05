@@ -20,7 +20,7 @@ git config --global user.email tester@example.com
 repo="$scratch/project"
 mkdir -p "$repo" && cd "$repo"
 git init -q .
-cp -R "$HERE/swarmforge" swarmforge
+cp -R "$HERE/swarmforge" swarmforge && rm -f swarmforge/verify.conf
 git add -A && git commit -q -m seed
 
 fake="$scratch/fakebin"; mkdir -p "$fake"
@@ -31,17 +31,17 @@ fake_bb() { PATH="$fake:$PATH" "$@"; }
 src="$scratch/tool-src"; mkdir -p "$src"; echo '{:tasks {mutate {} gherkin-mutator {}}}' > "$src/bb.edn"
 export SWARMFORGE_TOOL_SRC="$src"
 
-assert_match "list prints the catalogue" "$(sf tool list)" "^clj-mutate +bb +github.com/unclebob/clj-mutate$"
+assert_match "list prints the catalogue with its refs" "$(sf tool list)" "^clj-mutate +bb +github.com/unclebob/clj-mutate +[0-9a-f]{40}$"
 assert_eq "bin names the wrapper directory" "$(sf tool bin)" "$repo/.swarmforge/bin"
 assert_fails "unknown tool" sf tool require nosuchtool
 out="$(sf tool require clj-mutate || true)"
 assert_match "require reports the first missing dependency" "$out" "^MISSING: cloverage$"
 
 out="$(sf tool ensure clj-mutate)"
-assert_match "ensure installs the dependency first" "$out" "^INSTALLED: cloverage .*/.swarmforge/bin/cloverage$"
-assert_match "ensure installs the tool" "$out" "INSTALLED: clj-mutate .*/.swarmforge/bin/clj-mutate$"
+assert_match "ensure installs the dependency first at its pinned version" "$out" "^INSTALLED: cloverage .*/.swarmforge/bin/cloverage @[0-9][^ ]*$"
+assert_match "ensure installs the tool from the unpinned override" "$out" "INSTALLED: clj-mutate .*/.swarmforge/bin/clj-mutate$"
 assert_match "require passes after ensure" "$(sf tool require clj-mutate)" "^OK: clj-mutate $repo/.swarmforge/bin/clj-mutate$"
-assert_match "cloverage wrapper runs the Clojure CLI" "$(head -2 .swarmforge/bin/cloverage | tail -1)" "^exec clojure -Sdeps .* -M -m cloverage.coverage -p src -s spec -s test -r speclj"
+assert_match "cloverage wrapper runs the Clojure CLI" "$(head -2 .swarmforge/bin/cloverage | tail -1)" "^exec clojure -Sdeps .* -M -m 'cloverage.coverage' -p src -s spec -s test -r speclj"
 
 run="$(fake_bb .swarmforge/bin/clj-mutate --mutate-all --max-workers 9 src/a.clj | paste -sd ' ' -)"
 assert_eq "mutate wrapper drops --mutate-all and forces four workers" "$run" "--config $src/bb.edn mutate src/a.clj --max-workers 4"
@@ -65,27 +65,45 @@ assert_match "fresh install validates its runtime configuration" "$(cd "$consume
 assert_match "installed init is repeatable" "$(cd "$consumer" && swarmforge/bin/sf init)" '^roles: '
 assert_eq "installed compatibility entrypoint lists the same tools" \
   "$(cd "$consumer" && swarmforge/bin/sf-tool list)" "$(cd "$consumer" && swarmforge/bin/sf tool list)"
-for wrapper in sf sf-tool sf-cs sf-fs sf-js; do
+for wrapper in sf sf-tool sf-cs sf-fs sf-vb sf-js sf-rb; do
   (cd "$consumer" && "swarmforge/bin/$wrapper" --help >/dev/null) \
     && pass "installed $wrapper exposes help" || fail "installed $wrapper cannot load"
 done
 development="$(find "$consumer/swarmforge/tools" -type d \( -name spec -o -name test -o -name property -o -name fixtures -o -name features -o -name acceptance \))"
 assert_eq "fresh install excludes development asset directories" "$development" ""
 assert_fails "fresh install excludes the developer-only sf task config" test -e "$consumer/swarmforge/tools/sf/bb.edn"
+assert_fails "fresh install excludes this repository's verify.conf" test -e "$consumer/swarmforge/verify.conf"
+assert_eq "fresh install ships the default tasks-dir" "$(sed -n 's/^tasks-dir //p' "$consumer/swarmforge/project.conf")" "tasks"
+printf 'tasks-dir swarmforge/tasks\n' > "$consumer/swarmforge/project.conf"
+bash "$HERE/install.sh" "$consumer" >/dev/null
+assert_eq "reinstall keeps the project's project.conf" "$(cat "$consumer/swarmforge/project.conf")" "tasks-dir swarmforge/tasks"
 test -f "$HERE/swarmforge/tools/sf/bb.edn" && test -d "$HERE/swarmforge/tools/javascript/fixtures" \
   && pass "installation leaves source development assets in place" || fail "source development assets changed"
 mkdir -p "$consumer/tmp/jscpd"
 cp "$HERE/swarmforge/tools/csharp/fixtures/jscpd-report.json" "$consumer/tmp/jscpd/jscpd-report.json"
-for wrapper in sf-cs sf-fs sf-js; do
+for wrapper in sf-cs sf-fs sf-vb sf-js sf-rb; do
   (cd "$consumer" && swarmforge/bin/sf-tool ensure "$wrapper" >/dev/null)
   status=0
   out="$(cd "$consumer" && ".swarmforge/bin/$wrapper" dry --all --report-only)" || status=$?
   assert_eq "installed $wrapper reports clone findings" "$status" 1
   assert_match "installed $wrapper reads reports through shared runtime code" "$out" '3 of 3 clone'
 done
+for wrapper in sf-fs sf-vb; do
+  status=0
+  (cd "$consumer" && "swarmforge/bin/$wrapper" mutate >/dev/null 2>&1) || status=$?
+  assert_eq "installed $wrapper mutation fails explicitly" "$status" 2
+done
+test -f "$consumer/swarmforge/languages/vbnet.md" && pass "installed VB.NET guide" || fail "installed VB.NET guide missing"
+test -f "$consumer/swarmforge/languages/ruby.md" && pass "installed Ruby guide" || fail "installed Ruby guide missing"
+for resource in simplecov.rb flay_report.rb; do
+  test -f "$consumer/swarmforge/tools/ruby/resources/sfrb/$resource" \
+    && pass "installed sf-rb resource $resource" || fail "installed sf-rb resource $resource missing"
+done
 status=0
-(cd "$consumer" && swarmforge/bin/sf-fs mutate >/dev/null 2>&1) || status=$?
-assert_eq "installed F# mutation fails explicitly" "$status" 2
+(cd "$consumer" && swarmforge/bin/sf-rb crap --complexity skunk >/dev/null 2>&1) || status=$?
+assert_eq "installed sf-rb refuses an unknown complexity source" "$status" 2
+(cd "$consumer/swarmforge/tools/csharp/resources" && test -f smell.globalconfig && test -f smell.targets && test -f fsharplint.json) \
+  && pass "installed .NET code-smell configs" || fail "installed .NET code-smell configs missing"
 mkdir -p "$consumer/swarmforge/tools/sf/spec" "$consumer/.agents/skills/project"
 echo owned > "$consumer/swarmforge/tools/sf/spec/project.clj"
 echo owned > "$consumer/.agents/skills/project/SKILL.md"
@@ -98,6 +116,25 @@ for path in swarmforge/tools/sf/spec/project.clj .agents/skills/project/SKILL.md
   assert_eq "reinstall preserves consumer file $path" "$(cat "$consumer/$path")" owned
 done
 assert_eq "reinstall leaves one ignore entry" "$(grep -cxF .metrics/ "$consumer/.gitignore")" 1
+
+for rule in '[Bb]in/' 'bin/' 'bin' '**/[Bb]in/*' '**/bin/**'; do
+  dotnet="$scratch/dotnet-$RANDOM"
+  git init -q "$dotnet"
+  printf '%s\n' "$rule" > "$dotnet/.gitignore"
+  mkdir -p "$dotnet/src/App/bin" && echo x > "$dotnet/src/App/bin/App.dll"
+  bash "$HERE/install.sh" "$dotnet" >/dev/null
+  assert_fails "git check-ignore of swarmforge/bin/sf after install under '$rule'" git -C "$dotnet" check-ignore -q swarmforge/bin/sf
+  git -C "$dotnet" check-ignore -q src/App/bin/App.dll \
+    && pass "install under '$rule' keeps other bin directories ignored" || fail "install under '$rule' unignored src/App/bin"
+  git -C "$dotnet" check-ignore -q swarmforge/tools/sf/bin/out \
+    && pass "install under '$rule' keeps bin directories nested in swarmforge ignored" || fail "install under '$rule' unignored swarmforge/tools/sf/bin"
+  assert_eq "install under '$rule' adds no negation to the root .gitignore" "$(grep -c '^!' "$dotnet/.gitignore")" 0
+done
+echo scratch/ > "$dotnet/swarmforge/.gitignore"
+bash "$HERE/install.sh" "$dotnet" >/dev/null
+bash "$HERE/install.sh" "$dotnet" >/dev/null
+assert_eq "reinstall keeps swarmforge/.gitignore lines once" "$(sort "$dotnet/swarmforge/.gitignore" | uniq -d)" ""
+assert_eq "reinstall keeps existing swarmforge/.gitignore lines" "$(grep -cxF scratch/ "$dotnet/swarmforge/.gitignore")" 1
 
 if [ "$failures" -gt 0 ]; then echo "$failures failure(s)" >&2; exit 1; fi
 echo "all tests passed"

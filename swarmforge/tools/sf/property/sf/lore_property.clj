@@ -92,3 +92,66 @@
                           (for [line (lore/lines (lore/read-log (git-log commits)))
                                 :let [[_ sha _ t] (re-matches #"LORE: (\S+) (\S+) (.*)" line)]]
                             [sha t])))))))
+
+(def ^:private lore-id (gen/elements ["a1" "b2" "c3" "d4"]))
+
+(def ^:private brief-trailer
+  "A trailer of any Lore key, a Supersedes naming one of a few Lore-ids, or a
+  trailer that is not Lore."
+  (gen/one-of [(gen/fmap (fn [[k v]] (str k ": " v))
+                         (gen/tuple (gen/elements ["Constraint" "Rejected" "Directive" "Scope-risk" "Reversibility"
+                                                   "Depends-on" "Related" "Tested" "Not-tested" "Confidence"
+                                                   "Co-Authored-By"])
+                                    sentence))
+               (gen/fmap #(str "Supersedes: " %) lore-id)]))
+
+(def ^:private brief-commit
+  "A commit with an optional Lore-id first, as the hook writes it."
+  (gen/let [sha hex7
+            r role
+            id (gen/one-of [(gen/return nil) lore-id])
+            trailers (gen/vector brief-trailer 0 4)]
+    {:sha sha :message (str "M\n\nBy " r ".\n")
+     :trailers (vec (cond->> trailers id (cons (str "Lore-id: " id))))}))
+
+(def ^:private evidence #{"Tested" "Not-tested" "Confidence" "Lore-id"})
+
+(defn- line-key [line]
+  (second (re-matches #"LORE: \S+ \S+ ([^:]+): .*" line)))
+
+(defn- line-sha [line]
+  (second (re-matches #"LORE: (\S+) .*" line)))
+
+(defn- subsequence? [xs ys]
+  (cond (empty? xs) true
+        (empty? ys) false
+        (= (first xs) (first ys)) (recur (rest xs) (rest ys))
+        :else (recur xs (rest ys))))
+
+(describe "brief"
+  (it "keeps LORE lines in sf show order and counts every line it leaves out"
+    (should (passes? (prop/for-all [commits (gen/vector brief-commit 0 6)]
+                       (let [{:keys [lines omitted]} (lore/brief commits)
+                             all (lore/lines commits)]
+                         (and (subsequence? lines all)
+                              (= (count all) (+ (count lines) omitted))))))))
+
+  (it "keeps no evidence line and no line of a superseded commit"
+    (should (passes? (prop/for-all [commits (gen/vector brief-commit 0 6)]
+                       (let [superseded (set (for [{:keys [trailers]} commits
+                                                   t trailers
+                                                   :when (str/starts-with? t "Supersedes: ")]
+                                               (subs t (count "Supersedes: "))))
+                             gone (set (for [{:keys [sha trailers]} commits
+                                             t trailers
+                                             :when (superseded (second (re-matches #"Lore-id: (.*)" t)))]
+                                         sha))]
+                         (not-any? #(or (evidence (line-key %)) (gone (line-sha %)))
+                                   (:lines (lore/brief commits))))))))
+
+  (it "leaves out only the evidence lines when nothing is superseded"
+    (should (passes? (prop/for-all [commits (gen/vector brief-commit 0 6)]
+                       (let [commits (map #(update % :trailers (partial remove (fn [t] (str/starts-with? t "Supersedes: "))))
+                                          commits)]
+                         (= (remove #(evidence (line-key %)) (lore/lines commits))
+                            (:lines (lore/brief commits)))))))))

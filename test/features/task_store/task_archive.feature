@@ -11,7 +11,9 @@ Feature: sf task archive
   sf finish merges the task branch into the target with --no-ff. The merge
   commit is the finished record: "sf finished: <id>" and the snapshot
   trailers, then SwarmForge-Merged-Into. sf finish removes the worktree and
-  the branch.
+  the branch. Without swarmforge/verify.conf it prints "VERIFY: none
+  configured" before "FINISHED: <id> merged into <target>" (see sf finish
+  verify).
 
   Background:
     Given a project with swarmforge initialized
@@ -65,7 +67,7 @@ Feature: sf task archive
     And the tip of the branch of task "A" is named T1
     When I run "sf finish $A"
     Then the exit status is 0
-    And the output is "FINISHED: $A merged into main"
+    And the output is "VERIFY: none configured\nFINISHED: $A merged into main"
     And the HEAD of the main checkout is a merge whose second parent is T1
     And the HEAD of the main checkout has the message "sf finished: $A\n\nSwarmForge-Task: $A\nSwarmForge-Record: finished\nSwarmForge-From: operator\nSwarmForge-Stage: done\nSwarmForge-Route: coder\nSwarmForge-Needs: none\nSwarmForge-Merged-Into: main"
     And the main checkout has the file "tasks/done/$A.md" and no file "tasks/$A.md"

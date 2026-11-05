@@ -3,7 +3,9 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [speclj.core :refer [describe it should]]
+            [sf.config :as config]
             [sf.flow :as flow]
+            [sf.shell :as shell]
             [sf.property-support :refer [passes? role sentence]]))
 
 (def ^:private catalogue ["specifier" "coder" "cleaner" "architect" "hardener" "qa"])
@@ -65,3 +67,23 @@
                          (and (not (str/blank? (:text rec)))
                               (not (flow/waiting? rec))
                               (= (:route s) (:route rec)))))))))
+
+(describe "optional catalogue roles"
+  (it "preserves order and audit flags while excluding only implicit optional roles"
+    (should (passes? (prop/for-all [optional (gen/set (gen/elements (rest catalogue)))
+                                   audited (gen/set (gen/elements catalogue))
+                                   reverse-flags? gen/boolean]
+                       (let [rows (mapv (fn [role]
+                                          (let [flags (cond-> []
+                                                        (optional role) (conj "optional")
+                                                        (audited role) (conj "audit"))]
+                                            (into [role "strong" "subagent"]
+                                                  (if reverse-flags? (reverse flags) flags))))
+                                        catalogue)
+                             explicit (str/join "," catalogue)]
+                         (with-redefs [config/rows #(when (= "roles.conf" %) rows)
+                                       shell/env (fn [_ default] default)]
+                           (and (= (str/join "," (remove optional catalogue)) (config/default-route))
+                                (= explicit (config/resolve-route explicit))
+                                (= (mapv #(boolean (audited %)) catalogue)
+                                   (mapv config/role-audits? catalogue))))))))))

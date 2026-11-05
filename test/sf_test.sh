@@ -30,10 +30,16 @@ git config --global user.name tester
 git config --global user.email tester@example.com
 git config --global init.defaultBranch main
 
+# A copy of this checkout's swarmforge/ without verify.conf, whose commands
+# (this script among them) must not run on every sf finish in the scratch repo.
+copy_swarmforge() {
+  rm -rf "$1/swarmforge" && cp -R "$HERE/swarmforge" "$1/swarmforge" && rm -f "$1/swarmforge/verify.conf"
+}
+
 repo="$scratch/project"
 mkdir -p "$repo" && cd "$repo"
 git init -q .
-cp -R "$HERE/swarmforge" swarmforge
+copy_swarmforge .
 echo "hello" > README.md
 git add -A && git commit -q -m "seed"
 export PATH="$repo/swarmforge/bin:$PATH"
@@ -41,7 +47,7 @@ export PATH="$repo/swarmforge/bin:$PATH"
 # init
 out="$(sf init)"
 assert_match "init prints the identity of record commits" "$out" "identity: tester <tester@example.com>"
-assert_match "init reports the catalogue" "$out" "roles: specifier coder cleaner architect hardener qa"
+assert_match "init reports the catalogue" "$out" "roles: specifier architecture-design-reviewer coder cleaner architect hardener security-reviewer qa"
 assert_match "init reports the routes" "$out" "routes: feature bugfix refactor harden spike"
 assert_eq "init is idempotent" "$(sf init | head -n 1)" "identity: tester <tester@example.com>"
 assert_eq "init writes no git-bug data" "$(git for-each-ref refs/bugs refs/identities)" ""
@@ -50,7 +56,8 @@ assert_eq "init writes no git-bug data" "$(git for-each-ref refs/bugs refs/ident
 id="$(sf new "Add login" -m "Users can log in with email and password.")"
 assert_match "new prints a slug and hex id" "$id" '^add-login-[0-9a-f]{7}$'
 assert_eq "new puts the task at the first stage" "$(sf stage "$id")" "specifier"
-full="specifier,coder,cleaner,architect,hardener,qa"
+full="specifier,coder,cleaner,architect,hardener,security-reviewer,qa"
+fallback="specifier,coder,cleaner,architect,hardener,qa"
 assert_eq "new defaults to the feature route" "$(sf route "$id")" "$full"
 assert_eq "new creates the task branch" "$(git branch --list "swarm/$id" | tr -d ' *')" "swarm/$id"
 assert_match "show prints the body" "$(sf show "$id")" "email and password"
@@ -160,6 +167,7 @@ idn="$(sf new "Not done" -m x --route coder)"
 assert_fails "finish from a non-done task" sf finish "$idn"
 out="$(sf finish "$id")"
 assert_match "finish merges into the current branch" "$out" "merged into main"
+assert_match "finish without verification commands says so" "$out" "^VERIFY: none configured$"
 assert_match "main contains the task work" "$(git log --oneline main)" "Specify login"
 assert_eq "finish removes the worktree" "$(test -d ".worktrees/$id" && echo present || echo gone)" "gone"
 assert_eq "finish deletes the branch" "$(git branch --list "swarm/$id")" ""
@@ -170,20 +178,58 @@ assert_fails "a finished task cannot be started" sf start "$id"
 # routes
 assert_eq "routes lists the presets" "$(sf routes | awk '{print $1}' | paste -sd ' ' -)" "feature bugfix refactor harden spike"
 id2="$(sf new "Fix rounding" -m "x" --route bugfix)"
-assert_eq "named route is recorded" "$(sf route "$id2")" "specifier,coder,qa"
+assert_eq "named route is recorded" "$(sf route "$id2")" "specifier,coder,cleaner,qa"
 sf start "$id2" >/dev/null
 git -C ".worktrees/$id2" commit -q --allow-empty -m "Spec. By specifier."
 sf review "$id2" >/dev/null && sf approve "$id2" >/dev/null
-assert_match "handoff follows the route" "$(sf handoff "$id2")" "coder -> qa"
 assert_fails "route change must contain the current stage" sf route "$id2" refactor
+assert_match "handoff follows the route" "$(sf handoff "$id2")" "coder -> cleaner"
 assert_match "route change at the current stage" "$(sf route "$id2" "coder,cleaner,qa")" "^ROUTE: $id2 coder,cleaner,qa$"
 assert_match "route change is recorded" "$(sf show "$id2")" "route: coder,cleaner,qa"
-assert_match "handoff follows the changed route" "$(sf handoff "$id2")" "qa -> done"
+assert_match "handoff follows the changed route" "$(sf handoff "$id2")" "cleaner -> qa"
 assert_fails "route in the wrong order" sf new "Bad" -m x --route "qa,coder"
 assert_fails "route with an unknown role" sf new "Bad" -m x --route "janitor"
 id3="$(sf new "Tidy" -m "x" --route "cleaner,architect")"
 assert_eq "explicit route starts at its first role" "$(sf stage "$id3")" "cleaner"
 assert_eq "SWARMFORGE_ROUTE sets the default" "$(SWARMFORGE_ROUTE=spike sf new "Idea" -m x | xargs sf route)" "specifier"
+
+# optional roles are selected through existing routes and lifecycle
+review_route="specifier,architecture-design-reviewer,coder,architect,qa"
+idr="$(sf new "Migrate interface" -m x --route "$review_route")"
+assert_eq "explicit opt-in route is recorded" "$(sf route "$idr")" "$review_route"
+sf start "$idr" >/dev/null
+git -C ".worktrees/$idr" commit -q --allow-empty -m "Approve migration criteria"
+sf review "$idr" >/dev/null
+assert_match "approval sends an opted-in task to design review" "$(sf approve "$idr")" "specifier -> architecture-design-reviewer"
+assert_fails "design review cannot be placed after coder" sf new Bad -m x --route "coder,architecture-design-reviewer,qa"
+sf ask "$idr" "Which compatibility window?" >/dev/null
+assert_fails "reviewer cannot hand off a blocker" sf handoff "$idr"
+sf answer "$idr" "Keep both interfaces for one release" >/dev/null
+assert_match "reviewer uses ordinary handoff without approval" "$(sf handoff "$idr")" "architecture-design-reviewer -> coder"
+assert_match "coder still hands off to existing architect" "$(sf handoff "$idr")" "coder -> architect"
+assert_match "existing architect still hands off to QA" "$(sf handoff "$idr")" "architect -> qa"
+assert_eq "environment route can opt in" "$(SWARMFORGE_ROUTE=architecture-design-reviewer,coder sf new "Review migration" -m x | xargs sf route)" "architecture-design-reviewer,coder"
+cp swarmforge/routes.conf "$scratch/routes.conf"
+rm swarmforge/routes.conf
+assert_eq "implicit catalogue fallback skips optional reviewer" "$(sf new "Legacy fallback" -m x | xargs sf route)" "$fallback"
+printf 'quick coder\n' > swarmforge/routes.conf
+assert_eq "fallback without feature also skips optional reviewer" "$(sf new "Missing feature fallback" -m x | xargs sf route)" "$fallback"
+mv "$scratch/routes.conf" swarmforge/routes.conf
+
+# Optional review uses the existing route and handoff machinery.
+review_id="$(sf new "Review execution boundary" -m x --route coder,hardener,security-reviewer,qa)"
+assert_eq "optional security review is explicit" "$(sf route "$review_id")" "coder,hardener,security-reviewer,qa"
+sf start "$review_id" >/dev/null
+sf handoff "$review_id" >/dev/null
+assert_eq "hardener still precedes optional security review" "$(sf stage "$review_id")" "hardener"
+sf handoff "$review_id" >/dev/null
+assert_eq "security review follows hardener" "$(sf stage "$review_id")" "security-reviewer"
+sf ask "$review_id" "Confirmed defect needs a scoped correction" >/dev/null
+assert_fails "blocking security findings prevent handoff" sf handoff "$review_id"
+sf answer "$review_id" "Correction authorized" >/dev/null
+sf handoff "$review_id" >/dev/null
+assert_eq "QA follows optional security review" "$(sf stage "$review_id")" "qa"
+assert_fails "security review cannot precede hardener" sf new "Wrong review order" --route security-reviewer,hardener,qa
 
 # audit gate
 sed -i 's/^coder     strong   subagent$/coder strong subagent audit/' swarmforge/roles.conf
@@ -227,6 +273,17 @@ id4="$(sf new "Tidy" -m "x")"
 assert_eq "new uses the first catalogue role" "$(sf stage "$id4")" "coder"
 assert_eq "default route is the catalogue" "$(sf route "$id4")" "coder,cleaner"
 
+# A computed fallback is a literal role list, never a named-route lookup.
+printf 'coder strong subagent\nsecurity-reviewer strong subagent optional\n' > swarmforge/roles.conf
+printf 'coder coder,security-reviewer\n' > swarmforge/routes.conf
+assert_match "check permits a named route sharing the fallback name" "$(sf check)" "^CHECK: ok"
+fallback_id="$(sf new "Literal fallback" -m x)"
+assert_eq "fallback collision cannot opt in security review" "$(sf route "$fallback_id")" "coder"
+explicit_id="$(sf new "Explicit named review" -m x --route coder)"
+assert_eq "explicit colliding named route remains available" "$(sf route "$explicit_id")" "coder,security-reviewer"
+
+rm swarmforge/routes.conf
+
 # adapters
 printf 'specifier frontier session\ncoder frontier subagent\ncleaner fast subagent\n' > swarmforge/roles.conf
 out="$(sf adapters)"
@@ -241,19 +298,19 @@ assert_match "codex adapter uses the tier effort" "$(cat .codex/agents/cleaner.t
 
 # committed adapters are current
 work="$(mktemp -d "$scratch/adapters.XXXX")"
-cp -R "$HERE/swarmforge" "$HERE/.claude" "$HERE/.github" "$HERE/.codex" "$work/"
+cp -R "$HERE/.claude" "$HERE/.github" "$HERE/.codex" "$work/" && copy_swarmforge "$work"
 (cd "$work" && git init -q . && git add -A && git commit -q -m seed && ./swarmforge/bin/sf adapters >/dev/null && git diff --quiet) \
   && pass "committed adapters match sf adapters" \
   || fail "committed adapters are stale; run swarmforge/bin/sf adapters"
 
 # configuration check
-rm -rf swarmforge && cp -R "$HERE/swarmforge" swarmforge
-assert_match "check passes on the shipped configuration" "$(sf check)" "^CHECK: ok \(6 roles, 5 routes\)$"
+copy_swarmforge .
+assert_match "check passes on the shipped configuration" "$(sf check)" "^CHECK: ok \(8 roles, 5 routes\)$"
 check_fails() {
   local name="$1" expected="$2" out
   out="$(sf check 2>&1 || true)"
   assert_match "$name" "$out" "$expected"
-  rm -rf swarmforge && cp -R "$HERE/swarmforge" swarmforge
+  copy_swarmforge .
 }
 echo "qa strong subagent" >> swarmforge/roles.conf
 check_fails "check rejects a duplicate role" "CHECK: roles.conf: role 'qa' listed twice"
@@ -273,19 +330,127 @@ echo "slow opus" >> swarmforge/tiers.conf
 check_fails "check rejects a short tier line" "CHECK: tiers.conf: 'slow' needs exactly"
 echo "fast haiku low claude-haiku-5.5" >> swarmforge/tiers.conf
 check_fails "check rejects a duplicate tier" "CHECK: tiers.conf: tier 'fast' listed twice"
-echo "sf-cs local swarmforge/bin/sf-cs - - -" >> swarmforge/tools.conf
+echo "sf-cs local swarmforge/bin/sf-cs - - - -" >> swarmforge/tools.conf
 check_fails "check rejects a duplicate tool" "CHECK: tools.conf: tool 'sf-cs' listed twice"
 echo "backwards qa,coder" >> swarmforge/routes.conf
 check_fails "check rejects an out-of-order route" "CHECK: routes.conf: backwards: route 'qa,coder' is out of order"
 echo "feature specifier" >> swarmforge/routes.conf
 check_fails "check rejects a duplicate route" "CHECK: routes.conf: route 'feature' listed twice"
-echo "weird magic github.com/x/y task - -" >> swarmforge/tools.conf
+echo "weird magic github.com/x/y - task - -" >> swarmforge/tools.conf
 check_fails "check rejects an unknown tool kind" "CHECK: tools.conf: 'weird' has unknown kind 'magic'"
 echo "qa strong subagent" >> swarmforge/roles.conf
 assert_fails "init refuses a broken configuration" sf init
 assert_fails "adapters refuse a broken configuration" sf adapters
-rm -rf swarmforge && cp -R "$HERE/swarmforge" swarmforge
+copy_swarmforge .
 sf adapters >/dev/null
+
+# Config commands read the checkout they run in; bookkeeping reads main's.
+idc="$(sf new "Config change" -m x --route coder)"
+sf start "$idc" >/dev/null
+wt="$repo/.worktrees/$idc"
+echo "quick coder" >> "$wt/swarmforge/routes.conf"
+sed -i '/^security-reviewer /d' "$wt/swarmforge/roles.conf"
+assert_match "routes reads the worktree's routes.conf" "$(cd "$wt" && sf routes)" "^quick +coder$"
+assert_eq "routes in main reads main's routes.conf" "$(sf routes | grep -c '^quick' || true)" "0"
+assert_eq "roles reads the worktree's roles.conf" "$(cd "$wt" && sf roles | grep -c '^security-reviewer$' || true)" "0"
+assert_match "check names the worktree's swarmforge" "$(cd "$wt" && sf check 2>&1 || true)" "problem\(s\) in .*/\.worktrees/$idc/swarmforge$"
+assert_match "check in main reads main's config" "$(sf check)" "^CHECK: ok"
+git -C "$wt" checkout -q -- swarmforge/roles.conf
+assert_fails "new from a worktree resolves routes from main" sh -c "cd '$wt' && sf new Y -m x --route quick"
+assert_eq "route from a worktree is unchanged" "$(cd "$wt" && sf route "$idc")" "coder"
+cp -R .claude .codex .github "$wt/"
+sed -i 's/^cleaner   fast /cleaner   strong /' "$wt/swarmforge/roles.conf"
+sed -i '3s/.*/Cleans up after the coder./' "$wt/swarmforge/roles/cleaner.md"
+(cd "$wt" && sf adapters >/dev/null) && pass "adapters in a worktree take over main's adapters" || fail "adapters in a worktree"
+assert_match "adapters writes the worktree's agents" "$(cat "$wt/.claude/agents/cleaner.md")" "^model: opus$"
+assert_match "adapters leaves main's agents" "$(cat .claude/agents/cleaner.md)" "^model: sonnet$"
+sf adapters >/dev/null && pass "adapters in main still succeeds" || fail "adapters in main after a worktree run"
+assert_match "main's agents follow main's config" "$(cat .claude/agents/cleaner.md)" "^model: sonnet$"
+
+# tasks-dir in project.conf places the task files; sf move-tasks moves them.
+tdrepo="$scratch/tasks-dir"
+mkdir -p "$tdrepo" && cd "$tdrepo"
+git init -q . && copy_swarmforge .
+mkdir -p tasks/own && echo "project content" > tasks/own/notes.md
+git add -A && git commit -q -m seed
+sf init >/dev/null
+assert_eq "tasks-dir defaults to tasks" "$(sed -n 's/^tasks-dir //p' swarmforge/project.conf)" "tasks"
+idf="$(sf new "Old finished" -m x --route coder)"
+assert_eq "by default the created commit adds tasks/<id>.md" "$(git diff-tree --no-commit-id --name-only -r "swarm/$idf")" "tasks/$idf.md"
+sf start "$idf" >/dev/null
+git -C ".worktrees/$idf" commit -q --allow-empty -m "Work"
+sf handoff "$idf" >/dev/null && sf finish "$idf" >/dev/null
+assert_eq "by default finish leaves the archive in tasks/done" "$(git ls-tree --name-only HEAD tasks/done/)" "tasks/done/$idf.md"
+ido="$(sf new "Open question" -m "Keep this request." --route coder,qa)"
+sf start "$ido" >/dev/null
+git -C ".worktrees/$ido" commit -q --allow-empty -m "Coder work"
+sf ask "$ido" "Which store?" >/dev/null
+idq="$(sf new "Not started" -m y --route coder)"
+tip_before="$(git rev-parse "swarm/$ido")"
+
+assert_fails "move-tasks refuses while tasks-dir is unchanged" sf move-tasks tasks
+assert_fails "move-tasks refuses an old directory inside tasks-dir" sf move-tasks tasks/old
+sed -i 's/^tasks-dir tasks$/tasks-dir tasks\/done/' swarmforge/project.conf
+assert_fails "move-tasks refuses a tasks-dir inside the old directory" sf move-tasks tasks
+assert_eq "a refused nested move records nothing" "$(git rev-parse "swarm/$ido")" "$tip_before"
+assert_eq "a refused nested move stages nothing" "$(git diff --cached --name-only)" ""
+sed -i 's/^tasks-dir tasks\/done$/tasks-dir tasks/' swarmforge/project.conf
+sed -i 's/^tasks-dir tasks$/tasks-dir swarmforge\/tasks/' swarmforge/project.conf
+assert_match "check accepts a nested tasks-dir" "$(sf check)" "^CHECK: ok"
+assert_eq "an unmoved open task is not listed with its title" "$(sf ls | grep "^$ido" | cut -f5)" ""
+echo dirty > ".worktrees/$ido/dirty.txt"
+assert_fails "move-tasks refuses a task worktree with changes" sf move-tasks tasks
+assert_eq "a refused move records nothing" "$(git rev-parse "swarm/$ido")" "$tip_before"
+rm ".worktrees/$ido/dirty.txt"
+out="$(sf move-tasks tasks/)"
+assert_match "move-tasks moves the open task's file on its branch" "$out" "^MOVED: $ido tasks/$ido.md -> swarmforge/tasks/$ido.md$"
+assert_match "move-tasks moves a task without a worktree" "$out" "^MOVED: $idq tasks/$idq.md -> swarmforge/tasks/$idq.md$"
+assert_match "move-tasks stages the archive move in the main checkout" "$out" "^MOVED: tasks/done/$idf.md -> swarmforge/tasks/done/$idf.md \(staged; commit it\)$"
+assert_eq "the branch has the file only under the new directory" \
+  "$(git ls-tree -r --name-only "swarm/$ido" tasks swarmforge/tasks | grep "$ido")" "swarmforge/tasks/$ido.md"
+assert_eq "the move keeps the task file's text" "$(git show "swarm/$ido:swarmforge/tasks/$ido.md")" "$(git show "$tip_before:tasks/$ido.md")"
+assert_match "the move is a record" "$(sf show "$ido")" "^path: tasks/$ido.md -> swarmforge/tasks/$ido.md$"
+assert_match "the move keeps the stage and the question" "$(sf ls --needs)" "^$ido	coder	operator	coder,qa	Open question$"
+assert_match "the question survives the move" "$(sf show "$ido")" "^question: Which store\?$"
+assert_eq "the task worktree follows the move" "$(git -C ".worktrees/$ido" status --porcelain)" ""
+assert_eq "the worktree has the moved file" "$(test -f ".worktrees/$ido/swarmforge/tasks/$ido.md" && echo yes)" "yes"
+assert_eq "project content under tasks/ stays" "$(git diff --cached --name-only -- tasks/own)" ""
+git commit -q -m "Move task files" -- swarmforge/project.conf tasks swarmforge/tasks
+assert_match "a finished task stays finished after the move" "$(sf show "$idf")" "^STATUS: finished$"
+assert_eq "a second move finds nothing to move" "$(sf move-tasks tasks)" ""
+
+idn="$(sf new "New place" -m "Lives in swarmforge/tasks." --route coder)"
+assert_eq "new adds the task file under tasks-dir" "$(git diff-tree --no-commit-id --name-only -r "swarm/$idn")" "swarmforge/tasks/$idn.md"
+assert_match "ls reads the title under tasks-dir" "$(sf ls)" "^$idn	coder		coder	New place$"
+assert_match "show reads the request under tasks-dir" "$(sf show "$idn")" "^Lives in swarmforge/tasks\.$"
+sf start "$idn" >/dev/null
+git -C ".worktrees/$idn" commit -q --allow-empty -m "Work"
+sf handoff "$idn" >/dev/null
+assert_eq "handoff to done archives under tasks-dir" \
+  "$(git ls-tree -r --name-only "swarm/$idn" tasks swarmforge/tasks | grep "$idn")" "swarmforge/tasks/done/$idn.md"
+assert_match "finish merges a task under tasks-dir" "$(sf finish "$idn")" "^FINISHED: $idn"
+assert_eq "the archive lands under tasks-dir" "$(git ls-tree --name-only HEAD swarmforge/tasks/done/ | grep -c "$idn")" "1"
+assert_match "the finished task is shown" "$(sf show "$idn")" "^STATUS: finished$"
+assert_eq "ls lists only the open tasks" "$(sf ls | cut -f1 | sort | paste -sd ' ' -)" "$(printf '%s\n' "$ido" "$idq" | sort | paste -sd ' ' -)"
+sf answer "$ido" "git" >/dev/null
+assert_match "a moved task hands off on" "$(sf handoff "$ido")" "coder -> qa"
+sf handoff "$ido" >/dev/null
+assert_match "a moved task finishes" "$(sf finish "$ido")" "^FINISHED: $ido"
+assert_eq "the moved task's archive is under tasks-dir" "$(git ls-tree --name-only HEAD swarmforge/tasks/done/ | grep -c "$ido")" "1"
+assert_eq "nothing is left in the old directory" "$(git ls-tree -r --name-only HEAD tasks | paste -sd ' ' -)" "tasks/own/notes.md"
+
+for value in "../up" ".hidden" "/abs" "a//b"; do
+  printf 'tasks-dir %s\n' "$value" > swarmforge/project.conf
+  assert_match "check rejects tasks-dir $value" "$(sf check 2>&1 || true)" "CHECK: project.conf: tasks-dir '$value' must be a relative path"
+  assert_fails "bookkeeping refuses tasks-dir $value" sf ls
+done
+printf 'tasks-dir a\ntasks-dir b\n' > swarmforge/project.conf
+assert_match "check rejects a repeated setting" "$(sf check 2>&1 || true)" "CHECK: project.conf: 'tasks-dir' listed twice"
+printf 'colour blue\n' > swarmforge/project.conf
+assert_match "check rejects an unknown setting" "$(sf check 2>&1 || true)" "CHECK: project.conf: unknown setting 'colour'"
+rm swarmforge/project.conf
+assert_eq "without project.conf tasks-dir is tasks" "$(sf new "No conf" -m x | xargs -I{} git diff-tree --no-commit-id --name-only -r "swarm/{}")" "$(git for-each-ref --format='%(refname:lstrip=3)' 'refs/heads/swarm/no-conf-*' | sed 's|^|tasks/|; s|$|.md|')"
+cd "$repo"
 
 for pair in ".claude/skills/swarm/SKILL.md .agents/skills/swarm/SKILL.md"; do
   set -- $pair

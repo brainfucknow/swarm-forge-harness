@@ -1,10 +1,7 @@
 # C# tooling
 
-`swarmforge/bin/sf-cs` wraps the C# tools so every role runs the same command
-and reads the same output. Run it from the task worktree (`DIR:` from
-`sf start`), by path or with `swarmforge/bin` on PATH. It writes only under
-`./tmp/`. It needs Babashka (`bb`) on PATH; `dotnet` for the .NET tools; and
-`node` with `npx` for jscpd.
+Run `swarmforge/bin/sf-cs` from the task worktree. It needs Babashka, the
+.NET SDK, and Node with `npx`; reports go under `./tmp/`.
 
 | Constitution tool | Command | Behind it |
 |---|---|---|
@@ -53,6 +50,32 @@ mutation score 50.0% (Killed 1, Survived 1, NoCoverage 1, Timeout 1, Ignored 1)
 
 Kill a survivor with a test that fails under the replacement. `NoCoverage`
 means no test reaches the line.
+
+## Security scanners
+
+- Code scanner: build the enclosing project or solution with the SDK's
+  security analyzers and read only the warnings in changed `.cs` files:
+  `mkdir -p tmp && dotnet build <project> --no-incremental -p:EnableNETAnalyzers=true -p:AnalysisModeSecurity=All -p:ReportAnalyzer=true -v:d > tmp/security-build.log`
+  The log's analyzer summary must list a `NetAnalyzers` assembly; otherwise
+  the analyzers did not run and the scan is Not-tested, not clean.
+- Dependency audit, when the task changes a `*.csproj`,
+  `Directory.Packages.props`, `Directory.Build.props` or `packages.lock.json`:
+  `dotnet restore <project>` on SDKs before .NET 10, then
+  `dotnet list <project> package --vulnerable --include-transitive`
+  (`dotnet package list ...` on .NET 10+). It needs the NuGet feeds. Read its
+  output, not only its exit status.
+
+## Code-smell check
+
+The SDK's CA1501 (inheritance depth over 5), CA1505 (maintainability index
+under 10) and CA1506 (class coupling over 95 per type, 40 per member) are off
+by default; `swarmforge/tools/csharp/resources/smell.targets` turns them on
+without changing the project. Build the enclosing project or solution:
+`mkdir -p tmp && dotnet build <project> --no-incremental -p:EnableNETAnalyzers=true -p:ReportAnalyzer=true -v:d -p:CustomAfterMicrosoftCommonTargets="$PWD/swarmforge/tools/csharp/resources/smell.targets" > tmp/smell-build.log`
+Without a `NetAnalyzers` assembly in the analyzer summary and
+`smell.globalconfig` in the compiler command, the check is Not-tested, not
+clean. Read only CA1501, CA1505 and CA1506 lines in changed `.cs` files; a
+project that treats warnings as errors reports them as errors.
 
 ## Conventions the tools rely on
 

@@ -6,7 +6,8 @@
             [sf.config :as config]
             [sf.flow :as flow]
             [sf.shell :as shell]
-            [sf.store :as store]))
+            [sf.store :as store]
+            [sf.task :as task]))
 
 (def backends ["claude" "codex" "copilot"])
 
@@ -32,7 +33,7 @@
       "codex" (concat ["codex" "exec" "--full-auto" "-c" (str "model_reasoning_effort=\"" model "\"")]
                       (extra-args "SWARMFORGE_CODEX_ARGS")
                       [prompt])
-      "copilot" (concat ["copilot" "-p" prompt "--model" (str model) "--allow-all-tools"]
+      "copilot" (concat ["copilot" "-p" prompt "--model" (str model)]
                         (extra-args "SWARMFORGE_COPILOT_ARGS"))
       (shell/die "unknown backend '" backend "'"))))
 
@@ -42,8 +43,9 @@
   (let [id (store/resolve-id id-arg)
         backend (or (not-empty backend) (detect-backend))
         command (vec (command-for backend role (role-prompt role id)))
+        dir (task/worktree! id)
         _ (flush)
-        {:keys [exit]} (try (p/shell {:cmd command :dir (shell/repo-root) :continue true})
+        {:keys [exit]} (try (p/shell {:cmd command :dir dir :continue true})
                             (catch java.io.IOException e
                               (shell/die backend ": " (ex-message e))))]
     (when-not (zero? exit) (shell/fail exit nil))))

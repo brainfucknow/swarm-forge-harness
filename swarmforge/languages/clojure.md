@@ -19,10 +19,40 @@ needs to know to run them on Babashka code.
   and `spec`, or `src`, `test`, `../core/src` and `../core/test`), with
   `--no-coverage`, which clj-mutate requires for a custom test command.
 
+## Security scanners
+
+- Code scanner: clj-holmes (`sf tool ensure clj-holmes`), run on each `.clj`
+  file changed since the merge base, committed or not. It is unmaintained
+  since 2022, has 9 security rules and reads `.clj` only, so changed `.cljc`,
+  `.cljs` and `.bb` files are Not-tested. Fetching rules reaches
+  api.github.com. Its defaults write to `/tmp` and the current directory;
+  keep rules and output under `./tmp`:
+
+  ```sh
+  mkdir -p tmp
+  clj-holmes fetch-rules -o tmp/clj-holmes-rules \
+    -r git://clj-holmes/clj-holmes-rules#fbf5e2eeebe9a85e2dc568c04b482a50fc482a02
+  clj-holmes scan -p <file> -d tmp/clj-holmes-rules -t json -o tmp/clj-holmes.json --fail-on-result
+  ```
+
+- Dependency audit: nvd-clojure (`sf tool ensure nvd-clojure`), when the task
+  changes `deps.edn`, `bb.edn` or `project.clj`. It needs `NVD_API_TOKEN` and
+  reaches clojars.org and the NVD API. Run it from `./tmp`, which keeps the
+  project's `deps.edn` out of its `-Sdeps` and its config and report in
+  `./tmp`. Pass the project classpath (`clojure -Spath`, `bb print-deps
+  --format classpath` or `lein classpath`):
+
+  ```sh
+  mkdir -p tmp && cd tmp && nvd-clojure nvd-clojure.edn "$(cd .. && clojure -Spath)"
+  ```
+
 ## Tool compatibility checks
 
 When changing wrappers or upgrading their upstream tools, use disposable
-projects under `tmp/`, real GitHub sources and Maven dependencies:
+projects under `tmp/`, real GitHub sources and Maven dependencies. An upgrade
+edits the ref column of `swarmforge/tools.conf` (`git ls-remote
+https://github.com/<owner>/<repo>.git HEAD` prints a SHA); run these checks at
+the new refs before the upgrade commit:
 
 - Install and require `dry4clj`, `clj-mutate`, `crap4clj` and the APS tools
   through `sf tool`. Confirm DRY output, mutation scan counts and parser
@@ -38,4 +68,5 @@ projects under `tmp/`, real GitHub sources and Maven dependencies:
   root tests or root outputs. An invalid source root must fail before coverage.
 - Explicit `--lcov` and `--use-existing-coverage` choices must not trigger
   another coverage run. Keep generated output and verification detail out of
-  commits; record actual tool versions, outcomes and unavailable checks in Lore.
+  commits; record each tool's `@<ref>`, outcomes and unavailable
+  checks in Lore.

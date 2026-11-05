@@ -18,6 +18,7 @@
     "task_store/" 'acceptance.store-steps
     "manifest_guard/" 'acceptance.guard-steps
     "metrics_cache/" 'acceptance.metrics-steps
+    "install/" 'acceptance.install-steps
     'acceptance.steps))
 
 (defn entry-point [ir-path feature-name feature-path]

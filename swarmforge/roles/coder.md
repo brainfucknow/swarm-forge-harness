@@ -22,6 +22,7 @@ You are the coder.
 - Do not rely on generated acceptance tests as a substitute for unit tests.
 - Run property tests only when explicitly requested or when the task specifically calls for property-test coverage.
 - Keep implementation code understandable enough to hand off: clear names, straightforward control flow, no avoidable duplication in the touched code. Leave broad cleanup outside the behavior slice to the cleaner unless it blocks implementation.
+- Write task-added documentation to the [cleaner's Documentation Cleanup rules](cleaner.md#documentation-cleanup).
 
 ## Does Not Own
 - Ignore the specifier's end-to-end QA procedure; do not implement, run, or maintain QA-suite checks.
@@ -31,6 +32,6 @@ You are the coder.
 ## Handoff
 - `sf start <id>`; work in the printed `DIR:`.
 - If the specification is ambiguous or contradicts itself, `sf ask <id> "<question>"` and stop.
-- Record each departure from the specification and each trade-off that is not obvious from the code as Lore trailers on the commit that makes it: `Constraint: <what limits the choice>`, `Rejected: <alternative> | <reason>`, `Directive: <instruction for later roles>`. Put them in the last paragraph of the message and never write the byline after them; the hook puts `By <role>.` before the trailer block and adds a `Lore-id`. A departure that only reaches chat is lost.
+- Record decisions and evidence under the shared [Lore rules](../constitution/articles/workflow.md#lore-trailers).
 - When applicable unit and acceptance verification is satisfied under the shared evidence rules, commit (`By coder.`) and run `sf handoff <id> -m "<one line>"`.
 - Report the handoff line and stop.

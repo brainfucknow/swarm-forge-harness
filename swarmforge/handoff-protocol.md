@@ -1,217 +1,127 @@
 # Handoff Protocol
 
-SwarmForge roles communicate through plain git. A task is its branch,
-`swarm/<id>`; there is no daemon, no inbox directory, no dashboard, and no
-other store. The branch's first commit adds the task file; every later sf
-action is a record commit whose trailers hold the state. `swarmforge/bin/sf`
-is the only writer.
+A task is a Git branch, `swarm/<id>`, containing the request, role work, and
+record commits. `swarmforge/bin/sf` is the only writer of task state; never
+edit task files or write `SwarmForge-*` trailers by hand.
 
 ## Task
 
-| Part | Where | Meaning |
-|---|---|---|
-| `<id>` | branch name | A slug of the title, `-`, and 7 random hex digits, for example `add-login-3f9a2c1`. A command also takes the 7 hex digits or a unique prefix. |
-| `swarm/<id>` | git branch | All work for the task, every role in sequence, and its records. |
-| `tasks/<id>.md` | file on the branch | Front matter (`id`, `created`), the title as a `#` heading, and the operator's request. No command edits it while the task is open. |
-| `tasks/done/<id>.md` | file on the branch, then on the base branch | The task file after the handoff to `done`: `stage` and `route` in the front matter, and a `## Records` section with every record fenced. A task is finished once this file is in the main checkout's HEAD. |
-| `SwarmForge-Stage` | trailer of the newest record | The role that owns the task now, or `done`. |
-| `SwarmForge-Route` | trailer of the newest record | The roles this task visits, in catalogue order. Set by `sf new --route`, changed by `sf route`. |
-| `SwarmForge-Needs` | trailer of the newest record | `none`; `operator` after `sf ask` until `sf answer`; `approval` after `sf review` until `sf approve` or `sf reject`. |
-| `.worktrees/<id>` | directory | The checkout roles work in. Created by `sf start`, removed by `sf finish`. |
+| Part | Purpose |
+|---|---|
+| `<id>` | Title slug plus seven random hex digits, e.g. `add-login-3f9a2c1`. Commands also accept the suffix or a unique prefix. |
+| `tasks/<id>.md` | Operator request, title, ID, and creation date; unchanged while open. |
+| `tasks/done/<id>.md` | Archive created at `done`, with stage, route, and all records; presence in main checkout HEAD marks the task finished. |
+| `swarmforge/project.conf` | `tasks-dir <dir>` puts the task files under `<dir>/` instead of `tasks/`; sf reads the main checkout's. |
+| `.worktrees/<id>` | Role checkout, created by `sf start` and removed by `sf finish`. |
+| `swarmforge/verify.conf` | Optional project verification commands, one per line; blank lines and `#` comments are ignored. |
 
 ## Record commits
 
-Every sf action is one commit on the task branch:
+The newest record in first-parent history supplies stage, route, and needs.
+Needs is `none`, `operator` while a question awaits an answer, or `approval`
+while a reviewed specification awaits a decision. `sf show <id>` prints the
+records; use it rather than reconstructing them from trailers.
 
-```text
-sf <record>: <id>
+Paths here use the default `tasks/`; read them as the configured `tasks-dir`.
 
-<free text, when the record has one; any number of lines>
-
-SwarmForge-Task: <id>
-SwarmForge-Record: <record>
-SwarmForge-From: <role or operator>
-SwarmForge-Stage: <stage after the record>
-SwarmForge-Route: <route after the record>
-SwarmForge-Needs: none | operator | approval
-```
-
-The newest record (first-parent history of the branch) is the state. `sf new`
-writes `created`, whose commit adds `tasks/<id>.md`. Every other record
-changes no file and touches no worktree, except the handoff to `done`, which
-moves the task file to `tasks/done/<id>.md`. `sf finish` writes `finished` as
-the `--no-ff` merge commit on the base branch, with
-`SwarmForge-Merged-Into: <branch>`. The commit-msg hook refuses a role commit
-whose trailer block has a `SwarmForge-*` trailer. Author: git's `user.name`
-and `user.email`, else `SWARMFORGE_USER` and `SWARMFORGE_EMAIL`.
-
-## Records
-
-`sf start` and `sf show` print each record as a block of `key: value` lines,
-oldest first, after the request. A value of several lines continues on lines
-indented by two spaces. Later roles read them from `sf start`; the operator
-reads them from `sf show`.
-
-```text
-type: created
-from: operator
-branch: swarm/add-login-3f9a2c1
-commit: 1c0ffee
-route: specifier,coder,cleaner,architect,hardener,qa
-```
-
-```text
-type: handoff
-from: coder
-to: cleaner
-branch: swarm/add-login-3f9a2c1
-commit: 9f1c2ab
-files: src/Login.cs,test/LoginTest.cs
-summary: login scenarios pass
-```
-
-The `commit` of a `created` record is its own commit; that of a `review` or
-`handoff` record is the role's commit it was made on. `files` lists what
-changed between the previous `created`, `review` or `handoff` record's
-`commit` and this one's, capped at forty names, or `-` when nothing changed.
-`review` records carry the same keys.
-
-```text
-type: question
-from: coder
-question: Which password hash: bcrypt or argon2id?
-```
-
-```text
-type: answer
-from: operator
-answer: argon2id
-```
-
-```text
-type: review
-from: specifier
-commit: 4e21d0c
-files: features/login.feature
-summary: login acceptance contract; manual QA in the specification commit
-```
-
-```text
-type: approval
-from: operator
-```
-
-```text
-type: changes-requested
-from: operator
-reason: split the lockout scenarios into their own feature
-```
-
-```text
-type: route
-from: operator
-route: specifier,coder,cleaner,qa
-```
-
-```text
-type: finished
-from: operator
-merged-into: main
-```
-
-`from` is the acting role: `SWARMFORGE_ROLE` when set, otherwise the task's
-current stage. Operator records always say `operator`.
+Records change no files except `created` (adds the request), handoff to
+`done` (archives it), and `moved` (see [Moving the task files](#moving-the-task-files)). `finished` is the base branch's `--no-ff` merge commit.
+The hook rejects reserved `SwarmForge-*` trailers in role commits. Git's
+`user.name` and `user.email` supply the author, with `SWARMFORGE_USER` and
+`SWARMFORGE_EMAIL` as fallbacks.
 
 ## Lore lines
 
-After the records, `sf start` and `sf show` print the
-[Lore](https://github.com/Ian-stetsenko/lore-protocol) trailers of the task
-branch, one line per trailer:
+`sf show` prints every [Lore trailer](constitution/articles/workflow.md#lore-trailers),
+including evidence, from role commits on the task's first-parent history:
 
 ```text
 LORE: 3e1f0a2 coder Constraint: keep the byline format
 LORE: 3e1f0a2 coder Rejected: byline as a trailer | breaks old commits
-LORE: 9b07c44 qa Lore-id: 5d2c81fe
-LORE: 9b07c44 qa Tested: byline placement
 ```
 
-The commits are those on the first-parent history of `swarm/<id>` after the
-`created` record, oldest first, trailers in message order; a merge of the base
-branch brings in no lines. The sha is abbreviated as
-`git rev-parse --short` prints it; the role is the commit's last
-`By <role>.` line, or `-`. Only trailers that git reads from the trailer block
-count, with folded values on one line, and only Lore keys (`Constraint`,
-`Rejected`, `Confidence`, `Scope-risk`, `Reversibility`, `Directive`,
-`Tested`, `Not-tested`, `Supersedes`, `Depends-on`, `Related`, `Lore-id`).
-After `sf finish`, `sf show` reads them from the merge's second parent. After
-a host squash merge, it prints the records from `tasks/done/<id>.md`, and
-`LORE:` lines only while the task branch still exists.
+Lines appear oldest commit first, then trailer order. Base-branch merges add
+no Lore lines. The SHA is abbreviated; the role is the commit's last
+`By <role>.` line, or `-`. Only Git-parsed trailer blocks count; folded values
+print on one line. After finishing, `sf show` reads the merge's second parent.
+After a host squash merge, archived records remain readable, but Lore lines
+require the task branch to still exist.
+
+## What sf start leaves out
+
+`sf start` prints the request and a brief for the receiving role:
+
+- Every question, answer, and changes-requested record, plus the last ten
+  other records, oldest first. `RECORDS:` reports how many were omitted.
+- Decision Lore, excluding `Tested`, `Not-tested`, `Confidence`, and `Lore-id`.
+- No lines from a commit named by a `Supersedes: <Lore-id>` trailer. The
+  superseding trailer stays unless its own commit is superseded; unmatched
+  IDs remove nothing. `LORE-OMITTED:` counts omitted evidence and superseded lines.
+
+Use `sf show <id>` when the brief omits needed history or evidence.
 
 ## Lifecycle
 
-```text
-sf new ──► stage <first role>
-             │ sf review        (specifier only)
-             ▼
-         needs approval ──sf reject──► stage <first role>
-             │ sf approve
-             ▼
-         stage coder ──sf handoff──► stage cleaner ──► … ──► stage done
-             │ sf ask                                    (tasks/done/<id>.md)
-             ▼                                                 │ sf finish
-         needs operator ──sf answer──► same stage              ▼
-                                                        merged, branch removed
-```
+| Command | Transition or requirement |
+|---|---|
+| `sf new` | Creates a route and starts its first role. Route precedence: `--route`, `SWARMFORGE_ROUTE`, named `feature`, then all non-optional catalogue roles. |
+| `sf review` | Specifier requests operator approval of its committed specification. |
+| `sf approve` / `sf reject` | Approve advances the specifier; reject requests changes. Approval must match the reviewed role commit; a new specification needs review again. An answer or rejection is not approval. |
+| `sf ask` / `sf answer` | Block for an operator decision, then resume the same role. |
+| `sf handoff` | Requires a clean task worktree and needs `none`; records HEAD and advances to the next route role, then `done`. Use `--to` only as the role prompt directs. |
+| `sf route <id> <route>` | Changes an open task's route, retaining the current stage. Roles must follow catalogue order. |
+| `sf next <role>` | Lists open tasks at that stage needing nothing; blocked tasks stay hidden. |
 
-- `sf new` records the route (`--route`, else `SWARMFORGE_ROUTE`, else
-  `feature` from `swarmforge/routes.conf`, else every role) and sets the stage
-  to its first role. A route is any subset of `swarmforge/roles.conf` in that
-  file's order.
-- `sf handoff` requires a clean worktree on the task branch and needs
-  `none`. It records HEAD and moves the stage to the next role on the task's
-  route, or to `done` after the last one. `--to <role>` jumps elsewhere; role
-  prompts say when that is allowed.
-- The specifier leaves its stage only through `sf approve` after `sf review`.
-  Approval must match the reviewed role commit; a new specification commit
-  requires another review. Rejection or an answered question is not approval.
-- `sf route <id> <route>` changes an open task's route; the new route must
-  contain the current stage. The change is recorded as `type: route`.
-- For a role flagged `audit` in `roles.conf`, the first `sf handoff` or
-  `sf review` at a given HEAD exits 3 with `AUDIT_REQUIRED` and a self-review
-  checklist, recording nothing; the next attempt at the same HEAD goes
-  through. A new commit starts a new audit. State lives in
-  `.swarmforge/audit/<id>` and is removed when the record is written.
-- `sf next <role>` lists open tasks at that stage that need nothing, so a
-  blocked task is invisible to the role until the operator acts.
-- `sf finish` merges `swarm/<id>` into the base branch with `--no-ff` (the
-  merge commit is the `finished` record), then removes the worktree and the
-  branch. A finished task refuses `sf start` and every record.
+For an `audit` role, the first handoff or review at a HEAD exits 3 with
+`AUDIT_REQUIRED`, recording nothing. Complete the self-review before retrying
+at that HEAD; a new commit requires a new audit. Pending audit state lives
+under `.swarmforge/audit/<id>` and is cleared when the record is written.
+
+### Finishing and recovery
+
+`sf finish` refuses staged, unstaged, or untracked worktree changes without
+changing anything. It verifies a merge candidate in the task worktree, using
+the base branch as the current side of the merge. Commands run sequentially
+with `bash -c` from that checkout's root. `VERIFY:` reports each pass or
+`none configured`. A failed command exits 1, preserving both branches and the
+original worktree.
+
+On success, `sf finish` merges with `--no-ff`, removes the worktree without
+force, then removes the branch. Rerun it to complete interrupted cleanup.
+Finished tasks refuse `sf start` and further records.
+
+If the merge conflicts, resolve and commit it in the main checkout, then
+rerun `sf finish`. It verifies that committed merge before recording and
+cleaning up. If verification fails, fix it with `git commit --amend` and retry;
+a new commit on top of the merge is refused as finished. Nobody writes the
+finished-record trailers manually.
+
+## Moving the task files
+
+To change `tasks-dir`, edit it in the main checkout's `swarmforge/project.conf`,
+then run `sf move-tasks <old-dir>`. On each open task branch it records a
+`moved` record that moves the task file and keeps the stage, route, and needs,
+so a task waiting on the operator keeps waiting. It refuses before moving
+anything when a task worktree has uncommitted changes or when one directory
+lies inside the other, and brings each clean
+task worktree to the new tip. In the main checkout it stages a `git mv` of the
+archives under `<old-dir>/done/`; commit them with `project.conf`. Only files
+named `<id>.md` and `done/<id>.md` move; other files under `<old-dir>/` stay.
+The next review or handoff lists the moved paths among its files.
 
 ## Sharing
 
-Everything is under `refs/heads/`, so any host that takes branch pushes takes
-a task: `git push origin swarm/<id>` moves the task with its records and its
-work, and a fetch brings it back. Records change no file, so
-`git pull --rebase origin swarm/<id>` never conflicts on them; the newest
-record wins.
+Push `swarm/<id>` to share its work and records; fetch it in another clone.
+Record commits change no files, so rebasing them introduces no record-file
+conflicts; the newest record supplies the state.
 
-Mutation manifests are a cache on the orphan branch `swarmforge/metrics`,
-whose tree mirrors `.metrics/mutate/` and `.metrics/gherkin/`. `sf start`
-copies the cached files a worktree lacks, and `sf handoff` commits the new and
-changed ones without a checkout. sf does not push it: `git push origin
-swarmforge/metrics` shares the cache, and a fetch brings it back.
-
-When changing cache transport or mutator wrappers, check with real tools in
-scratch projects: clj-mutate reuses killed forms after handoff and a new task;
-gherkin-mutator reuses its manifest from both the worktree root and a feature
-subdirectory. On success and failure, keep the feature as committed, retain
-the block under `.metrics/gherkin/`, and preserve the tool's exit status.
-After handoff, verify the cached files load in a new task or a clone that
-fetches `swarmforge/metrics`. Do not commit manifests or test output.
+Mutation manifests live on the orphan branch `swarmforge/metrics`, mirroring
+`.metrics/mutate/` and `.metrics/gherkin/`. `sf start` loads missing files;
+`sf handoff` saves new and changed ones without checking out that branch.
+Push `swarmforge/metrics` explicitly to share it; `sf` does not push it.
 
 ## Audit
 
-`sf show <id>` prints the complete history: request, every question and
-answer, every handoff with its commit, the approval, and the merge.
-`git log --first-parent swarm/<id>` before finishing, or the merge commit
-after, shows the code and the records.
+`sf show <id>` gives the complete request and record history. Inspect role
+work with `git log --first-parent swarm/<id>` before finishing, or the merge's
+second parent afterwards.

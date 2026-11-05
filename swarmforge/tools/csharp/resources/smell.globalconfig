@@ -1,0 +1,7 @@
+is_global = true
+# Below a project's own .globalconfig (100) and other global configs (0).
+global_level = -1
+
+dotnet_diagnostic.CA1501.severity = warning
+dotnet_diagnostic.CA1505.severity = warning
+dotnet_diagnostic.CA1506.severity = warning

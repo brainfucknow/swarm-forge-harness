@@ -1,12 +1,23 @@
 (ns sf.config
-  "The catalogue files under swarmforge/: roles, tiers, routes, and tools."
+  "The catalogue files under swarmforge/: roles, tiers, routes, tools, and the
+  project settings."
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
+            [sf.catalogue :as catalogue]
             [sf.flow :as flow]
             [sf.shell :as shell]))
 
+(def ^:dynamic *root*
+  "The checkout whose swarmforge/ is read; nil reads the main checkout's."
+  nil)
+
 (defn conf-dir []
-  (str (fs/path (shell/repo-root) "swarmforge")))
+  (str (fs/path (or *root* (shell/repo-root)) "swarmforge")))
+
+(defn in-checkout
+  "The command f, reading the config of the checkout it runs in."
+  [f]
+  (fn [args] (binding [*root* (shell/checkout-root)] (f args))))
 
 (defn conf-file [name]
   (str (fs/path (conf-dir) name)))
@@ -32,8 +43,11 @@
   (when-not (some #{role} (pipeline))
     (shell/die "unknown role '" role "' (see swarmforge/roles.conf)")))
 
+(defn- role-flags [role]
+  (drop 3 (some #(when (= role (first %)) %) (rows "roles.conf"))))
+
 (defn role-audits? [role]
-  (= "audit" (role-field role 4)))
+  (boolean (some #{"audit"} (role-flags role))))
 
 (defn named-routes []
   (rows "routes.conf"))
@@ -63,7 +77,30 @@
   (let [route (shell/env "SWARMFORGE_ROUTE" nil)]
     (cond route (resolve-route route)
           (field (named-routes) "feature" 2) (resolve-route "feature")
-          :else (catalogue-route))))
+          :else (let [roles (remove #(some #{"optional"} (role-flags %)) (pipeline))]
+                  (when (empty? roles) (shell/die "empty route"))
+                  (str/join "," roles)))))
+
+;; project.conf
+
+(def default-tasks-dir "tasks")
+
+(defn tasks-dir-problem
+  "Why dir cannot hold task files, or nil: it must be a relative path whose
+  parts are letters, digits, ., _ and - and do not start with a dot."
+  [dir]
+  (when-not (and (string? dir)
+                 (every? #(re-matches #"[A-Za-z0-9_][A-Za-z0-9._-]*" %) (str/split dir #"/" -1)))
+    (str "tasks-dir '" dir "' must be a relative path of names that do not start with a dot")))
+
+(defn tasks-dir
+  "The directory of the task files, relative to the repository root: the
+  tasks-dir setting of project.conf, else tasks."
+  []
+  (let [dir (or (field (rows "project.conf") "tasks-dir" 2) default-tasks-dir)]
+    (when-let [problem (tasks-dir-problem dir)]
+      (shell/die "project.conf: " problem))
+    dir))
 
 ;; sf check
 
@@ -86,11 +123,17 @@
               (not= 4 (count row)) (conj (str "tiers.conf: '" tier "' needs exactly <tier> <claude-model> <codex-effort> <copilot-model>"))
               (seen tier) (conj (str "tiers.conf: tier '" tier "' listed twice")))))))
 
-(defn- check-role [[role tier runs flag :as row] seen]
-  (if-not (<= 3 (count row) 4)
-    [(str "roles.conf: '" role "' needs <role> <tier> <runs-as> [audit]")]
-    (cond-> []
-      (not (contains? #{nil "audit"} flag)) (conj (str "roles.conf: '" role "' has unknown flag '" flag "' (only audit)"))
+(defn- flag-problems [role flags]
+  (concat
+    (for [flag (distinct flags) :when (not (#{"audit" "optional"} flag))]
+      (str "roles.conf: '" role "' has unknown flag '" flag "' (only audit, optional)"))
+    (for [[flag n] (frequencies flags) :when (> n 1)]
+      (str "roles.conf: '" role "' repeats flag '" flag "'"))))
+
+(defn- check-role [[role tier runs & flags :as row] seen]
+  (if-not (<= 3 (count row) 5)
+    [(str "roles.conf: '" role "' needs <role> <tier> <runs-as> [audit] [optional]")]
+    (cond-> (vec (flag-problems role flags))
       (not (re-matches #"[a-z][a-z0-9-]*" role)) (conj (str "roles.conf: role name '" role "' must be lowercase letters, digits, and hyphens"))
       (#{"done" "operator"} role) (conj (str "roles.conf: '" role "' is reserved"))
       (seen role) (conj (str "roles.conf: role '" role "' listed twice"))
@@ -117,28 +160,23 @@
               (seen name) (conj (str "routes.conf: route '" name "' listed twice"))
               (route-problem route) (conj (str "routes.conf: " name ": " (route-problem route))))))))
 
-(def tool-kinds
-  "The kinds sf tool can install."
-  #{"bb" "bbmain" "clj" "local"})
-
-(def tool-rewrites
-  "The argument rewrites sf tool can write."
-  #{"mutate" "gherkin" "coverage" "-"})
-
 (defn- check-tools []
-  (scan (rows "tools.conf")
-        (fn [[name kind _ _ rewrite :as row] seen]
-          (let [twice (when (seen name) [(str "tools.conf: tool '" name "' listed twice")])]
-            (if (not= 6 (count row))
-              (conj (vec twice) (str "tools.conf: '" name "' needs exactly <name> <kind> <source> <task> <rewrite> <needs>"))
-              (cond-> (vec twice)
-                (not (tool-kinds kind)) (conj (str "tools.conf: '" name "' has unknown kind '" kind "'"))
-                (not (tool-rewrites rewrite)) (conj (str "tools.conf: '" name "' has unknown rewrite '" rewrite "'"))))))))
+  (map #(str "tools.conf: " %) (catalogue/problems (map catalogue/tool (rows "tools.conf")))))
+
+(defn- check-project []
+  (scan (rows "project.conf")
+        (fn [[setting value :as row] seen]
+          (cond
+            (not= "tasks-dir" setting) [(str "project.conf: unknown setting '" setting "' (only tasks-dir)")]
+            (not= 2 (count row)) [(str "project.conf: '" setting "' needs exactly <setting> <value>")]
+            :else (cond-> []
+                    (seen setting) (conj (str "project.conf: '" setting "' listed twice"))
+                    (tasks-dir-problem value) (conj (str "project.conf: " (tasks-dir-problem value))))))))
 
 (defn check
   "Validates the catalogue files and prints a summary; stops on any problem."
   []
-  (let [problems (concat (check-tiers) (check-roles) (check-routes) (check-tools))]
+  (let [problems (concat (check-tiers) (check-roles) (check-routes) (check-tools) (check-project))]
     (when (seq problems)
       (binding [*out* *err*]
         (doseq [problem problems] (println (str "CHECK: " problem))))
