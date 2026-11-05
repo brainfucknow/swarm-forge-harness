@@ -45,7 +45,6 @@ Catalogue commands
   adapters                        regenerate .claude/.codex/.github agent files
   tool require|ensure|list|bin    install constitution tools project-locally (sf tool --help)
   check                           validate roles.conf, tiers.conf, routes.conf, tools.conf, role prompts
-  roles, routes, adapters, tool and check read the config of the checkout sf runs in
 
 Hook commands
   commit-msg <role> <file>        add the byline and a Lore-id to a commit message (the commit-msg hook runs this)
