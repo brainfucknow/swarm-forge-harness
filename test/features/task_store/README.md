@@ -20,7 +20,6 @@ for fixture operations and assertions.
 | `NEW` | The task created by the command under test. |
 | `C1`, `C2`, `T1`, `M1` | Commits named by fixture steps. |
 | `L1`, `L2`, `L3` | Hook-generated Lore IDs for the corresponding commits. |
-| `DATE` | Any `YYYY-MM-DD` date. |
 | `ROOT` | Absolute path of the main checkout. |
 
 The initialized fixture starts on `main`, with `swarmforge/`, ignored scratch

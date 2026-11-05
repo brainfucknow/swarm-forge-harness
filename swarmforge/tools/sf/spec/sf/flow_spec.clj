@@ -63,9 +63,9 @@
 
 (describe "records"
   (it "starts a task at the first role of its route"
-    (should= {:record "created" :from "operator" :text "Add login"
+    (should= {:record "created" :from "operator" :text "Add login\n\nUsers log in."
               :stage "coder" :route "coder,qa" :needs "none"}
-             (flow/created "Add login" "coder,qa")))
+             (flow/created "Add login" "Users log in." "coder,qa")))
 
   (it "carries the state into the next record under its own fields"
     (should= {:record "question" :from "coder" :stage "coder" :route "specifier,coder,cleaner"
@@ -102,10 +102,7 @@
     (should-be-nil (flow/created-commit (rest records))))
 
   (it "finds the commit of the newest created, review or handoff record"
-    (should= "r1" (flow/last-milestone-commit records)))
-
-  (it "finds the finished record"
-    (should= "f1" (:sha (flow/finished-record records)))))
+    (should= "r1" (flow/last-milestone-commit records))))
 
 (describe "a finished task that sf finish resumes"
   (it "keeps HEAD when HEAD's history has the finished record and the branch tip"
@@ -120,7 +117,10 @@
   (it "refuses a task without a branch"
     (should-be-nil (flow/resume-action true nil ["m0" "t1"] false)))
 
+  (it "keeps HEAD when it contains the branch tip some other way and has no record"
+    (should= :keep (flow/resume-action false "t1" ["t1" "m0"] true))
+    (should= :keep (flow/resume-action false "t1" ["m0"] true)))
+
   (it "refuses a HEAD that does not merge the branch tip"
     (should-be-nil (flow/resume-action false "t1" ["m0"] false))
-    (should-be-nil (flow/resume-action false "t1" ["m0" "t2"] false))
-    (should-be-nil (flow/resume-action false "t1" ["t1" "m0"] true))))
+    (should-be-nil (flow/resume-action false "t1" ["m0" "t2"] false))))

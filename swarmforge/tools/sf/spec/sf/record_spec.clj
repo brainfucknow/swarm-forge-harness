@@ -1,5 +1,5 @@
 (ns sf.record-spec
-  (:require [speclj.core :refer [describe it should= context]]
+  (:require [speclj.core :refer [describe it should=]]
             [sf.record :as record]))
 
 (describe "slug"
@@ -144,37 +144,30 @@
     (should= "type: approval\nfrom: operator"
              (record/block {:record "approval" :from "operator"}))))
 
-(def ^:private task-text
-  (record/task-file {:id "t-1" :date "2026-10-27" :title "Add login" :request "Users log in.\n"}))
+(defn- created-message [title request]
+  (record/message {:task "t-1" :record "created" :from "operator" :text (record/created-text title request)
+                   :stage "coder" :route "coder" :needs "none"}))
 
-(def ^:private archived-text
-  (record/archive task-text "coder" ["type: created\nfrom: operator" "type: handoff\nfrom: coder"]))
+(describe "title and request"
+  (it "go in the created message as the title, a blank line and the request"
+    (should= (str "sf created: t-1\n\nAdd login\n\nUsers log in.\n\nWith email.\n\n"
+                  "SwarmForge-Task: t-1\nSwarmForge-Record: created\nSwarmForge-From: operator\n"
+                  "SwarmForge-Stage: coder\nSwarmForge-Route: coder\nSwarmForge-Needs: none\n")
+             (created-message "Add login" "Users log in.\n\nWith email.\n")))
 
-(describe "task file"
-  (it "is the front matter, the title heading and the request"
-    (should= "---\nid: t-1\ncreated: 2026-10-27\n---\n\n# Add login\n\nUsers log in.\n" task-text))
+  (it "read back from the parsed created record, blank lines in the request kept"
+    (let [message (created-message "Add login" "Users log in.\n\n\nWith email.")]
+      (should= {:title "Add login" :request "Users log in.\n\n\nWith email."}
+               (record/title-and-request
+                (:text (record/parse {:sha "s" :parents ["p"] :message message
+                                      :trailers (take-last 6 (clojure.string/split-lines message))}))))))
 
-  (it "reads back"
-    (should= {:front {"id" "t-1" "created" "2026-10-27"} :title "Add login" :request "Users log in." :blocks []}
-             (record/read-task-file task-text)))
+  (it "read back from the task file of a task made before sf kept them in the created record"
+    (should= {:title "Add login" :request "Users log in.\n\nWith email."}
+             (record/read-task-file "---\nid: t-1\ncreated: 2026-10-27\n---\n\n# Add login\n\nUsers log in.\n\nWith email.\n")))
 
-  (it "keeps a Records heading in the request of an open task"
-    (let [request "Log the events.\n\n## Records\n\n```text\ntype: example\n```"]
-      (should= {:request request :blocks []}
-               (select-keys (record/read-task-file (record/task-file {:id "t-1" :date "2026-10-27" :title "Log" :request request}))
-                            [:request :blocks]))))
-
-  (context "archive"
-    (it "adds the stage, the route and the fenced records"
-      (should= (str "---\nid: t-1\ncreated: 2026-10-27\nstage: done\nroute: coder\n---\n\n# Add login\n\nUsers log in.\n\n"
-                    "## Records\n\n```text\ntype: created\nfrom: operator\n```\n\n```text\ntype: handoff\nfrom: coder\n```\n")
-               archived-text))
-
-    (it "reads back with the records unfenced"
-      (should= {:front {"id" "t-1" "created" "2026-10-27" "stage" "done" "route" "coder"}
-                :title "Add login" :request "Users log in."
-                :blocks ["type: created\nfrom: operator" "type: handoff\nfrom: coder"]}
-               (record/read-task-file archived-text)))))
+  (it "puts a title on one line"
+    (should= "Add login now" (record/one-line " Add\n login \t now\n"))))
 
 (describe "record-trailer"
   (it "is the first trailer key that starts with SwarmForge- in any case"
@@ -187,11 +180,6 @@
   (it "is the slug and the first hex that no task has"
     (should= "add-login-3333333"
              (record/new-id "Add login" ["1111111" "2222222"] ["1111111" "2222222" "3333333"]))))
-
-(describe "archived-state"
-  (it "is the stage and route of the front matter, waiting on no one"
-    (should= {:stage "done" :route "coder,qa" :needs "none"}
-             (record/archived-state {:front {"stage" "done" "route" "coder,qa" "id" "x"}}))))
 
 (describe "milestone?"
   (it "is true for created, review and handoff records"

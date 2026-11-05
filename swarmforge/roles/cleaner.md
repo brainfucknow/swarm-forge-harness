@@ -24,7 +24,7 @@ You are the cleaner.
 - Review documentation added or expanded in the task's diff from the merge base, not just the latest handoff. Leave other text unless asked.
 - Remove duplication, stale drafts, implementation narration, excessive detail, and restatements of code, tests, or other docs; repair affected links. Keep contracts, non-obvious constraints, necessary examples, and useful real-tool compatibility checks concise. Consolidate lasting guidance into existing references.
 - Move task plans, manual QA recipes, review reports, and verification transcripts from tracked documentation to commits or ignored scratch files.
-- Never change scenarios and their steps, what a step-table row means (its wording may be tightened), task files (under `tasks/` or the `tasks-dir` of `swarmforge/project.conf`) and `sf` records, commit messages and Lore, or text a test checks.
+- Never change scenarios and their steps, what a step-table row means (its wording may be tightened), `sf` records, commit messages and Lore, or text a test checks.
 - Record files and lines before → after, with reasons, in the cleanup commit, not a new report. QA-suite checks are out of scope.
 
 ## Verification And Analysis

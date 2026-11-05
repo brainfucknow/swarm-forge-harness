@@ -4,7 +4,9 @@
             [speclj.core :refer [describe it should= should-be-nil around]]
             [sf.shell :as shell]
             [sf.history :as history]
+            [sf.flow :as flow]
             [sf.lore]
+            [sf.record :as record]
             [sf.store :as store]))
 
 (def ^:dynamic *dir* nil)
@@ -47,31 +49,31 @@
   (it "is nil when there is no created record"
     (should-be-nil (lore-lines "HEAD" [{:record "question"}]))))
 
-(def ^:private finished-history @#'sf.history/finished-history)
+(defn- finish-through-second-parent!
+  "Task t-1 in dir, finished into the branch pr, which main then merges: its
+  finished record is reached only through HEAD's second parent."
+  [dir]
+  (store/create! "t-1" (record/message (assoc (flow/created "Add login" "Users log in." "coder") :task "t-1")))
+  (git dir "checkout" "-q" "-b" "pr")
+  (git dir "commit" "-q" "--allow-empty" "-m" "Code\n\nBy coder.\n\nTested: it\n")
+  (git dir "merge" "-q" "--no-ff" "-m" (record/message {:task "t-1" :record "finished" :from "operator" :stage "done"
+                                                         :route "coder" :needs "none" :merged-into "pr"})
+       "swarm/t-1")
+  (git dir "branch" "-q" "-D" "swarm/t-1")
+  (git dir "checkout" "-q" "main")
+  (git dir "merge" "-q" "--no-ff" "--no-edit" "pr"))
 
-(describe "finished-history"
+(describe "view of a finished task"
   (around [it] (with-repo it))
 
-  (it "takes the archive's blocks and no commits when the branch is gone"
-    (with-redefs [store/records-at (constantly [])
-                  store/has-branch? (constantly false)
-                  store/ref-of (fn [_] (throw (ex-info "no branch" {})))]
-      (should= {:blocks ["b"] :commits nil} (finished-history "t-1" {:blocks ["b"]}))))
-
-  (it "adds the commits of the branch while it exists"
-    (let [base (git *dir* "rev-parse" "--short" "HEAD")
-          _ (git *dir* "commit" "-q" "--allow-empty" "-m" "Code\n\nBy coder.\n\nConstraint: keep it\n")
-          head (git *dir* "rev-parse" "--short" "HEAD")]
-      (with-redefs [store/records-at (constantly [{:record "created" :commit base}])
-                    store/with-files identity
-                    store/has-branch? (constantly true)
-                    store/ref-of (constantly "HEAD")]
-        (should= ["b"] (:blocks (finished-history "t-1" {:blocks ["b"]})))
-        (should= [(str "LORE: " head " coder Constraint: keep it")]
-                 (sf.lore/lines (:commits (finished-history "t-1" {:blocks ["b"]}))))))))
+  (it "reads the finished record through a second parent and the records of the merged branch"
+    (finish-through-second-parent! *dir*)
+    (let [{:keys [status state title request records]} (history/view "t-1")]
+      (should= ["finished" "done" "Add login" "Users log in."] [status (:stage state) title request])
+      (should= [["created" nil] ["finished" "pr"]] (map (juxt :record :merged-into) records)))))
 
 (defn- view [records & commits]
-  {:file {:request "Users log in."} :records records :commits commits})
+  {:request "Users log in." :records records :commits commits})
 
 (def ^:private routes (repeat 11 {:record "route" :from "operator" :route "a,b"}))
 
