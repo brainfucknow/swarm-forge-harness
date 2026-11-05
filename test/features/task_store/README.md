@@ -1,6 +1,6 @@
 # Task store acceptance features
 
-Executable contracts for task IDs, files, records, approval, history, startup
+Executable contracts for task IDs, requests, records, approval, history, startup
 briefs, hooks, and safe finishing. Usage and recovery belong in the
 [handoff protocol](../../../swarmforge/handoff-protocol.md).
 
