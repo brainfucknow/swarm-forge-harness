@@ -1,9 +1,9 @@
 # SwarmForge
 
 This directory is SwarmForge installed into the project. It runs AI roles as
-harness agents in Claude Code, Codex, or Copilot CLI. Each task takes a route
-through the role catalogue, and roles pass work through task branches in this
-repository.
+harness agents in Kilo, Claude Code, Codex, or Copilot CLI. Each task takes a
+route through the role catalogue, and roles pass work through task branches in
+this repository.
 
 | File | Purpose |
 |---|---|
@@ -48,11 +48,12 @@ operator.
 ## Configuration
 
 After editing `roles.conf`, `routes.conf`, or `tiers.conf`, run `sf adapters`
-to regenerate the agent files under `.claude/agents/`, `.codex/agents/`, and
-`.github/agents/`. `sf check` validates the configuration files and the role
-prompts; `sf init` and `sf adapters` run it first and refuse a broken setup.
-`sf check`, `sf adapters`, `sf roles`, `sf routes` and `sf tool` read the
-checkout they run in; `sf init` and task bookkeeping read the main checkout's.
+to regenerate the agent files under `.claude/agents/`, `.codex/agents/`,
+`.github/agents/`, and `.kilo/agent/`. `sf check` validates the configuration
+files and the role prompts; `sf init` and `sf adapters` run it first and refuse
+a broken setup. `sf check`, `sf adapters`, `sf roles`, `sf routes` and `sf tool`
+read the checkout they run in; `sf init` and task bookkeeping read the main
+checkout's.
 
 Adapter ownership is recorded in ignored `.swarmforge/adapters.edn` in the
 checkout where `sf adapters` runs. Regeneration preserves unrelated agents and

@@ -40,6 +40,7 @@ for module in csharp javascript ruby; do
 done
 copy_tree "$HERE/.claude/skills" "$target/.claude/skills"
 copy_tree "$HERE/.agents/skills" "$target/.agents/skills"
+copy_tree "$HERE/.kilo/command" "$target/.kilo/command"
 
 append_once() {
   local file="$1" line="$2"
@@ -57,6 +58,8 @@ append_once "$target/.gitignore" ".worktrees/"
 append_once "$target/.gitignore" ".swarmforge/"
 append_once "$target/.gitignore" "tmp/"
 append_once "$target/.gitignore" ".metrics/"
+append_once "$target/.gitignore" ".kilo/worktrees/"
+append_once "$target/.gitignore" ".kilo/agent-manager.json"
 # Keeps swarmforge/bin tracked when the project ignores every bin/ directory,
 # as Visual Studio's "[Bb]in/" does. A file inside swarmforge/bin is never read
 # under such a rule; "!/bin/**" also covers rules like "**/bin/**". The leading
@@ -71,6 +74,6 @@ Installed SwarmForge into $target.
   swarmforge/roles.conf       role catalogue (edit, then: swarmforge/bin/sf adapters)
   swarmforge/routes.conf      named routes a task can take
   swarmforge/tiers.conf       model per tier per harness
-  .claude/agents, .codex/agents, .github/agents   generated role agents
-  /swarm <request>            start a task from Claude Code, Codex, or Copilot
+  .claude/agents, .codex/agents, .github/agents, .kilo/agent   generated role agents
+  /swarm <request>            start a task from Kilo, Claude Code, Codex, or Copilot
 EOF

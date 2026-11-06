@@ -3,8 +3,8 @@
             [babashka.fs :as fs]
             [clojure.string :as str]))
 
-(def dirs [".claude/agents" ".github/agents" ".codex/agents"])
-(def suffixes [".md" ".agent.md" ".toml"])
+(def dirs [".claude/agents" ".github/agents" ".codex/agents" ".kilo/agent"])
+(def suffixes [".md" ".agent.md" ".toml" ".md"])
 (defn new-world [] {})
 
 (defn- run-command [world command]
@@ -63,7 +63,7 @@
       (check (= expected (slurp (str (fs/path (:repo world) path)))) (str path " changed"))
       world)]
 
-   [#"adapters exist for the configured subagent roles in all three harnesses"
+   [#"adapters exist for the configured subagent roles in all four harnesses"
     (fn [world]
       (doseq [role ["specifier" "coder" "cleaner" "architect" "hardener" "qa"]]
         (require-role-files world role true))
@@ -83,12 +83,13 @@
 
    [#"the generated adapters for \"([^\"]+)\" use the configured tier settings"
     (fn [world role]
-      (let [[_ claude codex copilot]
+      (let [[_ claude codex copilot kilo]
             (some #(let [fields (str/split % #"\s+")] (when (= "fast" (first fields)) fields))
-                  (str/split-lines (slurp (str (fs/path (:repo world) "swarmforge/tiers.conf")))))]
+                  (str/split-lines (slurp (str (fs/path (:repo world) "swarmforge/tiers.conf")))))
+            kilo-metadata (if (or (nil? kilo) (= "inherit" kilo)) "mode: subagent" (str "model: " kilo))]
         (doseq [[dir suffix metadata] (map vector dirs suffixes
                                           [(str "model: " claude) (str "model: " copilot)
-                                           (str "model_reasoning_effort = \"" codex "\"")])]
+                                           (str "model_reasoning_effort = \"" codex "\"") kilo-metadata])]
           (check (str/includes? (slurp (str (fs/path (:repo world) dir (str role suffix)))) metadata)
                  (str "wrong configured model in " dir))))
       world)]
@@ -119,7 +120,7 @@
         (check (and (str/includes? err path) (str/includes? err "conflicting project agent")) err))
       world)]
 
-   [#"no file in the three harness agent directories was created, changed or removed"
+   [#"no file in the four harness agent directories was created, changed or removed"
     (fn [world]
       (check (= (:before world) (snapshot world)) "collision changed agent files")
       world)]

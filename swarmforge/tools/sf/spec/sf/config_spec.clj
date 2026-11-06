@@ -128,7 +128,7 @@
                               "coder weak robot\nqa strong subagent flag\nx\n"))
       (conf "routes.conf" "feature specifier,qa\nfeature qa,specifier\nlonely\n")
       (conf "tools.conf" "a java s - t rot13 -\na bb github.com/x/a 0123abc t - -\nshort bb\nc bb github.com/x/a aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa t - -\n")
-      (should= ["CHECK: tiers.conf: 'strong' needs exactly <tier> <claude-model> <codex-effort> <copilot-model>"
+      (should= ["CHECK: tiers.conf: 'strong' needs exactly <tier> <claude-model> <codex-effort> <copilot-model> [<kilo-model>]"
                 "CHECK: tiers.conf: tier 'strong' listed twice"
                 "CHECK: roles.conf: role name 'Bad' must be lowercase letters, digits, and hyphens"
                 "CHECK: roles/Bad.md: missing role prompt for 'Bad'"
