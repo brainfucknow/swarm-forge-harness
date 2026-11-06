@@ -73,6 +73,10 @@ development="$(find "$consumer/swarmforge/tools" -type d \( -name spec -o -name 
 assert_eq "fresh install excludes development asset directories" "$development" ""
 assert_fails "fresh install excludes the developer-only sf task config" test -e "$consumer/swarmforge/tools/sf/bb.edn"
 assert_fails "fresh install excludes this repository's verify.conf" test -e "$consumer/swarmforge/verify.conf"
+assert_fails "fresh install ships no project.conf" test -e "$consumer/swarmforge/project.conf"
+printf 'tasks-dir swarmforge/tasks\n' > "$consumer/swarmforge/project.conf"
+bash "$HERE/install.sh" "$consumer" >/dev/null
+assert_eq "reinstall leaves an existing project.conf alone" "$(cat "$consumer/swarmforge/project.conf")" "tasks-dir swarmforge/tasks"
 test -f "$HERE/swarmforge/tools/sf/bb.edn" && test -d "$HERE/swarmforge/tools/javascript/fixtures" \
   && pass "installation leaves source development assets in place" || fail "source development assets changed"
 mkdir -p "$consumer/tmp/jscpd"

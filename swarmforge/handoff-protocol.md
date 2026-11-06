@@ -2,15 +2,15 @@
 
 A task is a Git branch, `swarm/<id>`, containing the request, role work, and
 record commits. `swarmforge/bin/sf` is the only writer of task state; never
-edit task files or write `SwarmForge-*` trailers by hand.
+write `SwarmForge-*` trailers by hand. There are no task files.
 
 ## Task
 
 | Part | Purpose |
 |---|---|
 | `<id>` | Title slug plus seven random hex digits, e.g. `add-login-3f9a2c1`. Commands also accept the suffix or a unique prefix. |
-| `tasks/<id>.md` | Operator request, title, ID, and creation date; unchanged while open. |
-| `tasks/done/<id>.md` | Archive created at `done`, with stage, route, and all records; presence in main checkout HEAD marks the task finished. |
+| `created` record | The branch's first commit: the title and the operator's request in its message. |
+| `finished` record | The `sf finish` merge. A task is finished when the main checkout's HEAD reaches it through any parent. |
 | `.worktrees/<id>` | Role checkout, created by `sf start` and removed by `sf finish`. |
 | `swarmforge/verify.conf` | Optional project verification commands, one per line; blank lines and `#` comments are ignored. |
 
@@ -21,8 +21,10 @@ Needs is `none`, `operator` while a question awaits an answer, or `approval`
 while a reviewed specification awaits a decision. `sf show <id>` prints the
 records; use it rather than reconstructing them from trailers.
 
-Records change no files except `created` (adds the request) and handoff to
-`done` (archives it). `finished` is the base branch's `--no-ff` merge commit.
+Records change no files. `finished` is the base branch's `--no-ff` merge
+commit. sf reads only local `swarm/*` branches; a remote one never lists or
+reopens a task. A task made before task files were dropped keeps its request
+in the file its `created` commit adds, and its handoff to `done` deletes it.
 The hook rejects reserved `SwarmForge-*` trailers in role commits. Git's
 `user.name` and `user.email` supply the author, with `SWARMFORGE_USER` and
 `SWARMFORGE_EMAIL` as fallbacks.
@@ -41,8 +43,9 @@ Lines appear oldest commit first, then trailer order. Base-branch merges add
 no Lore lines. The SHA is abbreviated; the role is the commit's last
 `By <role>.` line, or `-`. Only Git-parsed trailer blocks count; folded values
 print on one line. After finishing, `sf show` reads the merge's second parent.
-After a host squash merge, archived records remain readable, but Lore lines
-require the task branch to still exist.
+A task squash-merged before `sf finish` stays open at `done` until `sf finish`
+merges its branch. One squash-merged after `sf finish` leaves no record in the
+base: `sf` no longer knows it; its history stays on the pushed branch.
 
 ## What sf start leaves out
 
@@ -89,15 +92,15 @@ Finished tasks refuse `sf start` and further records.
 
 If the merge conflicts, resolve and commit it in the main checkout, then
 rerun `sf finish`. It verifies that committed merge before recording and
-cleaning up. If verification fails, fix it with `git commit --amend` and retry;
-a new commit on top of the merge is refused as finished. Nobody writes the
-finished-record trailers manually.
+cleaning up. If verification fails, fix it and retry. A HEAD that contains
+the branch tip some other way, such as a host's merge, is verified and kept
+as it is. Nobody writes the finished-record trailers manually.
 
 ## Sharing
 
 Push `swarm/<id>` to share its work and records; fetch it in another clone.
-Record commits change no files, so rebasing them introduces no record-file
-conflicts; the newest record supplies the state.
+Record commits change no files, so rebasing them introduces no conflicts; the
+newest record supplies the state.
 
 Mutation manifests live on the orphan branch `swarmforge/metrics`, mirroring
 `.metrics/mutate/` and `.metrics/gherkin/`. `sf start` loads missing files;

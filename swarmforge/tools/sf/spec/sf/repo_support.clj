@@ -39,7 +39,8 @@
        (write-config! dir (merge default-conf conf))
        (git dir "add" ".")
        (git dir "commit" "-q" "-m" "Base")
-       (with-redefs [shell/repo-root (constantly dir)]
+       (with-redefs [shell/repo-root (constantly dir)
+                     shell/checkout-root (constantly dir)]
          (binding [*dir* dir] (run-spec)))
        (finally (fs/delete-tree dir))))))
 

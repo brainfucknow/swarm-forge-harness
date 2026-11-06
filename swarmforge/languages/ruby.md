@@ -53,8 +53,19 @@ usage` and continue.
 
 ## Security scanners
 
-- Code scanner on the changed `.rb` files (needs uv and semgrep.dev):
-  `uvx semgrep@1.183.0 scan --config p/ruby --metrics=off --error <changed files>`
+- Code scanner on the changed `.rb` files (needs uv): Semgrep with rules from
+  a pinned semgrep-rules commit in `tmp/` (never commit them: Semgrep Rules
+  License). The fetch and the first uvx run reach github.com and pypi.org; the
+  scan runs offline. Exit 0 is clean, 1 is findings, any other exit leaves the
+  scan Not-tested:
+
+  ```sh
+  git init -q tmp/semgrep-rules
+  git -C tmp/semgrep-rules fetch -q --depth 1 https://github.com/semgrep/semgrep-rules.git 16b9e6d45f10649f6a531ec4838ed9924372c3bc
+  git -C tmp/semgrep-rules checkout -q FETCH_HEAD
+  uvx semgrep@1.183.0 scan --config tmp/semgrep-rules/ruby --metrics=off --disable-version-check --error <changed files>
+  ```
+
 - Optional, acting only on findings in changed files:
   `bundle exec brakeman --no-pager -q` (Rails apps, `--force` otherwise; free
   for non-commercial use only) and

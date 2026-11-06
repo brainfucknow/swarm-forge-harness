@@ -1,8 +1,9 @@
 (ns sf.store
-  "Tasks in plain git. A task is its branch swarm/<id>; its first commit adds
-  tasks/<id>.md, and every sf action is a record commit whose trailers hold the
-  state. A task is finished when tasks/done/<id>.md is in the main checkout's
-  HEAD. git runs in the main checkout."
+  "Tasks in plain git. A task is its local branch swarm/<id>: its first commit
+  is the created record, which holds the title and the request, and every sf
+  action is a record commit whose trailers hold the state. A task is finished
+  when the history of the main checkout's HEAD, any parent included, has its
+  finished record: the merge of sf finish. git runs in the main checkout."
   (:require [clojure.string :as str]
             [sf.git :as git]
             [sf.record :as record]
@@ -11,19 +12,40 @@
 (defn ref-of [id]
   (str "refs/heads/" (record/branch id)))
 
-(defn open-path [id] (str "tasks/" id ".md"))
-(defn done-path [id] (str "tasks/done/" id ".md"))
-
 (defn branch-ids []
   (shell/lines (git/git "for-each-ref" "--format=%(refname:lstrip=3)" "refs/heads/swarm/")))
 
-(defn done-ids []
-  (let [result (git/run {} "ls-tree" "--name-only" "HEAD" "tasks/done/")]
+(def ^:private log-format "%h%x1f%p%x1f%B%x1f%(trailers:only,unfold)%x1e")
+
+(defn- read-commits [output]
+  (for [entry (str/split output #"\x1e")
+        :let [[sha parents message trailers] (str/split (str/replace entry #"^\n" "") #"\x1f" -1)]
+        :when (not (str/blank? sha))]
+    {:sha sha :parents (str/split parents #" ") :message message :trailers (shell/lines trailers)}))
+
+(defn- finished-records
+  "The finished records in the history of the main checkout's HEAD, any parent
+  included, newest first; only those of task id when given. A finished record
+  is a merge, so a squash commit that repeats its message is not one."
+  [& [id]]
+  (let [result (apply git/run {} "log" "--merges" "--all-match" "--grep=^SwarmForge-Record: finished$"
+                      (concat (when id [(str "--grep=^SwarmForge-Task: " id "$")])
+                              [(str "--format=" log-format) "HEAD" "--"]))]
     (when (shell/ok? result)
-      (keep #(second (re-matches #"tasks/done/(.+)\.md" %)) (shell/lines (:out result))))))
+      (->> (read-commits (:out result))
+           (map record/parse)
+           (filter #(and (= "finished" (:record %)) (or (nil? id) (= id (:task %)))))))))
+
+(defn finished-ids []
+  (distinct (map :task (finished-records))))
+
+(defn finished-record
+  "The finished record of the task in HEAD's history, or nil."
+  [id]
+  (first (finished-records id)))
 
 (defn finished? [id]
-  (boolean (some #{id} (done-ids))))
+  (some? (finished-record id)))
 
 (defn tip
   "The commit at the tip of the task branch, or nil."
@@ -37,7 +59,7 @@
   "The task that arg names, among the task branches and the finished tasks."
   [arg]
   (when (str/blank? arg) (shell/die "task id required"))
-  (let [[status found] (record/resolve arg (concat (branch-ids) (done-ids)))]
+  (let [[status found] (record/resolve arg (concat (branch-ids) (finished-ids)))]
     (case status
       :ok found
       :ambiguous (shell/die "task id '" arg "' is ambiguous: " (str/join " " found))
@@ -47,16 +69,8 @@
   "slug-hex, with a random hex part that no task has."
   [title]
   (record/new-id title
-                 (map record/hex-part (concat (branch-ids) (done-ids)))
+                 (map record/hex-part (concat (branch-ids) (finished-ids)))
                  (repeatedly #(format "%07x" (rand-int 0x10000000)))))
-
-(def ^:private log-format "%h%x1f%p%x1f%B%x1f%(trailers:only,unfold)%x1e")
-
-(defn- read-commits [output]
-  (for [entry (str/split output #"\x1e")
-        :let [[sha parents message trailers] (str/split (str/replace entry #"^\n" "") #"\x1f" -1)]
-        :when (not (str/blank? sha))]
-    {:sha sha :parents (str/split parents #" ") :message message :trailers (shell/lines trailers)}))
 
 (defn records-at
   "The records of the task on the first-parent history of rev, oldest first."
@@ -74,40 +88,63 @@
   (record/with-files records (fn [from to]
                                (when from (shell/lines (git/git "diff" "--name-only" from to))))))
 
-(defn show-file
-  "The text of path at rev, or nil."
+(defn- show-file
+  "The text of path at rev."
   [rev path]
-  (let [result (git/run {} "show" (str rev ":" path))]
-    (when (shell/ok? result) (:out result))))
+  (git/out {} "show" (str rev ":" path)))
 
-(defn task-file
-  "The task file: tasks/done/<id>.md in HEAD once finished, else from the branch."
+(defn title-and-request
+  "The :title and :request of the task whose records these are: from the free
+  text of its created record, or from the task file that the created commit
+  of a task made before sf kept them there adds."
+  [records]
+  (let [{:keys [sha text]} (first (filter #(= "created" (:record %)) records))
+        file (when sha (first (shell/lines (git/git "diff-tree" "--no-commit-id" "--name-only" "-r" sha))))]
+    (if file
+      (record/read-task-file (show-file sha file))
+      (record/title-and-request text))))
+
+(defn open-records
+  "The records of the task branch, oldest first; stops when it has none."
   [id]
-  (record/read-task-file
-   (or (if (finished? id)
-         (show-file "HEAD" (done-path id))
-         (or (show-file (ref-of id) (open-path id)) (show-file (ref-of id) (done-path id))))
-       "")))
+  (or (not-empty (records-at (ref-of id) id)) (shell/die "swarm/" id " has no records")))
 
 (defn state
-  "The newest record of the task branch, or the stage and route of the archive
-  when the branch is gone."
+  "The newest record of the task branch, or the finished record when the
+  branch is gone."
   [id]
   (if (has-branch? id)
-    (or (last (records-at (ref-of id) id)) (shell/die "swarm/" id " has no records"))
-    (record/archived-state (task-file id))))
+    (last (open-records id))
+    (finished-record id)))
 
 (defn create!
-  "Makes swarm/<id> at HEAD with one commit that adds the task file."
-  [id text message]
+  "Makes swarm/<id> at HEAD with one commit that changes no file."
+  [id message]
   (let [head (git/git "rev-parse" "HEAD")
-        commit (git/commit-tree (git/tree-with head [] {(open-path id) text}) [head] message)]
+        commit (git/commit-tree (str head "^{tree}") [head] message)]
     (git/git "update-ref" (ref-of id) commit "")))
+
+(defn- task-files
+  "The paths of the files named <id>.md on rev: the task file of a task made
+  before sf kept it in the created record."
+  [rev id]
+  (let [name (str id ".md")]
+    (filter #(or (= name %) (str/ends-with? % (str "/" name)))
+            (shell/lines (git/git "ls-tree" "-r" "--name-only" rev)))))
+
+(defn- tree-for
+  "The tree of the record after tip: tip's tree, without the task files once
+  the record is at done."
+  [tip {:keys [stage task]}]
+  (let [stale (when (= "done" stage) (task-files tip task))]
+    (if (seq stale)
+      (git/tree-with tip stale {})
+      (git/git "rev-parse" (str tip "^{tree}")))))
 
 (defn write!
   "Appends the record that (make records) returns to the task branch, records
-  being the branch's records, oldest first. A record with :archive moves the
-  task file to tasks/done/ with that text; any other record changes no file.
+  being the branch's records, oldest first. The record changes no file, except
+  that a record at done removes the task file of an older task.
   The branch moves only when its tip is still the one read; otherwise sf
   reads it again and retries once. No worktree is touched. Returns the record."
   [id make]
@@ -115,11 +152,8 @@
         (git/advance! (ref-of id)
                       (fn [tip]
                         (let [tip (or tip (shell/die "no branch " (record/branch id)))
-                              rec (assoc (make (records-at tip id)) :task id)
-                              tree (if-let [text (:archive rec)]
-                                     (git/tree-with tip [(open-path id)] {(done-path id) text})
-                                     (git/git "rev-parse" (str tip "^{tree}")))]
-                          {:rec rec :commit (git/commit-tree tree [tip] (record/message rec))})))]
+                              rec (assoc (make (records-at tip id)) :task id)]
+                          {:rec rec :commit (git/commit-tree (tree-for tip rec) [tip] (record/message rec))})))]
     (when error (shell/die error))
     rec))
 

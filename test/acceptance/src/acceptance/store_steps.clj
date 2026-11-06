@@ -110,19 +110,11 @@
                :when (= wanted (subvec actual i (+ i (count wanted))))]
            i)))
 
-(defn- show-file [world name path]
-  (run-in world (:repo world) ["git" "show" (str (branch-ref world name) ":" path)]))
-
-(defn- date-pattern
-  "A regular expression that matches text, with DATE matching any date."
-  [text]
-  (re-pattern (str/join "\\d{4}-\\d{2}-\\d{2}" (map #(java.util.regex.Pattern/quote %) (str/split text #"DATE" -1)))))
-
 (defn- commit-message [world rev]
   (str/replace (git world "log" "-1" "--format=%B" rev) #"\n+\z" ""))
 
-(defn- diff-tree [world name & flags]
-  (apply git world "diff-tree" "--no-commit-id" "-r" (concat flags [(branch-ref world name)])))
+(defn- diff-tree [world name]
+  (git world "diff-tree" "--no-commit-id" "-r" (branch-ref world name)))
 
 (def ^:private task #"task (?:\"(\w)\"|NEW)")
 
@@ -168,7 +160,7 @@
     (fn [world name]
       (handoff-to-done world name)
       (git world "merge" "--squash" (str "swarm/" (id-of world name)))
-      (git world "commit" "-q" "-m" (str "Squash " name))
+      (git world "commit" "-q" "--allow-empty" "-m" (str "Squash " name))
       world)]
 
    [#"the worktree and the branch of task \"(\w)\" were removed"
@@ -389,29 +381,6 @@
       (let [actual (diff-tree world name)]
         (check (str/blank? actual) (str "it changes " (pr-str actual)))
         world))]
-
-   [(step "the tip commit of {task} (adds only the file|changes the files) \"(.*)\"")
-    (fn [world name how text]
-      (let [actual (str/replace (diff-tree world name "--name-status" "--no-renames") "\t" " ")
-            want (if (= "adds only the file" how) (str "A " (expected world text)) (expected world text))]
-        (check (= want actual) (str "it changes " (pr-str actual)))
-        world))]
-
-   [(step "the file \"([^\"]+)\" on the branch of {task} (is|has the line) \"(.*)\"")
-    (fn [world path name how text]
-      (let [{:keys [exit out]} (show-file world name (fill world path))
-            want (expected world text)]
-        (check (zero? exit) (str path " is missing"))
-        (check (if (= "is" how)
-                 (re-matches (date-pattern want) (str/trim-newline out))
-                 (some #{want} (lines out)))
-               (str path " was " (pr-str out)))
-        world))]
-
-   [(step "the file \"([^\"]+)\" does not exist on the branch of {task}")
-    (fn [world path name]
-      (check (not (zero? (:exit (show-file world name (fill world path))))) (str path " exists"))
-      world)]
 
    [#"the file \"([^\"]+)\" in the worktree of task \"(\w)\" still holds \"(.*)\""
     (fn [world path name text]

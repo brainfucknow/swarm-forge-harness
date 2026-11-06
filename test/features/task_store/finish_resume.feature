@@ -11,15 +11,19 @@ Feature: sf finish resume
   "sf: a merge is in progress; commit the merge first" and changes nothing.
 
   Once the operator has committed the merge, sf finish <id> completes the
-  task although tasks/done/<id>.md is in HEAD. It first verifies HEAD as sf
-  finish verify describes, and stops on a failure. If HEAD's first-parent
-  history has the task's finished record, sf finish leaves HEAD as it is. If
-  it has none and HEAD is a merge whose second parent is the tip of the task
-  branch, sf finish rewrites HEAD's message to the finished record, with the
-  same parents and tree. Either way it then removes the worktree and the task
-  branch and prints the VERIFY lines, then "FINISHED: <id> merged into
-  <target>". In any other case a task with tasks/done/<id>.md in HEAD is
-  refused as before with "sf: task <id> is finished".
+  task: HEAD contains the tip of the task branch. It first verifies HEAD as
+  sf finish verify describes, and stops on a failure. If HEAD's history has
+  the task's finished record, sf finish leaves HEAD as it is. If it has none
+  and HEAD is a merge whose second parent is the tip of the task branch, sf
+  finish rewrites HEAD's message to the finished record, with the same
+  parents and tree. If it has none and HEAD contains the tip some other way,
+  sf finish leaves HEAD as it is. Each way it then removes the worktree and
+  the task branch and prints the VERIFY lines, then "FINISHED: <id> merged
+  into <target>". A task whose finished record is in HEAD and whose branch is
+  gone is refused with "sf: task <id> is finished".
+
+  A task that was squash-merged while its branch remains is not finished;
+  sf finish merges its branch as usual, which records it.
 
   Background:
     Given a project with swarmforge initialized
@@ -97,13 +101,20 @@ Feature: sf finish resume
     And the worktree of task "A" does not exist
 
   # sf finish resume 5
-  Scenario Outline: sf finish resume 5: a task finished without a merge of its tip is still refused
-    Given task "A" <how>
+  Scenario: sf finish resume 5: a finished task is refused
+    Given task "A" was finished
     When I run "sf finish $A"
     Then the exit status is 1
     And the error output has the line "sf: task $A is finished"
 
-    Examples:
-      | how                                                 |
-      | was finished                                        |
-      | was handed off to done and squash-merged into main  |
+  # sf finish resume 6
+  Scenario: sf finish resume 6: sf finish merges and records a squash-merged task whose branch remains
+    Given task "A" was handed off to done and squash-merged into main
+    And the tip of the branch of task "A" is named T1
+    When I run "sf finish $A"
+    Then the exit status is 0
+    And the output is "VERIFY: none configured\nFINISHED: $A merged into main"
+    And the HEAD of the main checkout is a merge whose second parent is T1
+    And the HEAD of the main checkout has the message "sf finished: $A\n\nSwarmForge-Task: $A\nSwarmForge-Record: finished\nSwarmForge-From: operator\nSwarmForge-Stage: done\nSwarmForge-Route: coder\nSwarmForge-Needs: none\nSwarmForge-Merged-Into: main"
+    And the branch "swarm/$A" does not exist
+    And the worktree of task "A" does not exist

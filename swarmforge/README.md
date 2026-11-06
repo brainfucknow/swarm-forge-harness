@@ -20,7 +20,7 @@ this repository.
 | `bin/sf-js`, `languages/javascript.md` | JavaScript and TypeScript tool wrapper: the same commands for Vitest or Jest, oxlint or ESLint complexity with Istanbul coverage, jscpd, and StrykerJS. |
 | `bin/sf-rb`, `languages/ruby.md` | Ruby tool wrapper: SimpleCov coverage, CRAP from RuboCop or flog, DRY from jscpd or flay, and optional mutant. |
 | `tools/core/` | Report readers shared by the language tool wrappers: changed lines, CRAP, jscpd, Stryker. |
-| `handoff-protocol.md` | The task branch, task file, record commits, and lifecycle. |
+| `handoff-protocol.md` | The task branch, record commits, and lifecycle. |
 | `verify.conf` | Optional, written by the project: one shell command per line that `sf finish` runs on the merge before it merges, for example `make test`. |
 
 The [handoff protocol](handoff-protocol.md) covers task state, approval, merge
@@ -51,10 +51,12 @@ After editing `roles.conf`, `routes.conf`, or `tiers.conf`, run `sf adapters`
 to regenerate the agent files under `.claude/agents/`, `.codex/agents/`,
 `.github/agents/`, and `.kilo/agent/`. `sf check` validates the configuration
 files and the role prompts; `sf init` and `sf adapters` run it first and refuse
-a broken setup.
+a broken setup. `sf check`, `sf adapters`, `sf roles`, `sf routes` and `sf tool`
+read the checkout they run in; `sf init` and task bookkeeping read the main
+checkout's.
 
 Adapter ownership is recorded in ignored `.swarmforge/adapters.edn` in the
-main checkout. Regeneration preserves unrelated agents and
+checkout where `sf adapters` runs. Regeneration preserves unrelated agents and
 refuses conflicting or locally edited adapters before changing agent files.
 
 Catalogue settings:

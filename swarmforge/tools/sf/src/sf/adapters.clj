@@ -113,11 +113,13 @@
 
 (defn adapters [_]
   (shell/quietly config/check)
-  (let [root (shell/repo-root)
+  (let [root (shell/checkout-root)
         roles (filter #(= "subagent" (nth % 2)) (config/rows "roles.conf"))
         desired (into {} (mapcat (fn [[role tier]] (agent-files role tier)) roles))
         state (fs/path root ".swarmforge" "adapters.edn")
-        recorded (read-ownership state)
+        main-state (fs/path (shell/repo-root) ".swarmforge" "adapters.edn")
+        local (read-ownership state)
+        recorded (if (fs/exists? state) local (read-ownership main-state))
         owned (merge (legacy-ownership root recorded) (refreshed-ownership root desired recorded))]
     (preflight root (distinct (concat (keys desired) (keys owned))) owned)
     (doseq [path (remove (set (keys desired)) (keys owned))]

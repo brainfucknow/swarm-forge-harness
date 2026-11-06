@@ -1,9 +1,10 @@
 Feature: sf record commits
 
-  Every sf command that changes a task, except sf new, sf finish and the
-  handoff to done, adds commits to the task branch that change no file. Each
-  is a record. Its message is "sf <record>: <id>", then a blank line and
-  the free text when the record has any, then a blank line and the trailers:
+  Every sf command that changes a task, except sf finish, adds commits to
+  the task branch that change no file (sf task done names the one exception,
+  for a task created before this change). Each is a record. Its message is
+  "sf <record>: <id>", then a blank line and the free text when the record
+  has any, then a blank line and the trailers:
   SwarmForge-Task, SwarmForge-Record, SwarmForge-From, and the state after
   the record as SwarmForge-Stage, SwarmForge-Route and SwarmForge-Needs (none,
   operator or approval). Free text keeps its newlines. Several arguments are
