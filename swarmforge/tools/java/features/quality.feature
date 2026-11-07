@@ -18,15 +18,15 @@ Feature: sf-java quality
     Given a changed production method has tool-reported CRAP <score>
     When I run sf-java with "crap --base main"
     Then the exit status is <status>
-    And the output identifies the method and its CRAP score
+    And the output identifies the method with CRAP <reported_score>
     And the coverage run uses the dedicated runner without property tests
     And Maven does not execute tests
 
     Examples:
-      | score | status |
-      | 8.5   | 0      |
-      | 10.0  | 0      |
-      | 10.1  | 1      |
+      | score | status | reported_score |
+      | 8.5   | 0      | 8.5            |
+      | 10.0  | 0      | 10.0           |
+      | 10.1  | 1      | 10.1           |
 
   # sf-java quality 2
   Scenario Outline: sf-java quality 2: changed source scope includes local edits
@@ -43,17 +43,20 @@ Feature: sf-java quality
       | untracked   |
 
   # sf-java quality 3
-  Scenario Outline: sf-java quality 3: irrelevant changes do not start mutation
-    Given only "<file>" changed from main
+  Scenario: sf-java quality 3: tests-only changes do not start mutation
+    Given only "src/test/java/demo/LedgerTest.java" changed from main
     When I run sf-java with "mutate --base main"
     Then the exit status is 0
     And mutate4java was not started
     And the output states that no production Java files require mutation
 
-    Examples:
-      | file                                 |
-      | src/test/java/demo/LedgerTest.java    |
-      | README.md                            |
+  # sf-java quality 3
+  Scenario: sf-java quality 3: documentation changes do not start mutation
+    Given only "README.md" changed from main
+    When I run sf-java with "mutate --base main"
+    Then the exit status is 0
+    And mutate4java was not started
+    And the output states that no production Java files require mutation
 
   # sf-java quality 4
   Scenario Outline: sf-java quality 4: DRY gates duplicates touching changes

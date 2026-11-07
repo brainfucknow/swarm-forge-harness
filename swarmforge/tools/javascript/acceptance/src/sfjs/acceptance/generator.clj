@@ -45,16 +45,18 @@
    (let [feature (json/parse-string ir-json)]
      (str ";; Generated from " feature-path ". Do not edit.\n"
           "(ns " namespace-prefix (slug feature-path) "\n"
-          "  (:require [speclj.core :refer [describe it should-be-nil]]\n"
+          "  (:require [speclj.core :refer [describe context tags it should-be-nil]]\n"
           "            [sfjs.acceptance.runtime :as runtime]\n"
           "            [" steps-ns " :as steps]))\n"
           "(def ir-json " (pr-str ir-json) ")\n"
           "(describe " (pr-str feature-path) "\n"
           (str/join
            (for [[i scenario] (map-indexed vector (get feature "scenarios"))]
-             (str "  (it " (pr-str (get scenario "name")) "\n"
+             (str "  (context " (pr-str (get scenario "name")) "\n"
+                  "    (tags :scenario-" i ")\n"
+                  "    (it \"checks every example\"\n"
                   "    (doseq [execution (runtime/executions (runtime/feature ir-json) " i ")]\n"
-                  "      (should-be-nil (runtime/run-execution steps/handlers execution))))\n")))
+                  "      (should-be-nil (runtime/run-execution steps/handlers execution)))))\n")))
           ")\n"))))
 
 (defn- sha256 [text]

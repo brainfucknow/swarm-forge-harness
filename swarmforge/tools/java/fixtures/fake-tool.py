@@ -37,9 +37,9 @@ if name == 'java':
         print('openjdk version "'+('11.0.1' if s.get('old_java') else '17.0.12')+'"'); finish()
     jar=next((args[i+1] for i,a in enumerate(args) if a=='-jar'), '')
     if 'console-standalone' in jar:
-        selected='property' if '--include-tag' in args else 'ordinary'
-        print('RUN '+selected+' tests')
-        if selected=='ordinary' and s.get('test_failure'): print('LedgerTest failed'); finish(1)
+        selected=['property'] if '--include-tag' in args else (['ordinary'] if '--exclude-tag' in args else ['ordinary','property'])
+        for group in selected: print('RUN '+group+' tests')
+        if 'ordinary' in selected and s.get('test_failure'): print('LedgerTest failed'); finish(1)
         if any(a.startswith('-javaagent:') for a in args) and not s.get('no_coverage'):
             write('target/jacoco.exec')
         finish()

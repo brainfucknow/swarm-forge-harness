@@ -19,17 +19,20 @@
           (swap! loaded assoc generated-dir namespaces)
           namespaces))))
 
+(def ^:dynamic *execute*
+  "Runs generated tests and returns clojure.test-compatible failure counts."
+  (fn [generated-dir] (apply t/run-tests (entry-points generated-dir))))
+
 (defn run-job [{:strs [id feature_json generated_dir]}]
   (let [started (System/nanoTime)
         output (java.io.StringWriter.)]
     (try
       (when-not generated_dir
         (throw (ex-info "no generated_dir; pass --generated-dir to gherkin-mutator" {})))
-      (let [namespaces (entry-points generated_dir)
-            {:keys [fail error]} (binding [*out* output
+      (let [{:keys [fail error]} (binding [*out* output
                                            t/*test-out* output
                                            runtime/*feature* (json/parse-string (slurp feature_json))]
-                                   (apply t/run-tests namespaces))]
+                                   (*execute* generated_dir))]
         {:id id :outcome (if (zero? (+ fail error)) "test_success" "test_failure")
          :output (str output) :error "" :duration (- (System/nanoTime) started)})
       (catch Exception e

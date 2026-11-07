@@ -19,14 +19,13 @@ Feature: sf-java execution
     When I run sf-java with "<command>"
     Then the exit status is 0
     And the dedicated runner executes "<selected>" tests
-    And the dedicated runner does not execute "<excluded>" tests
     And Maven does not execute tests
 
     Examples:
-      | command  | selected | excluded |
-      | test     | ordinary | property |
-      | property | property | ordinary |
-      | coverage | ordinary | property |
+      | command  | selected |
+      | test     | ordinary |
+      | property | property |
+      | coverage | ordinary |
 
   # sf-java execution 2
   Scenario Outline: sf-java execution 2: test failures fail the command

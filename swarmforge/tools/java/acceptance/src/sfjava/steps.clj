@@ -155,8 +155,9 @@
    [#"I run sf-java with \"(.+)\"(?: in that project)?" java]
    [#"the exit status is (\d+)" (fn [w n] (expect-status w (parse-long n)))]
    [#"the exit status is nonzero" (fn [w] (check (not (zero? (get-in w [:result :exit]))) "expected failure") w)]
-   [#"the dedicated runner executes \"(.+)\" tests" (fn [w group] (expect-output w (str "RUN " group " tests")))]
-   [#"the dedicated runner does not execute \"(.+)\" tests" (fn [w group] (check (not (str/includes? (result-output w) (str "RUN " group " tests"))) "wrong test group ran") w)]
+   [#"the dedicated runner executes \"(.+)\" tests" (fn [w group]
+                                                             (let [actual (mapv second (re-seq #"RUN (\w+) tests" (result-output w)))]
+                                                               (check (= [group] actual) (str "expected test group " group ", got " actual))) w)]
    [#"Maven does not execute tests" no-maven-tests]
    [#"the output identifies the failing test" #(expect-output % "LedgerTest failed")]
    [#"the dedicated runner was not started" no-runner]
@@ -167,7 +168,7 @@
    [#"a new JaCoCo XML report records the covered production code" (fn [w] (check (str/includes? (slurp (str (fs/path (:repo w) "target/site/jacoco/jacoco.xml"))) "covered=\"3\"") "no production coverage") w)]
    [#"the output identifies the coverage report path" #(expect-output % "target/site/jacoco/jacoco.xml")]
    [#"a changed production method has tool-reported CRAP ([\d.]+)" (fn [w score] (configure (changed-source w) {:crap (parse-double score)}))]
-   [#"the output identifies the method and its CRAP score" #(expect-output % "ledger demo.Ledger")]
+   [#"the output identifies the method with CRAP ([\d.]+)" (fn [w score] (expect-output w (str "ledger demo.Ledger 3 100.0% " score "\n")))]
    [#"the coverage run uses the dedicated runner without property tests" (fn [w] (check (seq (runner-calls w)) "no runner") (check (every? #(some #{"--exclude-tag"} (:args %)) (runner-calls w)) "property tests not excluded") w)]
    [#"a production Java file has a (committed|uncommitted|untracked) change from main" (fn [w change]
                                                                                     (if (= "untracked" change)
@@ -203,7 +204,7 @@
                                                                              "missing coverage data" (configure w {:no_coverage true})
                                                                              "malformed tool report" (configure w {:tool_failure true})
                                                                              "missing tool executable" (fs/delete (fs/path (:repo w) ".swarmforge/bin/mutate4java"))) w)]
-   [#"the error output identifies the analysis failure" (fn [w] (check (seq (get-in w [:result :err])) "no analysis diagnostic") w)]
+   [#"the error output identifies the analysis failure" #(expect-output % "analysis failure")]
    [#"a fresh SwarmForge consumer project" (fn [w] w)]
    [#"a controllable upstream checkout of \"(.+)\" at its configured commit" (fn [w tool] (assoc w :tool tool))]
    [#"I run \"sf tool ensure (.+)\" in the consumer project" (fn [w tool] (assoc (sf w "tool" "ensure" tool) :tool tool))]

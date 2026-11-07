@@ -1,10 +1,14 @@
-{:paths ["src" "resources" "spec" "property" "acceptance/src" "../core/src" "../javascript/acceptance/src"]
+{:paths ["src" "resources" "spec" "property" "hardening" "acceptance/src" "../core/src" "../javascript/acceptance/src"]
  :deps {speclj/speclj {:mvn/version "3.12.2"}}
  :tasks
  {:init (def here (str (babashka.fs/parent (babashka.fs/absolutize (System/getProperty "babashka.config")))))
   spec {:doc "Run Java wrapper unit specs"
         :task (System/exit (apply (requiring-resolve 'speclj.cli/run) ["-c" (str (babashka.fs/path here "spec"))]))}
+  hardening {:doc "Run mutation-derived Java boundary checks separately"
+             :task (System/exit (apply (requiring-resolve 'speclj.cli/run) ["-c" (str (babashka.fs/path here "hardening"))]))}
   property {:doc "Run Java wrapper properties separately"
             :task (System/exit (apply (requiring-resolve 'speclj.cli/run) ["-c" (str (babashka.fs/path here "property"))]))}
+  acceptance-worker {:doc "Persistent Speclj adapter for differential Gherkin mutation"
+                     :task ((requiring-resolve 'sfjava.acceptance/run-worker))}
   acceptance {:doc "Run Java contracts through the existing APS pipeline"
               :task (apply (requiring-resolve 'sfjava.acceptance/run) *command-line-args*)}}}

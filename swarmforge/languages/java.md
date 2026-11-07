@@ -94,11 +94,12 @@ org.owasp:dependency-check-maven:12.1.0:check`). Configure required credentials
 outside Git. These tools are separate from the quality commands above.
 
 In this harness source checkout, run the wrapper behavior specs and executable
-contracts separately from its property specs:
+contracts separately from mutation-derived hardening checks and property specs:
 
 ```sh
 bb --config swarmforge/tools/java/bb.edn spec
 bb --config swarmforge/tools/java/bb.edn acceptance
+bb --config swarmforge/tools/java/bb.edn hardening
 bb --config swarmforge/tools/java/bb.edn property
 ```
 
