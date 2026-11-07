@@ -15,7 +15,7 @@
     :else (throw (ex-info (str "invalid options for " command "; see sf-java help") {}))))
 
 (defn supported-java? [version]
-  (when-let [[_ major] (re-find #"version\s+\"(\d+)" version)]
+  (when-let [[_ major] (re-find #"(?:version\s+\"|(?:openjdk|java)\s+)(\d+)" version)]
     (>= (parse-long major) 17)))
 
 (defn tag-args [command]

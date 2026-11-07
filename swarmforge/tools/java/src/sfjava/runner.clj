@@ -29,9 +29,8 @@
   (let [{:keys [exit out]} (shell/capture "java" ["-version"])]
     ;; java -version writes stderr on common JDKs; use --version for stdout.
     (when-not (and (zero? exit) (policy/supported-java? out))
-      (let [{:keys [exit out]} (shell/capture "java" ["--version"])
-            version (or (some-> (re-find #"(?:openjdk|java)\s+(\d+)" out) second parse-long) 0)]
-        (when-not (and (zero? exit) (>= version 17))
+      (let [{:keys [exit out]} (shell/capture "java" ["--version"])]
+        (when-not (and (zero? exit) (policy/supported-java? out))
           (throw (ex-info "Java older than 17 or unrecognized Java version" {})))))))
 
 (defn validate-project []

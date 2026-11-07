@@ -11,6 +11,9 @@
   (it "requires a Java 17 runtime or later"
     (should (policy/supported-java? "openjdk version \"17.0.12\""))
     (should (policy/supported-java? "java version \"21.0.2\""))
+    (should (policy/supported-java? "openjdk 17.0.12 2024-07-16"))
+    (should (policy/supported-java? "java 21.0.2 2024-01-16 LTS"))
+    (should-not (policy/supported-java? "openjdk 16.0.2"))
     (should-not (policy/supported-java? "java version \"1.8.0\""))
     (should-not (policy/supported-java? "unparseable")))
   (it "keeps ordinary and property test selection disjoint"

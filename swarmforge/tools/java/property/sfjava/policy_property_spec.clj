@@ -13,9 +13,34 @@
                            tests (map #(str "src/test/java/Demo" % "Test.java") ids)
                            present (set (take-nth 2 production))
                            selected (policy/production-files (concat tests production) present)]
-                       (and (every? present selected)
-                            (every? #(clojure.string/starts-with? % "src/main/java/") selected))))]
+                       (= (vec (sort (filter present production))) selected
+                          (policy/production-files (reverse selected) present))))]
       (should (:pass? (tc/quick-check 100 property)))))
+  (it "applies the same Java baseline to both runtime output formats"
+    (let [property (prop/for-all [major (gen/choose 1 500)
+                                minor gen/nat
+                                vendor (gen/elements ["java" "openjdk"])]
+                     (let [version (str major "." minor ".0")
+                           quoted (str vendor " version \"" version "\"")
+                           stdout (str vendor " " version " 2026-01-01")]
+                       (= (>= major 17)
+                          (policy/supported-java? quoted)
+                          (policy/supported-java? stdout))))]
+      (should (:pass? (tc/quick-check 200 property)))))
+  (it "selects a duplicate exactly when changed lines intersect either interval"
+    (let [property (prop/for-all [start (gen/choose 1 50)
+                                width (gen/choose 0 20)
+                                changed-lines (gen/set (gen/choose 1 80))]
+                     (let [end (+ start width)
+                           candidate {:score 0.9
+                                      :left {:file "src/main/java/A.java" :start-line start :end-line end}
+                                      :right {:file "src/main/java/B.java" :start-line 1 :end-line 2}}
+                           findings (reports/relevant-duplicates
+                                     (pr-str {:candidates [candidate]})
+                                     {"src/main/java/A.java" changed-lines} nil)
+                           overlap? (boolean (some #(<= start % end) changed-lines))]
+                       (= (if overlap? [candidate] []) findings)))]
+      (should (:pass? (tc/quick-check 200 property)))))
   (it "treats the two sides of a duplicate symmetrically"
     (let [property (prop/for-all [line (gen/choose 1 30)]
                      (let [left {:file "src/main/java/A.java" :start-line 4 :end-line 10}
