@@ -7,6 +7,7 @@
             [sf.catalogue :as catalogue]
             [sf.clone :as clone]
             [sf.entry-point :as entry-point]
+            [sf.maven-tool :as maven-tool]
             [sf.shell :as shell]
             [sf.wrapper :as wrapper]))
 
@@ -104,6 +105,11 @@ out, and printed without @.")
            [(wrapper/bb-command dir task) pin])
     "bbmain" (let [[dir pin] (checked-source tool spec)]
                [(wrapper/bbmain-command dir task) pin])
+    "maven" (let [[dir pin] (checked-source tool spec)
+                  patches (str (fs/path (shell/checkout-root) "swarmforge/tools/sf/resources/sf/java-patches"))
+                  cache (str (fs/path (shell/repo-root) ".swarmforge/m2"))
+                  jar (maven-tool/build dir tool patches cache (some? pin))]
+              [(str "exec java -jar " (wrapper/sq jar) " \"$@\"") pin])
     "clj" [(wrapper/clj-command tool (clj-deps tool spec) task) ref]
     "local" [(wrapper/local-command (shell/repo-root) source) nil]))
 

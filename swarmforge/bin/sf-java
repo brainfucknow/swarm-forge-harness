@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Java CLI: swarmforge/languages/java.md.
+set -euo pipefail
+command -v bb >/dev/null || { echo "sf-java: Babashka (bb) is required" >&2; exit 2; }
+here="$(cd "$(dirname "$0")/../tools/java" && pwd)"
+exec bb -Dsfjava.home="$here" -cp "$here/src:$here/resources:$here/../core/src" -m sfjava.cli "$@"

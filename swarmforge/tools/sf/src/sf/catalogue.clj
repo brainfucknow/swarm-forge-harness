@@ -10,7 +10,7 @@
 
 (def kinds
   "The kinds sf tool can install."
-  #{"bb" "bbmain" "clj" "local"})
+  #{"bb" "bbmain" "maven" "clj" "local"})
 
 (def rewrites
   "The argument rewrites sf tool can write."
@@ -32,7 +32,7 @@
 (defn clones?
   "True for the kinds whose source is a GitHub repository sf tool clones."
   [kind]
-  (contains? #{"bb" "bbmain"} kind))
+  (contains? #{"bb" "bbmain" "maven"} kind))
 
 (defn- safe-part? [part]
   (and (re-matches #"[A-Za-z0-9._-]+" part) (not (#{"." ".."} part))))

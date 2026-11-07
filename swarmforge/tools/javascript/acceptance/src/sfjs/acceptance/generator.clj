@@ -22,7 +22,7 @@
   (or (System/getenv "SFJS_FEATURE_PATH")
       (str features-dir "/" (str/replace (fs/file-name ir-path) #"\.json$" "") ".feature")))
 
-(defn entry-point
+(defn- default-entry-point
   "The generated test source for one feature's IR."
   [feature-path ir-json]
   (let [feature (json/parse-string ir-json)
@@ -38,17 +38,38 @@
                           "(deftest scenario-" (inc i) "\n"
                           "  (runtime/run-scenario steps/handlers ir-json " i "))\n"))))))
 
+(defn entry-point
+  "Generates existing Clojure test entries, or Speclj entries for a configured language."
+  ([feature-path ir-json] (default-entry-point feature-path ir-json))
+  ([feature-path ir-json {:keys [steps-ns namespace-prefix]}]
+   (let [feature (json/parse-string ir-json)]
+     (str ";; Generated from " feature-path ". Do not edit.\n"
+          "(ns " namespace-prefix (slug feature-path) "\n"
+          "  (:require [speclj.core :refer [describe it should-be-nil]]\n"
+          "            [sfjs.acceptance.runtime :as runtime]\n"
+          "            [" steps-ns " :as steps]))\n"
+          "(def ir-json " (pr-str ir-json) ")\n"
+          "(describe " (pr-str feature-path) "\n"
+          (str/join
+           (for [[i scenario] (map-indexed vector (get feature "scenarios"))]
+             (str "  (it " (pr-str (get scenario "name")) "\n"
+                  "    (doseq [execution (runtime/executions (runtime/feature ir-json) " i ")]\n"
+                  "      (should-be-nil (runtime/run-execution steps/handlers execution))))\n")))
+          ")\n"))))
+
 (defn- sha256 [text]
   (let [digest (.digest (MessageDigest/getInstance "SHA-256") (.getBytes ^String text "UTF-8"))]
     (str "sha256:" (str/join (map #(format "%02x" %) digest)))))
 
 (defn generate
   "Writes the entry point and its metadata; returns the entry point's path."
-  [ir-path out-dir]
-  (let [feature (feature-path ir-path)
+  ([ir-path out-dir] (generate ir-path out-dir nil))
+  ([ir-path out-dir options]
+  (let [feature (or (:feature-path options) (feature-path ir-path))
         name (slug feature)
         test-file (str (fs/path out-dir (str name ".clj")))
-        source (entry-point feature (slurp ir-path))]
+        source (if options (entry-point feature (slurp ir-path) options)
+                   (entry-point feature (slurp ir-path)))]
     (fs/create-dirs (fs/path out-dir "metadata"))
     (spit test-file source)
     (spit (str (fs/path out-dir "metadata" (str name ".json")))
@@ -59,7 +80,7 @@
                                            :hash_scope "generated_files"
                                            :generated_files [test-file])
                                 {:pretty true}))
-    test-file))
+    test-file)))
 
 (defn- complain [status message]
   (binding [*out* *err*] (println message))
