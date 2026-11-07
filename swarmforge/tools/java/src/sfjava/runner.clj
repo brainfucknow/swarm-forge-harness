@@ -20,11 +20,12 @@
   (when-not (shell/available? command)
     (throw (ex-info (str "no " (if (= "mvn" command) "Maven" command) " executable on PATH") {}))))
 
-(defn validate-project []
+(defn- validate-layout []
   (when-not (shell/exists? "pom.xml") (throw (ex-info "no pom.xml in the current directory" {})))
   (when (re-find #"<(?:\w+:)?modules[\s>]" (slurp (shell/in-dir "pom.xml")))
-    (throw (ex-info "a Maven reactor root is unsupported; run in one module" {})))
-  (doseq [command ["java" "mvn"]] (require-command command))
+    (throw (ex-info "a Maven reactor root is unsupported; run in one module" {}))))
+
+(defn- validate-java []
   (let [{:keys [exit out]} (shell/capture "java" ["-version"])]
     ;; java -version writes stderr on common JDKs; use --version for stdout.
     (when-not (and (zero? exit) (policy/supported-java? out))
@@ -32,6 +33,11 @@
             version (or (some-> (re-find #"(?:openjdk|java)\s+(\d+)" out) second parse-long) 0)]
         (when-not (and (zero? exit) (>= version 17))
           (throw (ex-info "Java older than 17 or unrecognized Java version" {})))))))
+
+(defn validate-project []
+  (validate-layout)
+  (doseq [command ["java" "mvn"]] (require-command command))
+  (validate-java))
 
 (defn maven [args]
   (shell/run "mvn" (into ["-B" "-q" (str "-Dmaven.repo.local=" (cache) "/m2")

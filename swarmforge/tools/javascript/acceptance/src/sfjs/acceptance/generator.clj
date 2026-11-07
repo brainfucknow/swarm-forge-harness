@@ -65,22 +65,22 @@
   "Writes the entry point and its metadata; returns the entry point's path."
   ([ir-path out-dir] (generate ir-path out-dir nil))
   ([ir-path out-dir options]
-  (let [feature (or (:feature-path options) (feature-path ir-path))
-        name (slug feature)
-        test-file (str (fs/path out-dir (str name ".clj")))
-        source (if options (entry-point feature (slurp ir-path) options)
-                   (entry-point feature (slurp ir-path)))]
-    (fs/create-dirs (fs/path out-dir "metadata"))
-    (spit test-file source)
-    (spit (str (fs/path out-dir "metadata" (str name ".json")))
-          (json/generate-string (array-map :schema_version 1
-                                           :feature_path feature
-                                           :ir_path (str ir-path)
-                                           :implementation_hash (sha256 source)
-                                           :hash_scope "generated_files"
-                                           :generated_files [test-file])
-                                {:pretty true}))
-    test-file)))
+   (let [feature (or (:feature-path options) (feature-path ir-path))
+         name (slug feature)
+         test-file (str (fs/path out-dir (str name ".clj")))
+         source (if options (entry-point feature (slurp ir-path) options)
+                    (entry-point feature (slurp ir-path)))]
+     (fs/create-dirs (fs/path out-dir "metadata"))
+     (spit test-file source)
+     (spit (str (fs/path out-dir "metadata" (str name ".json")))
+           (json/generate-string (array-map :schema_version 1
+                                          :feature_path feature
+                                          :ir_path (str ir-path)
+                                          :implementation_hash (sha256 source)
+                                          :hash_scope "generated_files"
+                                          :generated_files [test-file])
+                                 {:pretty true}))
+     test-file)))
 
 (defn- complain [status message]
   (binding [*out* *err*] (println message))

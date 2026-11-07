@@ -39,10 +39,10 @@
   tmp/sf-js/acceptance/generated/<stem>/; returns the entry point."
   ([parser feature] (prepare parser feature work-dir nil))
   ([parser feature output-dir options]
-  (let [ir (str (fs/path output-dir "ir" (str (stem feature) ".json")))]
-    (fs/create-dirs (fs/parent ir))
-    (p/shell {:out :string} parser (str feature) ir)
-    (generator/generate ir (str (fs/path output-dir "generated" (stem feature))) options))))
+   (let [ir (str (fs/path output-dir "ir" (str (stem feature) ".json")))]
+     (fs/create-dirs (fs/parent ir))
+     (p/shell {:out :string} parser (str feature) ir)
+     (generator/generate ir (str (fs/path output-dir "generated" (stem feature))) options))))
 
 (defn generated-namespace [entry-point]
   (symbol (second (re-find #"\(ns (\S+)" (slurp entry-point)))))

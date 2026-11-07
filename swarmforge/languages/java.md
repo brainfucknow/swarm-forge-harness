@@ -22,13 +22,12 @@ swarmforge/bin/sf-java dry --base main
 swarmforge/bin/sf-java mutate --base main
 ```
 
-`tools` installs the pinned upstream quality JARs through `sf tool ensure` and
-checks them with `sf tool require`. It also obtains JUnit Platform Console
-1.10.2 and JaCoCo agent/CLI 0.8.12 from Maven. Runtime dependencies and the Maven
-cache stay in ignored `.swarmforge/java/`; `SFJAVA_CACHE` can point to a shared
-project-local cache, including for isolated mutation workers. Each command
-checks Java and Maven availability. `test` and `coverage` obtain missing runner
-JARs automatically; quality tools require `tools` first.
+`tools` installs and checks the pinned quality JARs through `sf tool`, plus
+JUnit Platform Console 1.10.2 and JaCoCo agent/CLI 0.8.12 from Maven. Runtime
+dependencies and the Maven cache stay in ignored `.swarmforge/java/`;
+`SFJAVA_CACHE` can select a shared project-local cache for mutation workers.
+Test commands obtain missing runner JARs automatically; quality tools require
+`tools` first.
 
 Tag property tests with `@org.junit.jupiter.api.Tag("property")`. `property`
 selects that tag; ordinary tests, coverage, CRAP and mutation exclude it. The
@@ -67,9 +66,9 @@ upstream commit SHAs. The `maven` catalogue kind clones that revision, validates
 and applies the tracked patches in
 `swarmforge/tools/sf/resources/sf/java-patches/`, builds with Maven test execution
 disabled, and publishes an executable JAR wrapper in `.swarmforge/bin/`.
-`INSTALLED: ... @<SHA>` identifies the upstream revision; the tracked patch is
-also part of the installed tool. Patch/build failures do not publish a new
-wrapper. Reinstalling resets the owned clone to its pin before patching.
+`INSTALLED: ... @<SHA>` identifies the upstream revision with the tracked patch
+applied. Patch/build failures do not publish a new wrapper. Reinstallation
+resets the owned clone to its pin before patching.
 
 - `crap4java`: requires the dedicated coverage command, rejects missing XML,
   and changes the gate from 8 to 10. `sf-java` supplies the command through
@@ -81,11 +80,10 @@ wrapper. Reinstalling resets the owned clone to its pin before patching.
   from worker copies. Its mutation analysis and differential selection remain
   upstream behavior.
 
-These environment variables are internal wrapper integration points. Direct
-`crap4java` runs need `SFJAVA_COVERAGE_COMMAND`; prefer `sf-java crap`.
-`SWARMFORGE_TOOL_SRC` remains an unpinned development override and cannot be
-cited as pinned verification evidence. Overrides are built as supplied without
-applying patches; they must already provide the wrapper integration APIs.
+Prefer `sf-java crap`; direct `crap4java` runs require
+`SFJAVA_COVERAGE_COMMAND`. `SWARMFORGE_TOOL_SRC` is an unpinned development
+override, built as supplied without patches. Overrides must provide these
+integration APIs and cannot establish pinned verification evidence.
 
 ## Security and verification
 
@@ -104,8 +102,6 @@ bb --config swarmforge/tools/java/bb.edn acceptance
 bb --config swarmforge/tools/java/bb.edn property
 ```
 
-Acceptance uses the existing APS parser, generator and runtime with controllable
-external Java tools. It checks public CLI contracts, while real-tool
-compatibility is checked separately. Consumer installs contain Java runtime
-code and patches; development specs, fixtures and acceptance code stay in the
-source checkout.
+Acceptance checks public CLI contracts with controlled external tools; real-tool
+compatibility requires separate verification. Consumer installs omit development
+specs, fixtures and acceptance code.

@@ -27,7 +27,7 @@
         (should= 1 (runner/tests "test"))
         (should= ["mvn"] @calls))))
   (it "deletes stale XML and rejects a runner that writes no new coverage"
-    (let [dir (str (fs/create-temp-dir {:dir "tmp" :prefix "coverage-spec"}))]
+    (let [dir (str (fs/create-temp-dir {:dir (fs/create-dirs "tmp") :prefix "coverage-spec"}))]
       (try
         (binding [shell/*dir* dir]
           (shell/write-file runner/coverage-xml "old report")
