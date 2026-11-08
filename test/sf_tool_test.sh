@@ -77,6 +77,16 @@ assert_fails "fresh install ships no project.conf" test -e "$consumer/swarmforge
 printf 'tasks-dir swarmforge/tasks\n' > "$consumer/swarmforge/project.conf"
 bash "$HERE/install.sh" "$consumer" >/dev/null
 assert_eq "reinstall leaves an existing project.conf alone" "$(cat "$consumer/swarmforge/project.conf")" "tasks-dir swarmforge/tasks"
+linked="$scratch/linked"
+git init -q "$linked"
+printf '# Rules\n' > "$linked/CLAUDE.md" && ln -s CLAUDE.md "$linked/AGENTS.md"
+bash "$HERE/install.sh" "$linked" >/dev/null
+assert_eq "install into a project whose AGENTS.md links to CLAUDE.md adds no self-import" \
+  "$(grep -c '^@AGENTS.md$' "$linked/CLAUDE.md" || true)" "0"
+assert_eq "install into a linked AGENTS.md still adds the orchestrator line" \
+  "$(grep -c '^Follow swarmforge/README.md' "$linked/CLAUDE.md")" "1"
+assert_eq "install into an unlinked project imports AGENTS.md from CLAUDE.md" \
+  "$(grep -c '^@AGENTS.md$' "$consumer/CLAUDE.md")" "1"
 test -f "$HERE/swarmforge/tools/sf/bb.edn" && test -d "$HERE/swarmforge/tools/javascript/fixtures" \
   && pass "installation leaves source development assets in place" || fail "source development assets changed"
 mkdir -p "$consumer/tmp/jscpd"

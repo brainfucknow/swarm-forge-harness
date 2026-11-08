@@ -51,7 +51,9 @@ append_once() {
 }
 
 append_once "$target/AGENTS.md" "Follow swarmforge/README.md and swarmforge/roles/orchestrator.md when asked to swarm a feature; delegate subagent roles by name and keep all task bookkeeping in swarmforge/bin/sf."
-append_once "$target/CLAUDE.md" "@AGENTS.md"
+# A project whose AGENTS.md links to CLAUDE.md (or the reverse) already loads
+# the instructions; importing AGENTS.md there would import the file into itself.
+[ "$target/CLAUDE.md" -ef "$target/AGENTS.md" ] || append_once "$target/CLAUDE.md" "@AGENTS.md"
 mkdir -p "$target/.github"
 append_once "$target/.github/copilot-instructions.md" "Follow AGENTS.md at the repository root."
 append_once "$target/.gitignore" ".worktrees/"
