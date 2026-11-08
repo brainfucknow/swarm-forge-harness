@@ -15,6 +15,7 @@
 - Each language guide in `swarmforge/languages/` names a security code scanner and a dependency audit. A project without one adds a line here per absent tool, with its reason:
   - `Security code scanner absent: <reason>`
   - `Dependency audit absent: <reason>`
+- Dependency audit absent: for Add Java support (`add-java-support-8418cf6`) only, the operator authorized skipping the blocked nvd-clojure audit for now in answer `da5632f`. NVD returned a Cloudflare HTTP 403 and supporting audit hosts denied access; failed-run evidence remains in `73e3d50`. Dependency vulnerability status remains unverified. This exception does not waive other security review or QA gates and does not apply to other tasks.
 - The architect, hardener, and QA own property-test verification for affected behavior; keep it separate from normal unit, coverage, and mutation runs.
 
 ## Handoffs
