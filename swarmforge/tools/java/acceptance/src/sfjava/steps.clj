@@ -220,7 +220,7 @@
                                                                                            uw (assoc w :repo up)]
                                                                                        (write (fs/path up "src/crap4java/CoverageRunner.java") "incompatible source")
                                                                                        (git uw "add" ".")
-                                                                                       (git uw "commit" "-q" "-m" "incompatible")
+                                                                                       (git uw "-c" "user.name=Fixture" "-c" "user.email=fixture@example.com" "commit" "-q" "-m" "incompatible")
                                                                                        (let [pin (git uw "rev-parse" "HEAD")
                                                                                              cat (str (fs/path (:repo w) "swarmforge/tools.conf"))]
                                                                                          (spit cat (str/replace (slurp cat) (get (:pins w) "crap4java") pin))))
