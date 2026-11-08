@@ -12,11 +12,18 @@ jobs:
       - name: Test the manifest guard
         run: bash test/no_manifests_test.sh
       - name: Install Babashka
+        env:
+          BB_VERSION: 1.13.229
+          BB_SHA256: a98c90a0530943dfa9a0b03bcccbc2030777a6ce094af303d5bb47d77e193299
         run: |
           mkdir -p "$HOME/bin"
           echo "$HOME/bin" >> "$GITHUB_PATH"
-          curl -sSL https://raw.githubusercontent.com/babashka/babashka/master/install -o install-bb
-          bash install-bb --dir "$HOME/bin"
+          curl -fsSL --retry 5 --retry-all-errors -o bb.tar.gz \
+            "https://github.com/babashka/babashka/releases/download/v$BB_VERSION/babashka-$BB_VERSION-linux-amd64.tar.gz"
+          echo "$BB_SHA256  bb.tar.gz" | sha256sum --check
+          tar -xzf bb.tar.gz -C "$HOME/bin"
+          rm bb.tar.gz
+          "$HOME/bin/bb" --version
       - name: Test sf
         run: bash test/sf_test.sh
       - name: Test sf tool
