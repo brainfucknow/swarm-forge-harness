@@ -65,7 +65,7 @@ assert_match "fresh install validates its runtime configuration" "$(cd "$consume
 assert_match "installed init is repeatable" "$(cd "$consumer" && swarmforge/bin/sf init)" '^roles: '
 assert_eq "installed compatibility entrypoint lists the same tools" \
   "$(cd "$consumer" && swarmforge/bin/sf-tool list)" "$(cd "$consumer" && swarmforge/bin/sf tool list)"
-for wrapper in sf sf-tool sf-cs sf-fs sf-vb sf-js sf-rb; do
+for wrapper in sf sf-tool sf-cs sf-fs sf-vb sf-js sf-rb sf-java; do
   (cd "$consumer" && "swarmforge/bin/$wrapper" --help >/dev/null) \
     && pass "installed $wrapper exposes help" || fail "installed $wrapper cannot load"
 done

@@ -13,6 +13,16 @@
 (defn feature [ir-json]
   (or *feature* (json/parse-string ir-json)))
 
+(defn changed-scenario
+  "Identifies a single scenario change; ambiguous changes require the full feature."
+  [original changed]
+  (when (and (= (dissoc original "scenarios") (dissoc changed "scenarios"))
+             (= (count (get original "scenarios")) (count (get changed "scenarios"))))
+    (let [indexes (keep-indexed (fn [index scenario]
+                                  (when (not= scenario (nth (get original "scenarios") index)) index))
+                                (get changed "scenarios"))]
+      (when (= 1 (count indexes)) (first indexes)))))
+
 (defn executions
   "One execution per example row (one with no values when there are none),
   background steps first."

@@ -108,7 +108,7 @@ the optional reviewers. Model mappings live in
   [C#](swarmforge/languages/csharp.md), [F#](swarmforge/languages/fsharp.md),
   [VB.NET](swarmforge/languages/vbnet.md),
   [JavaScript/TypeScript](swarmforge/languages/javascript.md),
-  [Ruby](swarmforge/languages/ruby.md).
+  [Ruby](swarmforge/languages/ruby.md), [Java](swarmforge/languages/java.md).
 
 ## Tests
 
@@ -118,6 +118,7 @@ Run these from the source checkout; fresh consumer installs omit harness tests a
 bash test/sf_test.sh
 bash test/sf_tool_test.sh
 bb --config swarmforge/tools/sf/bb.edn spec
+bb --config swarmforge/tools/sf/bb.edn hardening
 bb --config swarmforge/tools/sf/bb.edn property
 swarmforge/bin/sf tool ensure gherkin-parser
 bash test/acceptance.sh
@@ -126,6 +127,10 @@ bb --config swarmforge/tools/javascript/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn property
 bb --config swarmforge/tools/javascript/bb.edn acceptance
 bb --config swarmforge/tools/ruby/bb.edn test
+bb --config swarmforge/tools/java/bb.edn spec
+bb --config swarmforge/tools/java/bb.edn hardening
+bb --config swarmforge/tools/java/bb.edn acceptance
+bb --config swarmforge/tools/java/bb.edn property
 ```
 
 These suites exercise the CLI with scratch Git repositories and test the
