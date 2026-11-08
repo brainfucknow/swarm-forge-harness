@@ -36,9 +36,10 @@
     sf.catalogue #{}
     sf.config #{sf.catalogue sf.flow sf.shell}
     sf.entry-point #{}
+    sf.maven-tool #{sf.shell}
     sf.wrapper #{sf.shell}
     sf.clone #{sf.shell}
-    sf.tool #{sf.catalogue sf.clone sf.entry-point sf.shell sf.wrapper}
+    sf.tool #{sf.maven-tool sf.catalogue sf.clone sf.entry-point sf.shell sf.wrapper}
     sf.adapters #{sf.config sf.shell}
     sf.git #{sf.shell}
     sf.store #{sf.git sf.record sf.shell}

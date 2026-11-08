@@ -1,8 +1,10 @@
-{:paths ["src" "resources" "spec" "property"]
+{:paths ["src" "resources" "spec" "property" "hardening"]
  :deps {speclj/speclj {:mvn/version "3.12.2"}}
  :tasks
  {:init (def here (str (babashka.fs/parent (babashka.fs/absolutize (System/getProperty "babashka.config")))))
   spec {:doc "Run the sf unit specs"
         :task (apply (requiring-resolve 'speclj.main/-main) ["-c" (str (babashka.fs/path here "spec"))])}
+  hardening {:doc "Run sf mutation-derived checks separately"
+             :task (apply (requiring-resolve 'speclj.main/-main) ["-c" (str (babashka.fs/path here "hardening"))])}
   property {:doc "Run the sf property tests (test.check)"
             :task (apply (requiring-resolve 'speclj.main/-main) ["-c" (str (babashka.fs/path here "property"))])}}}

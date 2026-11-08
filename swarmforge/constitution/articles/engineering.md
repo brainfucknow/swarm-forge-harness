@@ -9,7 +9,7 @@
   |---|---|---|---|---|
   | Go | `github.com/unclebob/mutate4go` | `github.com/unclebob/crap4go` | `github.com/unclebob/dry4go` | `go install` |
   | Clojure | `github.com/unclebob/clj-mutate` | `github.com/unclebob/crap4clj` | `github.com/unclebob/dry4clj` | Clojure CLI/deps.edn; [Babashka guide](../../languages/clojure.md) |
-  | Java | `github.com/unclebob/mutate4java` | `github.com/unclebob/crap4java` | `github.com/unclebob/dry4java` | Maven (`mvn`) |
+  | Java | `github.com/unclebob/mutate4java` | `github.com/unclebob/crap4java` | `github.com/unclebob/dry4java` | [`sf-java`](../../languages/java.md) |
   | C# | Stryker.NET | Coverlet | jscpd | [`sf-cs tools`](../../languages/csharp.md) |
   | F# | Unsupported (exit 2) | Coverlet compiled methods | jscpd | [`sf-fs tools`](../../languages/fsharp.md) |
   | VB.NET | Unsupported (exit 2) | Coverlet compiled methods | jscpd | [`sf-vb tools`](../../languages/vbnet.md) |

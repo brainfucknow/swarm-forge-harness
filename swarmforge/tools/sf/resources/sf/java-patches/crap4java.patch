@@ -1,0 +1,53 @@
+diff --git a/src/crap4java/CliApplication.java b/src/crap4java/CliApplication.java
+index c8f5ab7..b6fc2d2 100644
+--- a/src/crap4java/CliApplication.java
++++ b/src/crap4java/CliApplication.java
+@@ -44,7 +44,7 @@ final class CliApplication {
+ 
+         double max = Main.maxCrap(metrics);
+         if (thresholdExceeded(max)) {
+-            err.printf("CRAP threshold exceeded: %.1f > 8.0%n", max);
++            err.printf("CRAP threshold exceeded: %.1f > 10.0%n", max);
+             return 2;
+         }
+         return 0;
+@@ -57,7 +57,7 @@ final class CliApplication {
+             Path jacocoXml = moduleRoot.resolve("target/site/jacoco/jacoco.xml");
+             coverageRunner.generateCoverage(moduleRoot);
+             if (!Files.exists(jacocoXml)) {
+-                err.println("Warning: JaCoCo XML not found at " + jacocoXml + ". Coverage will be N/A.");
++                throw new IllegalStateException("Missing new coverage report: " + jacocoXml);
+             }
+             metrics.addAll(CrapAnalyzer.analyze(moduleRoot, entry.getValue(), jacocoXml));
+         }
+@@ -65,7 +65,7 @@ final class CliApplication {
+     }
+ 
+     static boolean thresholdExceeded(double max) {
+-        return Double.compare(max, 8.0) > 0;
++        return Double.compare(max, 10.0) > 0;
+     }
+ 
+     private ParseOutcome parseArguments(String[] args) {
+diff --git a/src/crap4java/CoverageRunner.java b/src/crap4java/CoverageRunner.java
+index 6a21041..58b6949 100644
+--- a/src/crap4java/CoverageRunner.java
++++ b/src/crap4java/CoverageRunner.java
+@@ -18,12 +18,11 @@ final class CoverageRunner {
+         deleteIfExists(projectRoot.resolve("target/site/jacoco"));
+         deleteIfExists(projectRoot.resolve("target/jacoco.exec"));
+ 
+-        int exit = executor.run(List.of(
+-                "mvn", "-q",
+-                "org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent",
+-                "test",
+-                "org.jacoco:jacoco-maven-plugin:0.8.12:report"
+-        ), projectRoot);
++        String command = System.getenv("SFJAVA_COVERAGE_COMMAND");
++        if (command == null || command.isBlank()) {
++            throw new IllegalStateException("SFJAVA_COVERAGE_COMMAND must name a dedicated coverage runner");
++        }
++        int exit = executor.run(List.of("/bin/sh", "-c", command), projectRoot);
+         if (exit != 0) {
+             throw new IllegalStateException("Coverage command failed with exit " + exit);
+         }

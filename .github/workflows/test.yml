@@ -30,6 +30,8 @@ jobs:
         run: bash test/sf_tool_test.sh
       - name: Unit specs for sf
         run: bb --config swarmforge/tools/sf/bb.edn spec
+      - name: Hardening checks for sf
+        run: bb --config swarmforge/tools/sf/bb.edn hardening
       - name: Property tests for sf
         run: bb --config swarmforge/tools/sf/bb.edn property
       - name: Acceptance tests for sf
@@ -46,6 +48,16 @@ jobs:
         run: |
           swarmforge/bin/sf tool ensure gherkin-parser
           bb --config swarmforge/tools/javascript/bb.edn acceptance
+      - name: Unit specs for sf-java
+        run: bb --config swarmforge/tools/java/bb.edn spec
+      - name: Hardening checks for sf-java
+        run: bb --config swarmforge/tools/java/bb.edn hardening
+      - name: Property tests for sf-java
+        run: bb --config swarmforge/tools/java/bb.edn property
+      - name: Accept sf-java
+        run: |
+          swarmforge/bin/sf tool ensure gherkin-parser
+          bb --config swarmforge/tools/java/bb.edn acceptance
       - name: Test sf-rb
         run: bb --config swarmforge/tools/ruby/bb.edn test
       - name: Property-test sf-rb
