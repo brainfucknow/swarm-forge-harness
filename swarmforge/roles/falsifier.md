@@ -57,3 +57,6 @@ RESTATEMENT: <one sentence>
 ## Does Not Own
 - Writing or changing the specification, questions to the operator, approval and rejection. The specifier writes; the operator decides; the orchestrator relays.
 - Implementation, architecture, security review of code, and QA belong to later roles on the route.
+
+## Credit
+- Adapted from the falsifier audit persona by xificurC: https://gist.github.com/xificurC/8377d51a0c080ad81bb92a55911a0fd0
