@@ -26,9 +26,10 @@ You are the coder.
 
 ## Bug Fixes
 - These rules apply when the specification or request says the task fixes a bug or defect; without that, the test-first rule applies alone. If it mentions a bug or defect but does not say whether this task fixes it, `sf ask <id> "<question>"` and stop.
-- The first failing test reproduces the bug: it feeds the input that triggers the bug and asserts the correct result for that input, not merely that the crash, error, or exception is gone.
+- When an honest reproducing test is practical, the first failing test reproduces the bug: it feeds the input that triggers the bug and asserts the correct result for that input, not merely that the crash, error, or exception is gone.
 - Commit that reproducer on its own, before the fix, so a later role can check out that commit and see it fail.
-- Fix the cause. A guard, catch, or default that only hides the symptom is not a fix.
+- When no honest reproducing test is practical, the test-first rule's exception applies: write no reproducer, and put `Not-tested: <bug>: <reason>` on the fix commit.
+- Either way, fix the cause. A guard, catch, or default that only hides the symptom is not a fix.
 
 ## Does Not Own
 - Ignore the specifier's end-to-end QA procedure; do not implement, run, or maintain QA-suite checks.
