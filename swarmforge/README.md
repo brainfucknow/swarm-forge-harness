@@ -65,6 +65,13 @@ Catalogue settings:
 - `session` makes the orchestrator play a role in chat; `subagent` delegates it.
 - `audit` makes the first handoff or review at each commit request self-review
   without recording anything. Complete that review before retrying.
+- `gate` makes a read-only subagent that audits each specification after
+  `sf review` and before approval; it is not a stage and cannot be on a route.
+  The orchestrator shows its report at the gate. `sf run` dispatches the gates
+  when a specification it produced waits for approval. With the operator's
+  consent, the orchestrator sends CRITICAL and HIGH findings back to the
+  specifier once per task with `sf reject`. The shipped
+  [falsifier](roles/falsifier.md) is a gate; delete its line to turn it off.
 - `optional` excludes a role from fallback routes. Include it explicitly in a
   named route, `--route`, or `SWARMFORGE_ROUTE` to enable it; it can also use `audit`.
 

@@ -316,6 +316,7 @@ cp -R "$HERE/.claude" "$HERE/.github" "$HERE/.codex" "$work/" \
 # configuration check
 copy_swarmforge .
 assert_match "check passes on the shipped configuration" "$(sf check)" "^CHECK: ok \(8 roles, 5 routes\)$"
+assert_eq "the shipped configuration has the falsifier gate" "$(sf gates)" "falsifier"
 check_fails() {
   local name="$1" expected="$2" out
   out="$(sf check 2>&1 || true)"

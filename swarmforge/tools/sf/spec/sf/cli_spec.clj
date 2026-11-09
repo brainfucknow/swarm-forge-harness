@@ -24,6 +24,13 @@
     (should= (:out (sf "roles")) (:out (sf "pipeline")))
     (should= "feature    specifier,coder,cleaner\nquick      coder" (:out (sf "routes"))))
 
+  (it "prints the gates, none by default"
+    (should= "" (:out (sf "gates")))
+    (spit (str support/*dir* "/swarmforge/roles/falsifier.md") "# falsifier\n\nAudits.\n")
+    (support/write-conf! support/*dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\n")
+    (should= "falsifier" (:out (sf "gates")))
+    (should= "specifier\ncoder" (:out (sf "roles"))))
+
   (it "checks the catalogue"
     (should= "CHECK: ok (3 roles, 2 routes)" (:out (sf "check"))))
 

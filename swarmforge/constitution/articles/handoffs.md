@@ -29,3 +29,4 @@ hand. `sf start` and `sf show` print the records;
 
 ## Specification Gate
 - The specifier does not hand off. It commits the specification, runs `sf review <id>`, and stops. The orchestrator shows the operator the criteria and QA from that commit or durable contract files; `sf approve <id>` records the approval and performs the handoff to the next role; `sf reject <id> "<reason>"` keeps the task with the specifier.
+- Gate roles (`gate` in `roles.conf`, listed by `sf gates`) audit the specification between `sf review` and approval. They are not stages and record nothing; the orchestrator shows their reports with the specification.

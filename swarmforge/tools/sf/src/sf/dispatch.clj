@@ -12,7 +12,9 @@
 (def backends ["claude" "codex" "copilot"])
 
 (defn- role-prompt [role short]
-  (str "You are the SwarmForge '" role "' role. Read swarmforge/constitution.md and every file it names, then read swarmforge/roles/" role ".md, then do your role's work for task " short ". Start with: swarmforge/bin/sf start " short))
+  (if (config/gate? role)
+    (str "You are the SwarmForge '" role "' gate. Read swarmforge/roles/" role ".md, then audit the specification of task " short " that waits for approval. Start with: swarmforge/bin/sf show " short ". Change nothing: no edits, no commits, no sf command that records. End with your report.")
+    (str "You are the SwarmForge '" role "' role. Read swarmforge/constitution.md and every file it names, then read swarmforge/roles/" role ".md, then do your role's work for task " short ". Start with: swarmforge/bin/sf start " short)))
 
 (defn- detect-backend []
   (or (shell/env "SWARMFORGE_BACKEND" nil)
@@ -39,7 +41,7 @@
 
 (defn dispatch [[role id-arg backend]]
   (when (str/blank? role) (shell/die "dispatch needs a role"))
-  (config/require-role role)
+  (config/require-agent role)
   (let [id (store/resolve-id id-arg)
         backend (or (not-empty backend) (detect-backend))
         command (vec (command-for backend role (role-prompt role id)))
@@ -50,19 +52,31 @@
                               (shell/die backend ": " (ex-message e))))]
     (when-not (zero? exit) (shell/fail exit nil))))
 
+(defn- run-gates
+  "Dispatches each gate on the specification of id that waits for approval.
+  A gate reports; it must not record."
+  [id backend state]
+  (doseq [gate (config/gates)]
+    (dispatch [gate id backend])
+    (when (not= state (store/state id))
+      (shell/die "gate " gate " changed task " id "; a gate only reports"))))
+
 (defn run
   "Dispatches stage after stage until the task is done (exit 0) or waits on the
-  operator (exit 2)."
+  operator (exit 2). When a stage it dispatched asked for approval, it first
+  runs the gates on that specification."
   [[id-arg backend]]
   (let [id (store/resolve-id id-arg)]
-    (loop []
+    (loop [dispatched? false]
       (let [{:keys [stage needs] :as state} (store/state id)]
         (cond
           (= "done" stage)
           (println (str "DONE: " id "; run: sf finish " id))
 
           (flow/waiting? state)
-          (do (println (str "BLOCKED: " id " needs:" needs))
+          (do (when (and dispatched? (= "approval" needs))
+                (run-gates id backend state))
+              (println (str "BLOCKED: " id " needs:" needs))
               (shell/fail 2 nil))
 
           :else
@@ -70,4 +84,4 @@
               (when (let [after (store/state id)]
                       (and (= stage (:stage after)) (not (flow/waiting? after))))
                 (shell/die "stage:" stage " made no progress"))
-              (recur)))))))
+              (recur true)))))))

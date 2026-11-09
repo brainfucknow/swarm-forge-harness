@@ -54,6 +54,23 @@
       (adapters/adapters [])
       (should= before (snapshot))))
 
+  (it "generates a gate's read-only adapters and recognizes them without ownership state"
+    (write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\n")
+    (write-agent "swarmforge/roles/falsifier.md" "# falsifier\n\nAudits a specification.\n")
+    (adapters/adapters [])
+    (doseq [path [".claude/agents/falsifier.md" ".github/agents/falsifier.agent.md" ".codex/agents/falsifier.toml" ".kilo/agent/falsifier.md"]
+            :let [text (slurp (str (fs/path *dir* path)))]]
+      (should-contain "SwarmForge falsifier gate. Audits a specification. Use at a task's specification gate" text)
+      (should-contain "You are the SwarmForge `falsifier` gate." text)
+      (should-contain "swarmforge/bin/sf show <id>" text)
+      (should-not-contain "sf handoff" text))
+    (should-contain "model: opus" (slurp (str (fs/path *dir* ".claude/agents/falsifier.md"))))
+    (should-contain "You are the SwarmForge `coder` role." (slurp (str (fs/path *dir* ".claude/agents/coder.md"))))
+    (let [before (snapshot)]
+      (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
+      (should= 0 (:status (captured #(adapters/adapters []))))
+      (should= before (snapshot))))
+
   (it "omits the Kilo model when the tier inherits the session model"
     (write-conf! *dir* "tiers.conf" "frontier inherit high gpt inherit\nstrong opus medium gpt-5 inherit\nfast sonnet low gpt-mini inherit\n")
     (adapters/adapters [])
