@@ -21,9 +21,11 @@
     (when (and model (not= "inherit" model))
       (str "model: " model "\n"))))
 
-(defn- agent-files [role tier]
-  (let [body (str/replace (shell/template "adapter.md") "{{role}}" role)
-        description (str "SwarmForge " role " role. " (role-summary role) " Use for a task whose stage is " role ".")]
+(defn- agent-files [role tier gate?]
+  (let [body (str/replace (shell/template (if gate? "gate-adapter.md" "adapter.md")) "{{role}}" role)
+        description (if gate?
+                      (str "SwarmForge " role " gate. " (role-summary role) " Use at a task's specification gate, after the specifier's sf review and before the operator approves.")
+                      (str "SwarmForge " role " role. " (role-summary role) " Use for a task whose stage is " role "."))]
     {(str ".claude/agents/" role ".md")
      (str "---\nname: " role "\ndescription: " description "\nmodel: " (config/tier-field tier 2)
           "\n---\n\n" body)
@@ -70,10 +72,14 @@
                  #"(?m)^model_reasoning_effort = \"[^\r\n]*\"\n"
                  #"(?m)^model: [^\r\n]*\n") ""))
 
-(defn- legacy-ownership [root owned]
+(defn- legacy-ownership
+  "The adapters on disk that sf adapters wrote for a role prompt, as a stage or
+  as a gate, whatever roles.conf now says about the role."
+  [root owned]
   (into {} (for [prompt (fs/glob (fs/path (config/conf-dir) "roles") "*.md")
-                 [path text] (agent-files (str/replace (fs/file-name prompt) #"\.md$" "")
-                                         (ffirst (config/rows "tiers.conf")))
+                 :let [role (str/replace (fs/file-name prompt) #"\.md$" "")]
+                 gate? [false true]
+                 [path text] (agent-files role (ffirst (config/rows "tiers.conf")) gate?)
                  :let [file (fs/path root path)]
                  :when (and (not (contains? owned path)) (not (fs/sym-link? file))
                             (fs/regular-file? file))
@@ -115,7 +121,7 @@
   (shell/quietly config/check)
   (let [root (shell/checkout-root)
         roles (filter #(= "subagent" (nth % 2)) (config/rows "roles.conf"))
-        desired (into {} (mapcat (fn [[role tier]] (agent-files role tier)) roles))
+        desired (into {} (mapcat (fn [[role tier]] (agent-files role tier (config/gate? role))) roles))
         state (fs/path root ".swarmforge" "adapters.edn")
         main-state (fs/path (shell/repo-root) ".swarmforge" "adapters.edn")
         local (read-ownership state)

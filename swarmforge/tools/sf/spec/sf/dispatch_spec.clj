@@ -1,7 +1,7 @@
 (ns sf.dispatch-spec
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
-            [speclj.core :refer [around describe it should-contain should=]]
+            [speclj.core :refer [around describe it should-contain should-not-contain should=]]
             [sf.dispatch :as dispatch]
             [sf.repo-support :as support :refer [*dir* git with-repo]]
             [sf.shell :as shell]
@@ -145,6 +145,16 @@
         (should= {:out "" :err "claude: no such file" :status 1}
                 (support/captured #(dispatch/dispatch ["coder" id "claude"]))))))
 
+  (it "dispatches a gate read-only on the task's specification"
+    (support/write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\n")
+    (let [id (new-id "Add login" "--route" "specifier,coder")
+          [{:keys [cmd dir]}] (dispatched "falsifier" id "claude")]
+      (should= (str *dir* "/.worktrees/" id) dir)
+      (should= ["claude" "-p" "--permission-mode" "acceptEdits" "--model" "opus"] (take 6 cmd))
+      (should-contain "swarmforge/roles/falsifier.md" (last cmd))
+      (should-contain (str "swarmforge/bin/sf show " id) (last cmd))
+      (should-not-contain "sf start" (last cmd))))
+
   (it "needs a known role"
     (should-contain "dispatch needs a role" (:err (support/captured #(dispatch/dispatch []))))
     (should-contain "unknown role" (:err (support/captured #(dispatch/dispatch ["nobody" "x"]))))))
@@ -167,6 +177,51 @@
       (let [result (support/captured #(dispatch/run [id]))]
         (should= 2 (:status result))
         (should-contain "BLOCKED" (:out result)))))
+
+  (it "runs the gates on a specification it dispatched, then waits for approval"
+    (support/write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\n")
+    (let [id (new-id "Add login" "--route" "specifier,coder")
+          ran (atom [])]
+      (with-redefs [dispatch/dispatch (fn [[role id _]]
+                                        (swap! ran conj role)
+                                        (when (= "specifier" role) (task/review [id "-m" "spec"])))]
+        (let [result (support/captured #(dispatch/run [id]))]
+          (should= 2 (:status result))
+          (should-contain (str "BLOCKED: " id " needs:approval") (:out result))))
+      (should= ["specifier" "falsifier"] @ran)))
+
+  (it "does not rerun the gates on a specification that already waited for approval"
+    (support/write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\n")
+    (let [id (new-id "Add login" "--route" "specifier,coder")
+          ran (atom [])]
+      (task/review [id "-m" "spec"])
+      (with-redefs [dispatch/dispatch (fn [[role]] (swap! ran conj role))]
+        (should= 2 (:status (support/captured #(dispatch/run [id])))))
+      (should= [] @ran)))
+
+  (it "stops when a gate records anything"
+    (support/write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\n")
+    (let [id (new-id "Add login" "--route" "specifier,coder")]
+      (with-redefs [dispatch/dispatch (fn [[role id _]]
+                                        (if (= "specifier" role)
+                                          (task/review [id "-m" "spec"])
+                                          (task/ask [id "Which?"])))]
+        (let [result (support/captured #(dispatch/run [id]))]
+          (should= 1 (:status result))
+          (should-contain (str "gate falsifier changed task " id "; a gate only reports") (:err result))))))
+
+  (it "stops when a gate edits or commits in the task worktree"
+    (support/write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\n")
+    (doseq [[title change] [["Edit" #(spit (str % "/note") "x")]
+                            ["Commit" #(git % "commit" "-q" "--allow-empty" "-m" "Gate commit")]]]
+      (let [id (new-id title "--route" "specifier,coder")]
+        (with-redefs [dispatch/dispatch (fn [[role id _]]
+                                          (if (= "specifier" role)
+                                            (task/review [id "-m" "spec"])
+                                            (change (str *dir* "/.worktrees/" id))))]
+          (let [result (support/captured #(dispatch/run [id]))]
+            (should= 1 (:status result))
+            (should-contain (str "gate falsifier changed task " id) (:err result)))))))
 
   (it "stops when a stage makes no progress"
     (let [id (new-id "Add login")]

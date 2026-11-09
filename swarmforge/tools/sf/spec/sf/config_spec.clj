@@ -1,7 +1,7 @@
 (ns sf.config-spec
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
-            [speclj.core :refer [describe context it should= should should-throw around]]
+            [speclj.core :refer [describe context it should= should should-not should-throw around]]
             [sf.config :as config]
             [sf.shell :as shell]))
 
@@ -110,6 +110,41 @@
           (should= 1 status)
           (should (some #(str/includes? % problem) errors))))))
 
+  (context "gate roles"
+    (it "keeps a gate off the pipeline and the routes and lists it with the gates"
+      (spit (str (fs/path *dir* "swarmforge/roles/falsifier.md")) "fixture")
+      (conf "roles.conf" "specifier strong session\nfalsifier strong subagent gate\ncoder strong subagent audit\nqa fast subagent\n")
+      (should= ["specifier" "coder" "qa"] (config/pipeline))
+      (should= ["falsifier"] (config/gates))
+      (should (config/gate? "falsifier"))
+      (should-not (config/gate? "coder"))
+      (should= "specifier,coder,qa" (config/default-route))
+      (should= nil (config/require-agent "falsifier"))
+      (should= nil (config/require-agent "coder"))
+      (should-throw clojure.lang.ExceptionInfo "unknown role 'nope' (see swarmforge/roles.conf)" (config/require-agent "nope"))
+      (should-throw clojure.lang.ExceptionInfo "unknown role 'falsifier' (see swarmforge/roles.conf)" (config/require-role "falsifier"))
+      (should-throw clojure.lang.ExceptionInfo "'falsifier' in route 'specifier,falsifier,coder' is a gate, not a stage; it runs at the specification gate"
+                    (config/resolve-route "specifier,falsifier,coder"))
+      (should= [0 "CHECK: ok (3 roles, 2 routes)\n" [""]] (check)))
+
+    (it "has no gates when no role is flagged gate"
+      (should= [] (config/gates)))
+
+    (it "refuses a gate that audits, is optional, runs in session, or sits on a route"
+      (spit (str (fs/path *dir* "swarmforge/roles/falsifier.md")) "fixture")
+      (doseq [[row problem] [["falsifier strong subagent gate audit" "'falsifier' is a gate and cannot also be audit or optional"]
+                             ["falsifier strong subagent optional gate" "'falsifier' is a gate and cannot also be audit or optional"]
+                             ["falsifier strong session gate" "'falsifier' is a gate and must run as subagent"]]]
+        (conf "roles.conf" (str "specifier strong session\n" row "\ncoder strong subagent\nqa fast subagent\n"))
+        (let [[status _ errors] (check)]
+          (should= 1 status)
+          (should (some #(str/includes? % problem) errors))))
+      (conf "roles.conf" "specifier strong session\nfalsifier strong subagent gate\ncoder strong subagent\nqa fast subagent\n")
+      (conf "routes.conf" "feature specifier,falsifier,coder,qa\n")
+      (let [[status _ errors] (check)]
+        (should= 1 status)
+        (should (some #(str/includes? % "routes.conf: feature: 'falsifier' in route 'specifier,falsifier,coder,qa' is a gate, not a stage") errors)))))
+
   (context "check"
     (it "accepts a valid catalogue, the bbmain kind and the coverage rewrite"
       (should= [0 "CHECK: ok (3 roles, 2 routes)\n" [""]] (check)))
@@ -137,7 +172,7 @@
                 "CHECK: roles.conf: role 'specifier' listed twice"
                 "CHECK: roles.conf: 'coder' uses unknown tier 'weak' (see tiers.conf)"
                 "CHECK: roles.conf: 'coder' runs-as must be subagent or session, not 'robot'"
-                "CHECK: roles.conf: 'qa' has unknown flag 'flag' (only audit, optional)"
+                "CHECK: roles.conf: 'qa' has unknown flag 'flag' (only audit, optional, gate)"
                 "CHECK: roles.conf: 'x' needs <role> <tier> <runs-as> [audit] [optional]"
                 "CHECK: routes.conf: route 'feature' listed twice"
                 "CHECK: routes.conf: feature: route 'qa,specifier' is out of order; follow swarmforge/roles.conf: specifier,Bad,done,specifier,coder,qa,x"

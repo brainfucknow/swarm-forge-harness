@@ -38,10 +38,12 @@ Role commands
 
 Catalogue commands
   roles                           print the role catalogue in canonical order
+  gates                           print the gate roles that audit a specification before approval
   routes                          print the named routes
   stage <id>                      print the task's current stage
-  dispatch <role> <id> [backend]  run a role headlessly (claude, codex, copilot)
-  run <id> [backend]              dispatch stage after stage until done or blocked
+  dispatch <role> <id> [backend]  run a role or gate headlessly (claude, codex, copilot)
+  run <id> [backend]              dispatch stage after stage until done or blocked; runs the
+                                  gates when the specification it dispatched waits for approval
   adapters                        regenerate .claude/.codex/.github agent files
   tool require|ensure|list|bin    install constitution tools project-locally (sf tool --help)
   check                           validate roles.conf, tiers.conf, routes.conf, tools.conf, role prompts
@@ -81,6 +83,7 @@ Environment
    "finish" task/finish
    "roles" (config/in-checkout print-roles)
    "pipeline" (config/in-checkout print-roles)
+   "gates" (config/in-checkout (fn [_] (run! println (config/gates))))
    "routes" (config/in-checkout (fn [_] (doseq [[name route] (config/named-routes)]
                                           (println (format "%-10s %s" name (str route))))))
    "dispatch" dispatch/dispatch

@@ -2,6 +2,7 @@
   (:require [babashka.fs :as fs]
             [speclj.core :refer :all]
             [sf.adapters :as adapters]
+            [sf.shell :as shell]
             [clojure.string :as str]
             [sf.repo-support :refer [*dir* with-repo write-conf! captured git]]))
 
@@ -11,6 +12,14 @@
   (let [file (fs/path *dir* path)]
     (fs/create-dirs (fs/parent file))
     (spit (str file) text)))
+
+(def gate-paths [".claude/agents/falsifier.md" ".github/agents/falsifier.agent.md" ".codex/agents/falsifier.toml" ".kilo/agent/falsifier.md"])
+
+(defn write-gate!
+  "A catalogue with the falsifier gate and its role prompt."
+  []
+  (write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\ncleaner fast subagent\n")
+  (write-agent "swarmforge/roles/falsifier.md" "# falsifier\n\nAudits a specification.\n"))
 
 (defn snapshot []
   (into {} (for [dir [".claude/agents" ".github/agents" ".codex/agents" ".kilo/agent"]
@@ -53,6 +62,31 @@
     (let [before (snapshot)]
       (adapters/adapters [])
       (should= before (snapshot))))
+
+  (it "generates a gate's adapters from the gate template on its tier and recognizes them without ownership state"
+    (write-gate!)
+    (adapters/adapters [])
+    (let [body (fn [template role] (str/replace (shell/template template) "{{role}}" role))]
+      (doseq [path gate-paths
+              :let [text (slurp (str (fs/path *dir* path)))]]
+        (should-contain (body "gate-adapter.md" "falsifier") text)
+        (should-contain "Audits a specification." text))
+      (should-contain (body "adapter.md" "coder") (slurp (str (fs/path *dir* (first paths))))))
+    (should-contain "model: opus" (slurp (str (fs/path *dir* (first gate-paths)))))
+    (let [before (snapshot)]
+      (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
+      (should= 0 (:status (captured #(adapters/adapters []))))
+      (should= before (snapshot))))
+
+  (it "removes the adapters of a gate whose row is deleted, without ownership state"
+    (write-gate!)
+    (adapters/adapters [])
+    (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
+    (write-conf! *dir* "roles.conf" "specifier frontier subagent\ncoder strong subagent\ncleaner fast subagent\n")
+    (should= 0 (:status (captured #(adapters/adapters []))))
+    (doseq [path gate-paths]
+      (should-not (fs/exists? (fs/path *dir* path))))
+    (should (fs/exists? (fs/path *dir* (first paths)))))
 
   (it "omits the Kilo model when the tier inherits the session model"
     (write-conf! *dir* "tiers.conf" "frontier inherit high gpt inherit\nstrong opus medium gpt-5 inherit\nfast sonnet low gpt-mini inherit\n")
