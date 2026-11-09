@@ -55,7 +55,7 @@
       (should= before (snapshot))))
 
   (it "generates a gate's read-only adapters and recognizes them without ownership state"
-    (write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\n")
+    (write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\ncleaner fast subagent\n")
     (write-agent "swarmforge/roles/falsifier.md" "# falsifier\n\nAudits a specification.\n")
     (adapters/adapters [])
     (doseq [path [".claude/agents/falsifier.md" ".github/agents/falsifier.agent.md" ".codex/agents/falsifier.toml" ".kilo/agent/falsifier.md"]
