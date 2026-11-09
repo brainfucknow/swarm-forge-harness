@@ -72,10 +72,14 @@
                  #"(?m)^model_reasoning_effort = \"[^\r\n]*\"\n"
                  #"(?m)^model: [^\r\n]*\n") ""))
 
-(defn- legacy-ownership [root owned]
+(defn- legacy-ownership
+  "The adapters on disk that sf adapters wrote for a role prompt, as a stage or
+  as a gate, whatever roles.conf now says about the role."
+  [root owned]
   (into {} (for [prompt (fs/glob (fs/path (config/conf-dir) "roles") "*.md")
                  :let [role (str/replace (fs/file-name prompt) #"\.md$" "")]
-                 [path text] (agent-files role (ffirst (config/rows "tiers.conf")) (config/gate? role))
+                 gate? [false true]
+                 [path text] (agent-files role (ffirst (config/rows "tiers.conf")) gate?)
                  :let [file (fs/path root path)]
                  :when (and (not (contains? owned path)) (not (fs/sym-link? file))
                             (fs/regular-file? file))

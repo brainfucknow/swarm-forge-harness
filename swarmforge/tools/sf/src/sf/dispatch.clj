@@ -52,14 +52,24 @@
                               (shell/die backend ": " (ex-message e))))]
     (when-not (zero? exit) (shell/fail exit nil))))
 
+(defn- gate-snapshot
+  "What a gate must leave as it found it: the task's state, and the HEAD and
+  status of the task worktree."
+  [id]
+  (let [dir (task/worktree! id)]
+    [(store/state id)
+     (shell/chomp (shell/must {:dir dir} "git" "rev-parse" "HEAD"))
+     (shell/must {:dir dir} "git" "status" "--porcelain")]))
+
 (defn- run-gates
   "Dispatches each gate on the specification of id that waits for approval.
-  A gate reports; it must not record."
-  [id backend state]
-  (doseq [gate (config/gates)]
-    (dispatch [gate id backend])
-    (when (not= state (store/state id))
-      (shell/die "gate " gate " changed task " id "; a gate only reports"))))
+  A gate reports; it must not record, commit or edit."
+  [id backend]
+  (let [before (gate-snapshot id)]
+    (doseq [gate (config/gates)]
+      (dispatch [gate id backend])
+      (when (not= before (gate-snapshot id))
+        (shell/die "gate " gate " changed task " id "; a gate only reports")))))
 
 (defn run
   "Dispatches stage after stage until the task is done (exit 0) or waits on the
@@ -75,7 +85,7 @@
 
           (flow/waiting? state)
           (do (when (and dispatched? (= "approval" needs))
-                (run-gates id backend state))
+                (run-gates id backend))
               (println (str "BLOCKED: " id " needs:" needs))
               (shell/fail 2 nil))
 
