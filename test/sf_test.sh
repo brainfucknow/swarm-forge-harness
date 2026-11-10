@@ -421,8 +421,19 @@ assert_match "the squash-merged task is finished" "$(sf show "$idb")" "^STATUS: 
 
 idh="$(done_task "Host merge")"
 git merge -q --no-ff --no-edit "swarm/$idh" && git commit -q --allow-empty -m "After the host merge"
+after="$(git rev-parse HEAD)"
 assert_match "finish completes a host merge" "$(sf finish "$idh")" "^FINISHED: $idh merged into main$"
 assert_eq "finish removes the host-merged branch" "$(git branch --list "swarm/$idh")" ""
+assert_eq "finish records on top of the commits after a host merge" "$(git rev-parse HEAD^1)" "$after"
+assert_match "a task finished after a host merge shows as finished" "$(sf show "$idh")" "^STATUS: finished$"
+
+idm="$(done_task "Host merge at HEAD")"
+git merge -q --no-ff --no-edit "swarm/$idm"
+merge="$(git rev-parse HEAD)"
+sf finish "$idm" >/dev/null
+assert_eq "finish keeps a host merge at HEAD" "$(git rev-parse HEAD^1)" "$merge"
+assert_eq "the finished record merges the task tip" "$(git log -1 --format=%B HEAD | head -n 1)" "sf finished: $idm"
+assert_match "a task host-merged at HEAD shows as finished" "$(sf show "$idm")" "^STATUS: finished$"
 
 idl="legacy-task-1234567"
 git checkout -q -b "swarm/$idl"

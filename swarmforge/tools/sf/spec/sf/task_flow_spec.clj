@@ -210,9 +210,10 @@
                (select-keys (captured #(task/finish [id])) [:status :err]))
       (should= tip (git *dir* "rev-parse" "MERGE_HEAD"))
       (git *dir* "commit" "-q" "--no-verify" "-m" "Resolve")
-      (let [resolved (git *dir* "log" "-1" "--format=%P %T")]
+      (let [resolved (git *dir* "rev-parse" "HEAD")]
         (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id]))
-        (should= resolved (git *dir* "log" "-1" "--format=%P %T")))
+        (should= (str resolved " " tip) (git *dir* "log" "-1" "--format=%P"))
+        (should= (git *dir* "rev-parse" (str resolved "^{tree}")) (git *dir* "rev-parse" "HEAD^{tree}")))
       (should= (str "sf finished: " id) (git *dir* "log" "-1" "--format=%s"))
       (should-contain "SwarmForge-Merged-Into: main" (git *dir* "log" "-1" "--format=%B"))
       (should-not (fs/exists? dir))
@@ -254,15 +255,18 @@
       (should= (str "sf finished: " id) (git *dir* "log" "-1" "--format=%s"))
       (should-contain "STATUS: finished" (out task/show [id]))))
 
-  (it "keeps a merge of the branch tip that the host made, below later commits"
-    (let [id (done-task)]
+  (it "keeps a merge of the branch tip that the host made, below later commits, and records the finish on top"
+    (let [id (done-task)
+          tip (git *dir* "rev-parse" (str "swarm/" id))]
       (git *dir* "merge" "-q" "--no-ff" "--no-edit" (str "swarm/" id))
       (commit-on-main "later" "x")
       (let [head (git *dir* "rev-parse" "HEAD")]
         (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id]))
-        (should= head (git *dir* "rev-parse" "HEAD")))
+        (should= (str head " " tip) (git *dir* "log" "-1" "--format=%P"))
+        (should= (str "sf finished: " id) (git *dir* "log" "-1" "--format=%s")))
       (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))
-      (should-not (fs/exists? (worktree id)))))
+      (should-not (fs/exists? (worktree id)))
+      (should-contain "STATUS: finished" (out task/show [id]))))
 
   (it "refuses to finish while the worktree has uncommitted changes, and keeps them"
     (let [id (done-task)

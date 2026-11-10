@@ -195,9 +195,9 @@
         (must-in world dir "git" "add" staged)
         world))]
 
-   [#"the file \"([^\"]+)\" in the worktree of task \"(\w)\" is written with \"([^\"]*)\""
+   [#"the file \"([^\"]+)\" in the (?:worktree of task \"(\w)\"|main checkout) is written with \"([^\"]*)\""
     (fn [world path name text]
-      (write-file (worktree world name) path (str (unescape text) "\n"))
+      (write-file (if name (worktree world name) (:repo world)) path (str (unescape text) "\n"))
       world)]
 
    [#"the main checkout committed the file \"([^\"]+)\" with \"([^\"]*)\""
@@ -410,11 +410,11 @@
       (check (= (git world "rev-parse" (fill world head-name)) (git world "rev-parse" "HEAD")) "HEAD moved")
       world)]
 
-   [#"the HEAD of the main checkout has the parents and the tree of (M\d+)"
-    (fn [world head-name]
-      (let [shape #(git world "log" "-1" "--format=%P %T" %)]
-        (check (= (shape (fill world head-name)) (shape "HEAD")) (str "HEAD is " (shape "HEAD")))
-        world))]
+   [#"the HEAD of the main checkout has the first parent (M\d+) and the tree of (M\d+)"
+    (fn [world parent-name tree-name]
+      (check (= (git world "rev-parse" (fill world parent-name)) (git world "rev-parse" "HEAD^1")) "another first parent")
+      (check (= (git world "rev-parse" (str (fill world tree-name) "^{tree}")) (git world "rev-parse" "HEAD^{tree}")) "another tree")
+      world)]
 
    [#"the main checkout is on the branch \"([^\"]+)\" merging (T\d+) with (?:the conflicted files \"(.*)\"|no conflicted file)"
     (fn [world branch tip-name files]

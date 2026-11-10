@@ -239,25 +239,40 @@
     (shell/die "verification failed on the merge of " (record/branch id) " into " target ": "
                command " exited " exit)))
 
-(defn- verify-candidate!
-  "Verifies the merge of the task branch into target, built without a commit in
-  the task's worktree detached at target, so target is the current side as in
-  the real merge. Then returns the worktree to the branch tip. A candidate with
-  conflicts is not verified; the merge into target reports them."
-  [id target]
-  (let [dir (add-worktree id)
-        commit (or (plumbing/rev target) (shell/die "no branch " target))
-        _ (git dir "checkout" "--quiet" "--detach" commit)
-        merged (shell/run {:dir dir :env (plumbing/author-env)}
-                          "git" "merge" "--no-ff" "--no-commit" "--quiet" (record/branch id))]
+(defn- detached!
+  "Calls (f dir) with the task's worktree at dir detached at commit. Then
+  returns the worktree to the branch tip with no uncommitted change, discarding
+  what f created or changed there."
+  [id commit f]
+  (let [dir (add-worktree id)]
+    (git dir "checkout" "--quiet" "--detach" commit)
     (try
-      (cond (shell/ok? merged) (verified! id target dir)
-            (seq (shell/lines (git dir "diff" "--name-only" "--diff-filter=U"))) nil
-            :else (shell/fail (:exit merged) (shell/chomp (:err merged))))
+      (f dir)
       (finally
         (git dir "reset" "--quiet" "--hard")
         (git dir "clean" "--quiet" "-d" "--force")
         (git dir "checkout" "--quiet" (record/branch id))))))
+
+(defn- verify-candidate!
+  "Verifies the merge of the task branch into target, built without a commit in
+  the task's worktree detached at target, so target is the current side as in
+  the real merge. A candidate with conflicts is not verified; the merge into
+  target reports them."
+  [id target]
+  (detached! id (or (plumbing/rev target) (shell/die "no branch " target))
+             (fn [dir]
+               (let [merged (shell/run {:dir dir :env (plumbing/author-env)}
+                                       "git" "merge" "--no-ff" "--no-commit" "--quiet" (record/branch id))]
+                 (cond (shell/ok? merged) (verified! id target dir)
+                       (seq (shell/lines (git dir "diff" "--name-only" "--diff-filter=U"))) nil
+                       :else (shell/fail (:exit merged) (shell/chomp (:err merged))))))))
+
+(defn- verify-head!
+  "Verifies the main checkout's HEAD as committed, in the task's worktree
+  detached there, so uncommitted changes in the main checkout count for
+  nothing."
+  [id target]
+  (detached! id (git (shell/repo-root) "rev-parse" "HEAD") #(verified! id target %)))
 
 (defn- merge-task!
   "Merges the task into target, or stops with the conflicted files."
@@ -269,15 +284,15 @@
 
 (defn- finish-by!
   "Does what flow/finish-action decided for the task and target: merges the
-  branch, verifies the merge already in HEAD and rewords it with the finished
-  record when it lacks one, or stops."
+  branch, or verifies the merge already in HEAD and records the finished merge
+  on top of it when HEAD lacks one, or stops."
   [id state target action]
   (case action
     :merge (do (verify-candidate! id target)
                (merge-task! id state target))
-    :keep (verified! id target (shell/repo-root))
-    :reword (do (verified! id target (shell/repo-root))
-                (store/reword-head! (finished-message id state target)))
+    :keep (verify-head! id target)
+    :record (do (verify-head! id target)
+                (store/record-merge! id (finished-message id state target)))
     :unmerged (shell/die (record/branch id) " has commits that HEAD does not contain; merge them, then run: sf finish " id)
     (shell/die "task " id " is finished")))
 
@@ -296,8 +311,7 @@
         dir (worktree-of id)
         current (git root "rev-parse" "--abbrev-ref" "HEAD")
         tip (store/tip id)
-        action (flow/finish-action (store/finished? id) tip (store/head-parents)
-                                   (boolean (and tip (store/in-head? tip))))
+        action (flow/finish-action (store/finished? id) tip (boolean (and tip (store/in-head? tip))))
         target (if (= :merge action) (or (not-empty target) current) current)]
     (finish-by! id state target action)
     (when (fs/directory? dir) (git root "worktree" "remove" dir))

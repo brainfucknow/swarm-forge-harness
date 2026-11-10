@@ -91,10 +91,14 @@ force, then removes the branch. Rerun it to complete interrupted cleanup.
 Finished tasks refuse `sf start` and further records.
 
 If the merge conflicts, resolve and commit it in the main checkout, then
-rerun `sf finish`. It verifies that committed merge before recording and
-cleaning up. If verification fails, fix it and retry. A HEAD that contains
-the branch tip some other way, such as a host's merge, is verified and kept
-as it is. Nobody writes the finished-record trailers manually.
+rerun `sf finish`. It verifies that committed merge in the task worktree,
+detached at HEAD, before recording and cleaning up, so an uncommitted fix in
+the main checkout does not count. If verification fails, commit the fix and
+retry. When HEAD contains the branch tip without the finished record (a
+merge committed with another message, or a host's merge, with or without
+commits after it), `sf finish` commits the finished record on top of HEAD as
+a merge of the tip. It never rewrites a commit HEAD already has. Nobody
+writes the finished-record trailers manually.
 
 ## Sharing
 

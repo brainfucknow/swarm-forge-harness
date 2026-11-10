@@ -75,17 +75,16 @@
 
 (defn finish-action
   "What sf finish does with a done task, from whether HEAD's history has its
-  finished record (recorded?), its branch tip (nil when it has no branch),
-  HEAD's parents and whether HEAD contains the tip (tip-merged?): :merge the
-  branch when HEAD has neither, :keep HEAD when it contains the tip,
-  :unmerged when the branch moved after the recorded merge, :reword HEAD when
-  it is the merge of the tip without the record, else nil: the task is
-  finished."
-  [recorded? tip head-parents tip-merged?]
+  finished record (recorded?), its branch tip (nil when it has no branch) and
+  whether HEAD contains the tip (tip-merged?): :merge the branch when HEAD has
+  neither, :record the finished merge on top of HEAD when HEAD contains the
+  tip without the record, :keep HEAD when it has both, :unmerged when the
+  branch moved after the recorded merge, else nil: the task is finished. No
+  action rewrites a commit HEAD already has."
+  [recorded? tip tip-merged?]
   (cond (nil? tip) nil
         recorded? (if tip-merged? :keep :unmerged)
-        (and (= 2 (count head-parents)) (= tip (second head-parents))) :reword
-        tip-merged? :keep
+        tip-merged? :record
         :else :merge))
 
 (defn role-commit

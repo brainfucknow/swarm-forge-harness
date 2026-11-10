@@ -106,21 +106,17 @@
 
 (describe "what sf finish does with a done task"
   (it "merges a branch that HEAD neither contains nor has the finished record of"
-    (should= :merge (flow/finish-action false "t1" ["m0"] false))
-    (should= :merge (flow/finish-action false "t1" ["m0" "t2"] false)))
+    (should= :merge (flow/finish-action false "t1" false)))
 
   (it "keeps HEAD when HEAD's history has the finished record and the branch tip"
-    (should= :keep (flow/finish-action true "t1" ["m0"] true)))
+    (should= :keep (flow/finish-action true "t1" true)))
 
   (it "stops when the branch moved after the recorded merge"
-    (should= :unmerged (flow/finish-action true "t1" ["m0"] false)))
+    (should= :unmerged (flow/finish-action true "t1" false)))
 
-  (it "rewords HEAD when it is the merge of the branch tip without the record"
-    (should= :reword (flow/finish-action false "t1" ["m0" "t1"] true)))
+  (it "records the finished merge on HEAD when HEAD contains the branch tip without the record"
+    (should= :record (flow/finish-action false "t1" true)))
 
   (it "refuses a task without a branch"
-    (should-be-nil (flow/finish-action true nil ["m0" "t1"] false)))
-
-  (it "keeps HEAD when it contains the branch tip some other way and has no record"
-    (should= :keep (flow/finish-action false "t1" ["t1" "m0"] true))
-    (should= :keep (flow/finish-action false "t1" ["m0"] true))))
+    (should-be-nil (flow/finish-action true nil false))
+    (should-be-nil (flow/finish-action false nil true))))

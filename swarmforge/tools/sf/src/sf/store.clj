@@ -178,14 +178,12 @@
   [commit]
   (shell/ok? (git/run {} "merge-base" "--is-ancestor" commit "HEAD")))
 
-(defn head-parents
-  "The parents of the main checkout's HEAD, in order."
-  []
-  (shell/lines (git/git "rev-parse" "HEAD^@")))
-
-(defn reword-head!
-  "Gives the main checkout's HEAD message, with the same parents and tree."
-  [message]
+(defn record-merge!
+  "Commits message on the main checkout's HEAD as the merge of the task
+  branch, which HEAD already contains: its parents are HEAD and the branch tip,
+  its tree is HEAD's. No commit is rewritten, so a HEAD that a host merged and
+  others pulled stays theirs too."
+  [id message]
   (let [head (git/git "rev-parse" "HEAD")
-        commit (git/commit-tree (str head "^{tree}") (head-parents) message)]
+        commit (git/commit-tree (str head "^{tree}") [head (tip id)] message)]
     (git/git "update-ref" "HEAD" commit head)))
