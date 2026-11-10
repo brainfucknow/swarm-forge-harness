@@ -21,15 +21,17 @@
   (str "refs/heads/swarm/" (id-of world name)))
 
 (defn fill
-  "text with $A, $A:hex, $A:created, NEW, ROOT and named commits filled in."
+  "text with $A, $A:hex, $A:created, $A:created-sha, NEW, ROOT and named
+  commits filled in."
   [world text]
   (-> text
-      (str/replace #"\$([A-Z])(:hex|:created)?"
+      (str/replace #"\$([A-Z])(:hex|:created-sha|:created)?"
                    (fn [[_ name part]]
                      (let [id (id-of world name)]
                        (case part
                          ":hex" (last (str/split id #"-"))
                          ":created" (get-in world [:created name])
+                         ":created-sha" (get-in world [:created-sha name])
                          id))))
       (str/replace #"\bNEW\b" (fn [_] (id-of world nil)))
       (str/replace #"\b[CLTM]\d+\b" (fn [name] (or (get-in world [:names name])
@@ -74,7 +76,9 @@
 (defn- create-task [world name title request route]
   (let [id (must-in world (:repo world) "sf" "new" title "-m" (unescape request) "--route" route)
         world (assoc-in world [:ids name] id)]
-    (assoc-in world [:created name] (git world "rev-parse" "--short" (branch-ref world name)))))
+    (-> world
+        (assoc-in [:created name] (git world "rev-parse" "--short" (branch-ref world name)))
+        (assoc-in [:created-sha name] (git world "rev-parse" (branch-ref world name))))))
 
 (defn- start-task [world name]
   (must-in world (:repo world) "sf" "start" (id-of world name))
