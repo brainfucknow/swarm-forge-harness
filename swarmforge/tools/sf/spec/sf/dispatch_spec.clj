@@ -155,10 +155,21 @@
     (let [id (new-id "Add login" "--route" "specifier,coder")
           [{:keys [cmd dir]}] (dispatched "falsifier" id "claude")]
       (should= (str *dir* "/.worktrees/" id) dir)
-      (should= ["claude" "-p" "--permission-mode" "acceptEdits" "--model" "opus"] (take 6 cmd))
+      (should= ["claude" "-p" "--permission-mode" "default"
+                "--disallowedTools=Edit" "--disallowedTools=Write" "--disallowedTools=NotebookEdit"
+                "--model" "opus"]
+               (take 9 cmd))
       (should-contain "swarmforge/roles/falsifier.md" (last cmd))
       (should-contain (str "swarmforge/bin/sf show " id) (last cmd))
       (should-not-contain "sf start" (last cmd))))
+
+  (it "dispatches a gate on codex and copilot without edit permissions, keeping the extra arguments"
+    (support/write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\n")
+    (with-redefs [shell/env (env-of {"SWARMFORGE_CODEX_ARGS" "--y" "SWARMFORGE_COPILOT_ARGS" "--allow-all-tools"})]
+      (should= ["codex" "exec" "--sandbox" "read-only" "-c" "model_reasoning_effort=\"medium\"" "--y" "prompt"]
+               (vec (command-for "codex" "falsifier" "prompt")))
+      (should= ["copilot" "-p" "prompt" "--model" "gpt-5" "--deny-tool=write" "--allow-all-tools"]
+               (vec (command-for "copilot" "falsifier" "prompt")))))
 
   (it "needs a known role"
     (should-contain "dispatch needs a role" (:err (support/captured #(dispatch/dispatch []))))

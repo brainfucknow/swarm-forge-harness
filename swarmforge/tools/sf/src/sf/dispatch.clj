@@ -24,18 +24,27 @@
 (defn- extra-args [variable]
   (some-> (shell/env variable nil) str/trim (str/split #"\s+")))
 
-(defn- command-for [backend role prompt]
+(defn- command-for
+  "The backend command that runs role on prompt. A gate runs without edit
+  permissions: claude in its default permission mode with the editing tools
+  disallowed, codex in its read-only sandbox, copilot with the write tool
+  denied."
+  [backend role prompt]
   (let [tier (config/role-field role 2)
-        model (config/tier-field tier ({"claude" 2 "codex" 3 "copilot" 4} backend 2))]
+        model (config/tier-field tier ({"claude" 2 "codex" 3 "copilot" 4} backend 2))
+        gate? (config/gate? role)]
     (case backend
-      "claude" (concat ["claude" "-p" "--permission-mode" "acceptEdits"]
+      "claude" (concat ["claude" "-p" "--permission-mode" (if gate? "default" "acceptEdits")]
+                       (when gate? ["--disallowedTools=Edit" "--disallowedTools=Write" "--disallowedTools=NotebookEdit"])
                        (when (and model (not= "inherit" model)) ["--model" model])
                        (extra-args "SWARMFORGE_CLAUDE_ARGS")
                        [prompt])
-      "codex" (concat ["codex" "exec" "--full-auto" "-c" (str "model_reasoning_effort=\"" model "\"")]
+      "codex" (concat ["codex" "exec"] (if gate? ["--sandbox" "read-only"] ["--full-auto"])
+                      ["-c" (str "model_reasoning_effort=\"" model "\"")]
                       (extra-args "SWARMFORGE_CODEX_ARGS")
                       [prompt])
       "copilot" (concat ["copilot" "-p" prompt "--model" (str model)]
+                        (when gate? ["--deny-tool=write"])
                         (extra-args "SWARMFORGE_COPILOT_ARGS"))
       (shell/die "unknown backend '" backend "'"))))
 

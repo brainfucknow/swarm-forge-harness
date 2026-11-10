@@ -21,6 +21,12 @@
     (when (and model (not= "inherit" model))
       (str "model: " model "\n"))))
 
+(def ^:private gate-tools
+  "The tools of a gate's agent, by harness: reading, searching and the shell
+  for sf show and git, without the editing tools."
+  {:claude "Read, Grep, Glob, Bash"
+   :copilot "[\"read\", \"search\", \"shell\"]"})
+
 (defn- agent-files [role tier gate?]
   (let [body (str/replace (shell/template (if gate? "gate-adapter.md" "adapter.md")) "{{role}}" role)
         description (if gate?
@@ -28,11 +34,11 @@
                       (str "SwarmForge " role " role. " (role-summary role) " Use for a task whose stage is " role "."))]
     {(str ".claude/agents/" role ".md")
      (str "---\nname: " role "\ndescription: " description "\nmodel: " (config/tier-field tier 2)
-          "\n---\n\n" body)
+          (when gate? (str "\ntools: " (:claude gate-tools))) "\n---\n\n" body)
 
      (str ".github/agents/" role ".agent.md")
      (str "---\nname: " role "\ndescription: " description "\nmodel: " (config/tier-field tier 4)
-          "\ntools: [\"*\"]\ninclude-custom-instructions: true\n---\n\n" body)
+          "\ntools: " (if gate? (:copilot gate-tools) "[\"*\"]") "\ninclude-custom-instructions: true\n---\n\n" body)
 
      (str ".codex/agents/" role ".toml")
      (str "name = \"" role "\"\ndescription = \"" description "\"\nmodel_reasoning_effort = \""
@@ -70,7 +76,7 @@
   (str/replace text
                (if (str/ends-with? path ".toml")
                  #"(?m)^model_reasoning_effort = \"[^\r\n]*\"\n"
-                 #"(?m)^model: [^\r\n]*\n") ""))
+                 #"(?m)^(?:model|tools): [^\r\n]*\n") ""))
 
 (defn- legacy-ownership
   "The adapters on disk that sf adapters wrote for a role prompt, as a stage or
