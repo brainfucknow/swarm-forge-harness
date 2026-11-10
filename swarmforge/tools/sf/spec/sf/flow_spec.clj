@@ -120,3 +120,24 @@
   (it "refuses a task without a branch"
     (should-be-nil (flow/finish-action true nil false))
     (should-be-nil (flow/finish-action false nil true))))
+
+(describe "operator commands"
+  (it "are refused to a dispatched role or gate"
+    (should= "approve is the operator's; the dispatched specifier cannot run it"
+             (flow/operator-refusal "approve" "specifier")))
+
+  (it "run when sf dispatch started nothing"
+    (should-be-nil (flow/operator-refusal "approve" nil))
+    (should-be-nil (flow/operator-refusal "approve" ""))))
+
+(describe "operator-record"
+  (it "finds the first record the operator wrote"
+    (should= {:record "approval" :from "operator"}
+             (flow/operator-record [{:record "review" :from "specifier"}
+                                    {:record "approval" :from "operator"}
+                                    {:record "handoff" :from "specifier"}])))
+
+  (it "is nil when roles wrote every record"
+    (should-be-nil (flow/operator-record [{:record "review" :from "specifier"}]))
+    (should-be-nil (flow/operator-record []))))
+

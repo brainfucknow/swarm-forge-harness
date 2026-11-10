@@ -72,6 +72,13 @@ Use `sf show <id>` when the brief omits needed history or evidence.
 | `sf route <id> <route>` | Changes an open task's route, retaining the current stage. Roles must follow catalogue order. |
 | `sf next <role>` | Lists open tasks at that stage needing nothing; blocked tasks stay hidden. |
 
+`sf approve`, `sf reject`, `sf answer`, `sf finish` and a route change are the
+operator's. `sf dispatch` and `sf run` start each role and gate with
+`SWARMFORGE_DISPATCHED` set to its name, and those commands refuse to run
+under it. `sf run` also stops when a stage it dispatched added an operator
+record. Subagents that the session starts share the session's environment,
+so for them this rule rests on the role prompts.
+
 For an `audit` role, the first handoff or review at a HEAD exits 3 with
 `AUDIT_REQUIRED`, recording nothing. Complete the self-review before retrying
 at that HEAD; a new commit requires a new audit. Pending audit state lives

@@ -88,6 +88,11 @@
                (take 6 cmd))
       (should-contain (str "do your role's work for task " id) (last cmd))))
 
+  (it "tells the backend which role it runs, so operator commands refuse it"
+    (doseq [backend dispatch/backends]
+      (let [id (new-id (str "Mark " backend))]
+        (should= [{"SWARMFORGE_DISPATCHED" "coder"}] (map :extra-env (dispatched "coder" id backend))))))
+
   (it "runs every backend in the task worktree, created on the task branch when missing"
     (doseq [backend dispatch/backends]
       (let [id (new-id (str "Add " backend))
@@ -222,6 +227,24 @@
           (let [result (support/captured #(dispatch/run [id]))]
             (should= 1 (:status result))
             (should-contain (str "gate falsifier changed task " id) (:err result)))))))
+
+  (it "stops when a stage records what only the operator records"
+    (doseq [[title stage operator] [["Approve" "specifier" #(task/approve [%])]
+                                    ["Answer" "coder" #(do (task/ask [% "Which?"]) (task/answer [% "This."]))]
+                                    ["Route" "coder" #(task/route [% "coder,cleaner"])]]]
+      (let [id (new-id title "--route" "specifier,coder,cleaner")
+            ran (atom [])]
+        (when (= "coder" stage)
+          (task/review [id "-m" "spec"])
+          (task/approve [id]))
+        (with-redefs [dispatch/dispatch (fn [[role id _]]
+                                          (swap! ran conj role)
+                                          (when (= "specifier" role) (task/review [id "-m" "spec"]))
+                                          (operator id))]
+          (let [result (support/captured #(dispatch/run [id]))]
+            (should= 1 (:status result))
+            (should-contain (str "stage:" stage " added the operator's ") (:err result))))
+        (should= [stage] @ran))))
 
   (it "stops when a stage makes no progress"
     (let [id (new-id "Add login")]

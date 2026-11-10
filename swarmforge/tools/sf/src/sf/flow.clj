@@ -39,6 +39,19 @@
        (when (or (nil? reviewed) (not= reviewed head))
          "specification changed since review; run sf review again"))))
 
+(defn operator-refusal
+  "Refuses the operator's command when dispatched names the role or gate that
+  sf dispatch runs: approval, answers, rejections, routes and finishing are
+  the operator's."
+  [command dispatched]
+  (when-not (str/blank? dispatched)
+    (str command " is the operator's; the dispatched " dispatched " cannot run it")))
+
+(defn operator-record
+  "The first record that the operator wrote among records, or nil."
+  [records]
+  (first (filter #(= "operator" (:from %)) records)))
+
 (defn reviewed-commit [records]
   (:commit (last (filter #(= "review" (:record %)) records))))
 

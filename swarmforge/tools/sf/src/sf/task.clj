@@ -29,6 +29,11 @@
   [refusal]
   (when refusal (shell/die refusal)))
 
+(defn- operator-only!
+  "Stops when a role or gate that sf dispatch runs tries the operator's command."
+  [command]
+  (refuse (flow/operator-refusal command (shell/env "SWARMFORGE_DISPATCHED" nil))))
+
 (defn- open-task
   "The task that arg names; stops when it is finished."
   [arg]
@@ -104,7 +109,8 @@
 (defn route [[id-arg spec]]
   (if (str/blank? spec)
     (println (:route (store/state (store/resolve-id id-arg))))
-    (let [id (open-task id-arg)
+    (let [_ (operator-only! "route")
+          id (open-task id-arg)
           route (config/resolve-route spec)]
       (write! id "route" "operator"
               (fn [state] (refuse (flow/route-refusal state route)) {:route route}))
@@ -191,6 +197,7 @@
     (println (str "ASKED: " id " waits for the operator"))))
 
 (defn answer [[id-arg & args]]
+  (operator-only! "answer")
   (let [id (open-task id-arg)
         text (options/free-text args "answer needs text")
         rec (write! id "answer" "operator" (constantly {:text text :needs "none"}))]
@@ -206,6 +213,7 @@
     (println (str "REVIEW: " id " waits for operator approval"))))
 
 (defn approve [[id-arg]]
+  (operator-only! "approve")
   (let [id (open-task id-arg)
         state (store/state id)
         to (flow/next-stage state nil)]
@@ -223,6 +231,7 @@
     (handoff [id] {:role (acting-role state) :audit-passed? true})))
 
 (defn reject [[id-arg & args]]
+  (operator-only! "reject")
   (let [id (open-task id-arg)
         text (options/free-text args "reject needs a reason")
         rec (write! id "changes-requested" "operator"
@@ -301,6 +310,7 @@
   its worktree and branch. Refuses a worktree with uncommitted changes. Run
   again after the operator commits a conflicting merge, it completes it."
   [[id-arg & args]]
+  (operator-only! "finish")
   (let [id (store/resolve-id id-arg)
         {:keys [target]} (options/parse "finish" args {"--into" :target} {})
         _ (when (store/merging?) (shell/die "a merge is in progress; commit the merge first"))
