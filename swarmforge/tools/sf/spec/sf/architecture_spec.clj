@@ -24,12 +24,13 @@
 
 (def ^:private pure
   "The high-level namespaces: plain values in and out, no IO."
-  '#{sf.lore sf.record sf.flow sf.feature-block sf.coverage-args sf.catalogue})
+  '#{sf.lore sf.record sf.flow sf.feature-block sf.coverage-args sf.catalogue sf.runtime})
 
 (def ^:private allowed
   "The sf namespaces each sf namespace may require. Dependencies point from the
   IO-near namespaces toward the pure ones; nothing requires sf.cli."
   '{sf.shell #{}
+    sf.runtime #{}
     sf.lore #{}
     sf.record #{}
     sf.flow #{sf.record}

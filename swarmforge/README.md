@@ -27,7 +27,8 @@ this repository.
 The [handoff protocol](handoff-protocol.md) covers task state, approval, merge
 recovery, and sharing the mutation cache on `swarmforge/metrics`.
 
-Prerequisites: `git`, `bash`, and [Babashka](https://babashka.org) (`bb`).
+Prerequisites: `git`, `bash`, and [Babashka](https://babashka.org) (`bb`) 1.12.205
+or newer; `sf` refuses an older `bb`.
 Run `swarmforge/bin/sf init` once per clone.
 
 Start a task from the harness with `/swarm <feature request>`, or by hand:
