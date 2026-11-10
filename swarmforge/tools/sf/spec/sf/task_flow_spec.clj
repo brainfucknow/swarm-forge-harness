@@ -347,7 +347,7 @@
       (should-not (fs/exists? (worktree id)))
       (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
 
-  (it "verifies the committed conflict resolution before it rewords HEAD or removes anything"
+  (it "verifies the committed conflict resolution before it records the finish or removes anything"
     (commit-on-main "swarmforge/verify.conf" "grep -qv resolved a\n")
     (let [id (conflicting-task)
           dir (worktree id)]
@@ -365,6 +365,20 @@
       (should= (str "VERIFY: passed: grep -qv resolved a\nFINISHED: " id " merged into main") (out task/finish [id]))
       (should= (str "sf finished: " id) (git *dir* "log" "-1" "--format=%s"))
       (should-not (fs/exists? dir))))
+
+  (it "refuses a --to that leaves the route or skips it to done, and moves nothing"
+    (let [id (new-id "Add login" "--route" "coder,cleaner")
+          tip #(git *dir* "rev-parse" (str "swarm/" id))
+          before (tip)]
+      (fails-with "--to done skips the rest of route 'coder,cleaner' after stage:coder"
+                  #(task/handoff [id "--to" "done"] {:audit-passed? true}))
+      (fails-with "--to qa is not on route 'coder,cleaner' at or after stage:coder"
+                  #(task/handoff [id "--to" "qa"] {:audit-passed? true}))
+      (should= before (tip))
+      (should-contain "coder -> cleaner" (out task/handoff [id "--to" "cleaner"] {:audit-passed? true}))
+      (fails-with "--to coder is not on route 'coder,cleaner' at or after stage:cleaner"
+                  #(task/handoff [id "--to" "coder"] {:audit-passed? true}))
+      (should-contain "cleaner -> done" (out task/handoff [id "--to" "done"] {:audit-passed? true}))))
 
   (it "hands a non-specifier task to done and refuses to finish an unfinished one"
     (let [id (new-id "Add login" "--route" "coder")]

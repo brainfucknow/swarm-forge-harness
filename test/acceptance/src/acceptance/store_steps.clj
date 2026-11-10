@@ -80,11 +80,15 @@
   (must-in world (:repo world) "sf" "start" (id-of world name))
   world)
 
-(defn- handoff-to-done [world name]
-  (let [id (id-of world name)
-        stage (must-in world (:repo world) "sf" "stage" id)]
-    (when (not= "done" stage)
-      (must-in world (:repo world) "sf" "handoff" id "--to" "done"))))
+(defn- handoff-to-done
+  "Hands the task off role after role along its route until it is at done."
+  [world name]
+  (let [id (id-of world name)]
+    (loop [handoffs 0]
+      (when (not= "done" (must-in world (:repo world) "sf" "stage" id))
+        (check (< handoffs 20) (str "task " name " did not reach done"))
+        (must-in world (:repo world) "sf" "handoff" id)
+        (recur (inc handoffs))))))
 
 (defn- commit [world name message env]
   (run-in world (worktree world name) ["git" "commit" "-q" "--allow-empty" "-m" (unescape message)] env))

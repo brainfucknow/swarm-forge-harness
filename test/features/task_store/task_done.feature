@@ -1,8 +1,9 @@
 Feature: sf task done
 
-  The handoff that moves a task to stage done (sf handoff to the last role's
-  successor, sf handoff --to done, or sf approve on a route whose last role
-  is the specifier) is a record commit like any other and changes no file.
+  The handoff that moves a task to stage done (sf handoff from the route's
+  last role, with or without --to done, or sf approve on a route whose last
+  role is the specifier) is a record commit like any other and changes no
+  file.
   For a task created before this change, it removes every file named
   <id>.md from the branch, so no task file reaches the merge.
 
@@ -29,7 +30,7 @@ Feature: sf task done
     Examples:
       | route    | command                 |
       | coder    | sf handoff $A           |
-      | coder,qa | sf handoff $A --to done |
+      | coder    | sf handoff $A --to done |
 
   # sf task done 2
   Scenario: sf task done 2: sf approve on a route that ends at the specifier changes no file

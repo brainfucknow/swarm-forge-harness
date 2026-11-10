@@ -68,7 +68,7 @@ Use `sf show <id>` when the brief omits needed history or evidence.
 | `sf review` | Specifier requests operator approval of its committed specification. |
 | `sf approve` / `sf reject` | Approve advances the specifier; reject requests changes. Approval must match the reviewed role commit; a new specification needs review again. An answer or rejection is not approval. |
 | `sf ask` / `sf answer` | Block for an operator decision, then resume the same role. |
-| `sf handoff` | Requires a clean task worktree and needs `none`; records HEAD and advances to the next route role, then `done`. Use `--to` only as the role prompt directs. |
+| `sf handoff` | Requires a clean task worktree and needs `none`; records HEAD and advances to the next route role, then `done`. Use `--to` only as the role prompt directs; it names the current stage or a later route role, and `done` only after the route's last role. |
 | `sf route <id> <route>` | Changes an open task's route, retaining the current stage. Roles must follow catalogue order. |
 | `sf next <role>` | Lists open tasks at that stage needing nothing; blocked tasks stay hidden. |
 

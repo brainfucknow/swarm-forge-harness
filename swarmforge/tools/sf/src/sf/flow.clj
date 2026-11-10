@@ -18,6 +18,17 @@
   [{:keys [stage route]} to]
   (or (not-empty to) (second (drop-while #(not= stage %) (route-list route))) "done"))
 
+(defn to-refusal
+  "Refuses a --to that skips past the route: to must be the stage, a later role
+  on the route, or done after the route's last role."
+  [{:keys [stage route] :as state} to]
+  (when-not (or (str/blank? to)
+                (some #{to} (drop-while #(not= stage %) (route-list route)))
+                (= to (next-stage state nil)))
+    (if (= "done" to)
+      (str "--to done skips the rest of route '" route "' after stage:" stage "; hand off to the next role")
+      (str "--to " to " is not on route '" route "' at or after stage:" stage))))
+
 (defn handoff-refusal
   ([state] (handoff-refusal state (:commit state)))
   ([state head]

@@ -174,6 +174,7 @@
         {:keys [to summary]} (options/handoff args)
         state (store/state id)
         _ (refuse (flow/handoff-refusal state))
+        _ (refuse (flow/to-refusal state to))
         from (or role (acting-role state))
         to (flow/next-stage state to)
         _ (when (not= "done" to) (config/require-role to))

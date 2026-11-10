@@ -30,6 +30,23 @@
   (it "is the role that --to names"
     (should= "qa" (flow/next-stage at-coder "qa"))))
 
+(describe "to-refusal"
+  (it "lets --to name the stage or a later role on the route"
+    (should-be-nil (flow/to-refusal at-coder nil))
+    (should-be-nil (flow/to-refusal at-coder "coder"))
+    (should-be-nil (flow/to-refusal at-coder "cleaner")))
+
+  (it "lets --to name done only after the route's last role"
+    (should-be-nil (flow/to-refusal (assoc at-coder :stage "cleaner") "done"))
+    (should= "--to done skips the rest of route 'specifier,coder,cleaner' after stage:coder; hand off to the next role"
+             (flow/to-refusal at-coder "done")))
+
+  (it "refuses an earlier role and a role off the route"
+    (should= "--to specifier is not on route 'specifier,coder,cleaner' at or after stage:coder"
+             (flow/to-refusal at-coder "specifier"))
+    (should= "--to qa is not on route 'specifier,coder,cleaner' at or after stage:coder"
+             (flow/to-refusal at-coder "qa"))))
+
 (describe "refusals"
   (it "refuses a handoff while the task waits on the operator"
     (should-be-nil (flow/handoff-refusal at-coder))
