@@ -1,5 +1,5 @@
 (ns sf.record-spec
-  (:require [speclj.core :refer [describe it should=]]
+  (:require [speclj.core :refer [describe it should= should should-not]]
             [sf.record :as record]))
 
 (describe "slug"
@@ -78,6 +78,28 @@
                   "SwarmForge-Merged-Into: main\n")
              (record/message {:task "t-1" :record "finished" :from "operator" :stage "done"
                               :route "coder" :needs "none" :merged-into "main"}))))
+
+(describe "a review record"
+  (it "names the commit it reviewed in a last trailer and reads it back"
+    (let [review {:task "t-1" :record "review" :from "specifier" :stage "specifier" :route "specifier,coder"
+                  :needs "approval" :reviewed "0123456789abcdef0123456789abcdef01234567"}
+          message (record/message review)]
+      (should= "SwarmForge-Reviewed: 0123456789abcdef0123456789abcdef01234567"
+               (last (clojure.string/split-lines message)))
+      (should= (assoc review :sha "abc1234" :commit "par1234")
+               (record/parse {:sha "abc1234" :parents ["par1234"] :message message
+                              :trailers (drop 2 (clojure.string/split-lines message))})))))
+
+(describe "same-commit?"
+  (it "matches a full sha and its abbreviation either way round"
+    (should (record/same-commit? "0123456789abcdef" "0123456"))
+    (should (record/same-commit? "0123456" "0123456789abcdef"))
+    (should (record/same-commit? "0123456" "0123456")))
+
+  (it "tells different commits and missing ones apart"
+    (should-not (record/same-commit? "0123456" "0123457"))
+    (should-not (record/same-commit? nil "0123456"))
+    (should-not (record/same-commit? "0123456" ""))))
 
 (describe "parse"
   (it "reads a record commit back"

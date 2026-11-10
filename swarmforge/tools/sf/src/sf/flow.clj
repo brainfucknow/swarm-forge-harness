@@ -47,7 +47,7 @@
    (when (not= "approval" (:needs state)) "task is not waiting for approval"))
   ([state reviewed head]
    (or (approval-refusal state)
-       (when (or (nil? reviewed) (not= reviewed head))
+       (when-not (record/same-commit? reviewed head)
          "specification changed since review; run sf review again"))))
 
 (defn operator-refusal
@@ -63,8 +63,13 @@
   [records]
   (first (filter #(= "operator" (:from %)) records)))
 
-(defn reviewed-commit [records]
-  (:commit (last (filter #(= "review" (:record %)) records))))
+(defn reviewed-commit
+  "The commit the newest review record reviewed: the one it names, else, for a
+  review made before sf named it, the commit the record sits on. A rebase
+  moves the record onto another commit but keeps the one it names."
+  [records]
+  (let [{:keys [reviewed commit]} (last (filter #(= "review" (:record %)) records))]
+    (or reviewed commit)))
 
 (defn route-refusal
   "Refuses a route that drops the stage of an open task."

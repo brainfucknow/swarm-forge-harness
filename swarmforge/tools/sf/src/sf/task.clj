@@ -210,7 +210,8 @@
         head (role-head id)
         role (acting-role (store/state id))]
     (audit/gate id role head)
-    (write! id "review" role (constantly {:text summary :needs "approval"}))
+    (write! id "review" role (constantly {:text summary :needs "approval"
+                                          :reviewed (git (shell/repo-root) "rev-parse" head)}))
     (println (str "REVIEW: " id " waits for operator approval"))))
 
 (defn approve [[id-arg]]

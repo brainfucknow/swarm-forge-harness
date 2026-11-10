@@ -110,8 +110,11 @@ writes the finished-record trailers manually.
 ## Sharing
 
 Push `swarm/<id>` to share its work and records; fetch it in another clone.
-Record commits change no files, so rebasing them introduces no conflicts; the
-newest record supplies the state.
+Record commits change no files, so a rebase replays them without conflicts,
+but onto other role commits: a record then sits on a commit its role never
+saw. Merge a fetched task branch rather than rebasing it. A `review` record
+names the commit it reviewed, so `sf approve` refuses a review that a rebase
+moved; run `sf review` again.
 
 Mutation manifests live on the orphan branch `swarmforge/metrics`, mirroring
 `.metrics/mutate/` and `.metrics/gherkin/`. `sf start` loads missing files;

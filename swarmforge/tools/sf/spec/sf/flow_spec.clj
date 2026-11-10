@@ -30,6 +30,23 @@
   (it "is the role that --to names"
     (should= "qa" (flow/next-stage at-coder "qa"))))
 
+(describe "reviewed-commit"
+  (it "is the commit the newest review names"
+    (should= "0123456789" (flow/reviewed-commit [{:record "review" :commit "aaaaaaa" :reviewed "aaaaaaa000"}
+                                                 {:record "review" :commit "bbbbbbb" :reviewed "0123456789"}
+                                                 {:record "approval" :commit "bbbbbbb"}])))
+
+  (it "is the commit under a review that names none"
+    (should= "bbbbbbb" (flow/reviewed-commit [{:record "review" :commit "bbbbbbb"}]))))
+
+(describe "approval of a moved review"
+  (it "accepts the reviewed commit, full or abbreviated"
+    (should-be-nil (flow/approval-refusal {:needs "approval"} "0123456789abcdef" "0123456")))
+
+  (it "refuses a head that is not the reviewed commit"
+    (should= "specification changed since review; run sf review again"
+             (flow/approval-refusal {:needs "approval"} "0123456789abcdef" "fedcba9"))))
+
 (describe "to-refusal"
   (it "lets --to name the stage or a later role on the route"
     (should-be-nil (flow/to-refusal at-coder nil))
