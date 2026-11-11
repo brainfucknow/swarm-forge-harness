@@ -3,6 +3,11 @@
 Run `swarmforge/bin/sf-cs` from the task worktree. It needs Babashka, the
 .NET SDK, and Node with `npx`; reports go under `./tmp/`.
 
+The minimum supported .NET SDK is 10, the currently supported one. .NET 8 is
+out of support; do not work around it. Ask `dotnet` and MSBuild for toolchain
+facts (SDK version, project and MSBuild properties, packages) instead of
+re-implementing their rules in `sf-cs`.
+
 | Constitution tool | Command | Behind it |
 |---|---|---|
 | Startup tools | `sf-cs tools` | `dotnet tool install dotnet-stryker` in a local manifest, `dotnet tool restore`, and a check that `node`, `npx`, and `dotnet` are on PATH. |
@@ -73,10 +78,8 @@ means no test reaches the line.
 
 - Dependency audit, when the task changes a `*.csproj`,
   `Directory.Packages.props`, `Directory.Build.props` or `packages.lock.json`:
-  `dotnet restore <project>` on SDKs before .NET 10, then
-  `dotnet list <project> package --vulnerable --include-transitive`
-  (`dotnet package list ...` on .NET 10+). It needs the NuGet feeds. Read its
-  output, not only its exit status.
+  `dotnet package list <project> --vulnerable --include-transitive`. It needs
+  the NuGet feeds. Read its output, not only its exit status.
 
 ## Code-smell check
 

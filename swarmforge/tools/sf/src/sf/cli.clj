@@ -22,7 +22,9 @@ Operator commands
   ls [--stage ROLE] [--needs]     list open tasks
   show <id>                       show a task with all records, also once finished
   answer <id> <text>              answer a role's question and clear needs operator
-  approve <id>                    accept the specification and hand it to the next role
+  approve <id> [--rejected \"<finding> | <reason>\"]...
+                                  accept the specification and hand it to the next role;
+                                  each --rejected records a finding approved over
   reject <id> <text>              send the specification back to the specifier
   finish <id> [--into BRANCH]     refuse uncommitted work in the worktree, run swarmforge/verify.conf
                                   on the merge, then merge the task branch into BRANCH

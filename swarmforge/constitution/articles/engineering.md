@@ -30,6 +30,7 @@
 - Keep tests close to the behavior being changed.
 - Separate testable modules from environmentally unsuitable modules that open GUIs, depend on external devices, throw environment errors, emit system errors, or hang under automated tests. Maximize testable code and minimize the unsuitable boundary.
 - IO-near modules must call existing high-level policy and translate the result, not recompute the same domain answer.
+- Ask the toolchain (dotnet, msbuild, maven, the package manager) for its facts instead of re-implementing its rules in wrapper code.
 - Exclude environmentally unsuitable adapters from any analysis that runs tests: unit, acceptance, property, coverage, mutation, CRAP, and test-running DRY checks.
 - Keep property tests separate from normal verification. Do not include property-test tags in normal unit coverage, Gherkin acceptance mutation, language mutation tools, CRAP, or coverage commands unless the role owns property-test verification or the user explicitly asks for property tests.
 - In each increment, settle the shape of the data the slice needs before writing its logic.
