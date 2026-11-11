@@ -102,6 +102,46 @@
       (should-contain "REVIEW" (out task/review [id]))
       (should-contain (str "HANDOFF: " id " specifier -> coder") (out task/approve [id]))))
 
+  (it "records each finding the operator approves over as a Rejected trailer of the approval"
+    (let [id (new-id "Add login")]
+      (out task/review [id])
+      (should-contain (str "HANDOFF: " id " specifier -> coder")
+                      (out task/approve [id "--rejected" " DEFECT, LOW: a | b | accepted " "--rejected" "C | d"]))
+      (let [approval (git *dir* "rev-parse" "--short" (str "swarm/" id "^"))
+            trailers (str/split-lines (git *dir* "log" "-1" "--format=%(trailers:only,unfold)" approval))]
+        (should= "sf approval: " (subs (git *dir* "log" "-1" "--format=%s" approval) 0 13))
+        (should= ["Rejected: DEFECT, LOW: a | b | accepted" "Rejected: C | d"]
+                 (filter #(str/starts-with? % "Rejected:") trailers))
+        (should= 1 (count (filter #(re-matches #"Lore-id: [0-9a-f]{8}" %) trailers)))
+        (should-contain (str "LORE: " approval " - Rejected: DEFECT, LOW: a | b | accepted\n"
+                             "LORE: " approval " - Rejected: C | d")
+                        (out task/show [id])))))
+
+  (it "writes no Lore trailer on a plain approval"
+    (let [id (new-id "Add login")]
+      (out task/review [id])
+      (out task/approve [id])
+      (should= "" (git *dir* "log" "-1" "--format=%(trailers:key=Rejected,key=Lore-id)" (str "swarm/" id "^")))))
+
+  (it "refuses a bad --rejected and leaves the task waiting for approval"
+    (let [id (new-id "Add login")
+          tip #(git *dir* "rev-parse" (str "swarm/" id))]
+      (out task/review [id])
+      (let [before (tip)]
+        (doseq [[text args] [["needs a value" ["--rejected"]]
+                             ["needs '<finding> | <reason>'" ["--rejected" "A|b"]]
+                             ["needs '<finding> | <reason>', got 'A |'" ["--rejected" "A | "]]
+                             ["one line" ["--rejected" "A | b\nc"]]
+                             ["unknown approve argument '--rejectd'" ["--rejectd" "A | b"]]
+                             ["unknown approve argument 'extra'" ["extra"]]]]
+          (fails-with text #(task/approve (into [id] args)))
+          (should= before (tip)))
+        (should= (str id "\tspecifier\tapproval\tspecifier,coder,cleaner\tAdd login") (out task/ls ["--needs"])))))
+
+  (it "keeps the existing approval refusals with --rejected"
+    (let [id (new-id "Add login")]
+      (fails-with "not waiting for approval" #(task/approve [id "--rejected" "A | b"]))))
+
   (it "keeps the task with the specifier on a rejection"
     (let [id (new-id "Add login")]
       (fails-with "not waiting for approval" #(task/reject [id "no"]))

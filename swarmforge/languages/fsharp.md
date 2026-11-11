@@ -57,8 +57,8 @@ Acceptance Pipeline Specification tools and the project's runtime/handlers.
 - Code scanner: none. The SDK's security analyzers skip F# and no maintained
   F# scanner exists, so an F# project adds
   `Security code scanner absent: <reason>` to `project.md`.
-- Dependency audit: as in [csharp.md](csharp.md#security-scanners), restore
-  included, with `*.fsproj` in place of `*.csproj` among the dependency files.
+- Dependency audit: as in [csharp.md](csharp.md#security-scanners), with
+  `*.fsproj` in place of `*.csproj` among the dependency files.
 
 ## Code-smell check
 

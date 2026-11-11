@@ -1,5 +1,5 @@
 (ns sf.record-spec
-  (:require [speclj.core :refer [describe it should= should should-not]]
+  (:require [speclj.core :refer [describe it should= should should-not should-be-nil]]
             [sf.record :as record]))
 
 (describe "slug"
@@ -83,6 +83,14 @@
                   "SwarmForge-Stage: coder\nSwarmForge-Route: coder\nSwarmForge-Needs: none\n")
              (record/message {:task "t-1" :record "approval" :from "operator"
                               :stage "coder" :route "coder" :needs "none"})))
+
+  (it "puts a Lore-id and one Rejected trailer per value, in order, above the snapshot trailers"
+    (should= (str "sf approval: t-1\n\n"
+                  "Lore-id: 0a1b2c3d\nRejected: A | b\nRejected: C | x | d\n"
+                  "SwarmForge-Task: t-1\nSwarmForge-Record: approval\nSwarmForge-From: operator\n"
+                  "SwarmForge-Stage: coder\nSwarmForge-Route: coder\nSwarmForge-Needs: none\n")
+             (record/message {:task "t-1" :record "approval" :from "operator" :stage "coder" :route "coder"
+                              :needs "none" :lore-id "0a1b2c3d" :rejected ["A | b" "C | x | d"]})))
 
   (it "ends with Merged-Into for the finished record"
     (should= (str "sf finished: t-1\n\n"
@@ -245,3 +253,21 @@
   (it "tells equal records apart by position"
     (let [route {:record "route" :route "a,b"}]
       (should= {:records [route] :omitted 2} (record/brief [route route route] 1)))))
+
+(describe "rejected-refusal"
+  (it "accepts a finding and a reason split at the last ' | '"
+    (should-be-nil (record/rejected-refusal "DEFECT, LOW: a | b is wrong | accepted"))
+    (should-be-nil (record/rejected-refusal "A | b")))
+
+  (it "refuses a value with no ' | '"
+    (should= "--rejected needs '<finding> | <reason>', got 'A|b'" (record/rejected-refusal "A|b"))
+    (should= "--rejected needs '<finding> | <reason>', got 'A'" (record/rejected-refusal "A")))
+
+  (it "refuses a blank finding or reason around the last ' | '"
+    (doseq [value [" | b" "A | " "A |   " "A | b |  " "  |  "]]
+      (should= (str "--rejected needs a finding and a reason around its last ' | ', got '" value "'")
+               (record/rejected-refusal value))))
+
+  (it "refuses a value of more than one line"
+    (doseq [value ["A | b\nc" "A\n | b" "A | b\rc"]]
+      (should= "--rejected takes one line" (record/rejected-refusal value)))))
