@@ -8,13 +8,17 @@
             [sf.shell :as shell]
             [sf.store :as store]))
 
+(defn- commits-after
+  "The first-parent commits of rev after base, as lore/read-log reads them."
+  [base rev]
+  (lore/read-log (shell/must {:dir (shell/repo-root)} "git" "log" "--reverse" "--first-parent"
+                             (str "--format=" lore/log-format) (str base ".." rev))))
+
 (defn- lore-commits
   "The first-parent commits of rev after the created record, as lore/read-log
   reads them."
   [rev records]
-  (when-let [base (flow/created-commit records)]
-    (lore/read-log (shell/must {:dir (shell/repo-root)} "git" "log" "--reverse" "--first-parent"
-                               (str "--format=" lore/log-format) (str base ".." rev)))))
+  (some-> (flow/created-commit records) (commits-after rev)))
 
 (defn- record-history
   "The task's :title and :request, its :records with their files and the
@@ -75,3 +79,35 @@
                     (str/join "\n\n" (map record/block shown))
                     (str/join "\n" (remove nil? (cons (omitted-line "LORE-OMITTED" lore-omitted "superseded or evidence lines" id)
                                                          lore))))))
+
+(defn- harvested
+  "The task as sf harvest prints it, from its records on the first-parent
+  history of rev. A history without the created record (cut off by a shallow
+  clone) makes it truncated: no title or request, and the commits after its
+  oldest readable record."
+  [id status rev records]
+  (let [created (flow/created-commit records)]
+    (merge (if created (store/title-and-request records) {:title "" :request ""})
+           {:id id :status status :truncated (nil? created) :records records
+            :commits (commits-after (or created (:sha (first records))) rev)})))
+
+(defn- finished-task [{:keys [task sha] :as finished}]
+  (let [rev (str sha "^2")
+        records (store/records-at rev task)]
+    (assoc (harvested task "finished" rev (or (not-empty records) [finished]))
+           :records (concat records [finished]))))
+
+(defn- open-task
+  "The open task id, or nil, after a warning, when its branch has no record."
+  [id]
+  (let [records (store/records-at (store/ref-of id) id)]
+    (if (seq records)
+      (harvested id "open" (store/ref-of id) records)
+      (shell/warn "swarm/" id " has no records; skipped"))))
+
+(defn harvest
+  "The tasks sf harvest prints, as harvest/line takes them: the finished ones,
+  the oldest finish first, then the open ones by id."
+  []
+  (concat (map finished-task (store/finished-tasks))
+          (keep open-task (store/open-ids))))

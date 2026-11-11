@@ -82,7 +82,17 @@ so for them this rule rests on the role prompts.
 For an `audit` role, the first handoff or review at a HEAD exits 3 with
 `AUDIT_REQUIRED`, recording nothing. Complete the self-review before retrying
 at that HEAD; a new commit requires a new audit. Pending audit state lives
-under `.swarmforge/audit/<id>` and is cleared when the record is written.
+under `.swarmforge/audit/<id>`: the refused HEAD and the number of refusals
+since the task's last audited record. It is cleared only once the record is
+written, so refusals before a write that failed still count. A file from an
+earlier sf holds only the HEAD and counts as one refusal.
+
+The audited role's review or handoff record carries that number in an
+sf-only `SwarmForge-Audit-Refusals` trailer, which `sf show` and `sf start`
+print as `audit-refusals: <n>`. Because the first attempt at each HEAD is
+always refused, 1 means a clean audited record and n - 1 counts the extra
+audit rounds. Records of unaudited roles, the handoff that `sf approve`
+performs, and records written before the count existed carry none.
 
 ### Finishing and recovery
 
@@ -120,6 +130,38 @@ Mutation manifests live on the orphan branch `swarmforge/metrics`, mirroring
 `.metrics/mutate/` and `.metrics/gherkin/`. `sf start` loads missing files;
 `sf handoff` saves new and changed ones without checking out that branch.
 Push `swarmforge/metrics` explicitly to share it; `sf` does not push it.
+
+## Harvest
+
+`sf harvest` takes no arguments and prints one JSON line per task for
+mining role failure patterns: finished tasks first, oldest finish merge
+first, then open tasks by id. It reads only: no ref, worktree, or file
+changes, and any role may run it. A `swarm/*` branch with no record is
+skipped with an `sf: ` line on stderr.
+
+Each line has `id`, `title`, `request`, `status` (`open` or `finished`),
+`truncated`, `stage`, `needs` and `route` (an array) from the newest record,
+plus `records` and `lore`:
+
+- `records`, oldest first, as `sf show` prints them. Every element has
+  `type`, `from`, `stage`, `needs`, `route`, `commit` (created, review and
+  handoff only), `text` (the free text of any record but created),
+  `merged_into` (finished), `rejected` (approval) and `audit_refusals`
+  (review and handoff, a number), each null where it does not apply.
+  `rejected` holds one `{finding, reason, kind, severity}` per `Rejected:`
+  trailer, split at the last ` | `; `kind` and `severity` come from a
+  `DEFECT|PREMISE, CRITICAL|HIGH|MEDIUM|LOW: ` prefix, else null. `files:`
+  are not exported.
+- `lore`: every Lore trailer `sf show` prints, evidence and superseded
+  commits included, except `Lore-id`, as `{commit, role, key, value,
+  lore_id}`, `role` null for `-`. `lore[].commit` is the commit that carries
+  the trailer; it equals a `records[].commit` only when a review or handoff
+  recorded that commit, so it is not a join key.
+
+A task whose readable history lacks its `created` record (a shallow clone)
+is `truncated`: `title` and `request` are empty, its readable records are
+listed, a commit outside the history is null, and its Lore starts after its
+oldest readable record.
 
 ## Audit
 

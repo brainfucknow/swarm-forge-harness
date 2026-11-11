@@ -6,6 +6,7 @@
             [sf.config :as config]
             [sf.flow :as flow]
             [sf.git :as plumbing]
+            [sf.harvest :as harvest]
             [sf.history :as history]
             [sf.hook :as hook]
             [sf.lore :as lore]
@@ -118,12 +119,9 @@
               (fn [state] (refuse (flow/route-refusal state route)) {:route route}))
       (println (str "ROUTE: " id " " route)))))
 
-(defn- open-ids []
-  (sort (remove (set (store/finished-ids)) (store/branch-ids))))
-
 (defn ls [args]
   (let [{:keys [stage needs]} (options/parse "ls" args {"--stage" :stage} {"--needs" :needs})]
-    (doseq [id (open-ids)
+    (doseq [id (store/open-ids)
             :let [records (store/open-records id)
                   state (last records)]
             :when (and (or (nil? stage) (= stage (:stage state)))
@@ -136,7 +134,7 @@
   (config/require-role role)
   (let [ready (filter #(let [state (store/state %)]
                          (and (= role (:stage state)) (not (flow/waiting? state))))
-                      (open-ids))]
+                      (store/open-ids))]
     (if (seq ready)
       (run! println ready)
       (println "NO_TASK"))))
@@ -182,12 +180,13 @@
         _ (when (not= "done" to) (config/require-role to))
         head (role-head id)]
     (refuse (flow/handoff-refusal state head))
-    (when-not audit-passed? (audit/gate id from head))
-    (store/write! id (fn [records]
-                       (let [state (last records)
-                             rec (flow/handoff state from to head summary)]
-                         (refuse (flow/handoff-refusal state (role-head id)))
-                         rec)))
+    (let [refusals (when-not audit-passed? (audit/gate id from head))]
+      (store/write! id (fn [records]
+                         (let [state (last records)
+                               rec (flow/handoff state from to head summary)]
+                           (refuse (flow/handoff-refusal state (role-head id)))
+                           (cond-> rec refusals (assoc :audit-refusals refusals)))))
+      (when refusals (audit/clear! id)))
     (metrics/save! id (worktree-of id))
     (when (and (= "done" to) (fs/directory? (worktree-of id)))
       (git (worktree-of id) "reset" "--quiet" "--hard"))
@@ -211,9 +210,11 @@
         summary (str/trim (options/message "specification ready for review" args))
         head (role-head id)
         role (acting-role (store/state id))]
-    (audit/gate id role head)
-    (write! id "review" role (constantly {:text summary :needs "approval"
-                                          :reviewed (git (shell/repo-root) "rev-parse" head)}))
+    (let [refusals (audit/gate id role head)]
+      (write! id "review" role (constantly (cond-> {:text summary :needs "approval"
+                                                    :reviewed (git (shell/repo-root) "rev-parse" head)}
+                                             refusals (assoc :audit-refusals refusals))))
+      (when refusals (audit/clear! id)))
     (println (str "REVIEW: " id " waits for operator approval"))))
 
 (defn- approval-fields
@@ -339,3 +340,10 @@
     (when (fs/directory? dir) (git root "worktree" "remove" dir))
     (git root "branch" "-D" (record/branch id))
     (println (str "FINISHED: " id " merged into " target))))
+
+(defn harvest
+  "Prints each task sf knows as one JSON line: the finished ones first. Reads
+  only; writes nothing."
+  [args]
+  (when (seq args) (shell/die "harvest takes no arguments"))
+  (run! (comp println harvest/line) (history/harvest)))
