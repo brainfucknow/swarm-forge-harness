@@ -16,7 +16,7 @@ hand. `sf start` and `sf show` print the records;
 - Commit first. `sf handoff` refuses an uncommitted worktree.
 - `sf handoff <id> -m "<one line>"` records your HEAD and moves the task to the next role on its route (`ROUTE:` from `sf start`). After the last role on the route it moves the task to `stage:done`. A role not on the route is not consulted; do not do its work for it.
 - Always hand off after completing a task, regardless of what changed. Formatting-only, manifest-only, audit-only, and other non-functional churn still move forward.
-- Pass `--to <role>` only when your role prompt says so. Do not send work backwards.
+- Pass `--to <role>` only when your role prompt says so. Do not send work backwards. `sf` accepts only your stage or a later role on the route, and `done` only from the route's last role.
 - Do not write long handoff summaries. One line. The commits are the content.
 - After `sf handoff`, stop and report its one-line output. Do not take another task unless your prompt tells you to.
 - If `sf handoff` or `sf review` prints `AUDIT_REQUIRED`, nothing was recorded. Do the listed self-review against the committed work, fix and commit what it finds, then run the command again. Running it again without the review defeats the gate and is a failure condition.

@@ -17,6 +17,7 @@ for fixture operations and assertions.
 | `\n`, `\t` | Newline and tab in quoted values or table cells. |
 | `$A`, `$B` | Task IDs returned by `sf new`; `$A:hex` is its seven-digit suffix. |
 | `$A:created` | Abbreviated SHA of the task's creation record. |
+| `$A:created-sha` | Full SHA of the task's creation record. |
 | `NEW` | The task created by the command under test. |
 | `C1`, `C2`, `T1`, `M1` | Commits named by fixture steps. |
 | `L1`, `L2`, `L3` | Hook-generated Lore IDs for the corresponding commits. |

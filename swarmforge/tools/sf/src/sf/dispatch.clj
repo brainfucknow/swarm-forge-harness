@@ -24,18 +24,27 @@
 (defn- extra-args [variable]
   (some-> (shell/env variable nil) str/trim (str/split #"\s+")))
 
-(defn- command-for [backend role prompt]
+(defn- command-for
+  "The backend command that runs role on prompt. A gate runs without edit
+  permissions: claude in its default permission mode with the editing tools
+  disallowed, codex in its read-only sandbox, copilot with the write tool
+  denied."
+  [backend role prompt]
   (let [tier (config/role-field role 2)
-        model (config/tier-field tier ({"claude" 2 "codex" 3 "copilot" 4} backend 2))]
+        model (config/tier-field tier ({"claude" 2 "codex" 3 "copilot" 4} backend 2))
+        gate? (config/gate? role)]
     (case backend
-      "claude" (concat ["claude" "-p" "--permission-mode" "acceptEdits"]
+      "claude" (concat ["claude" "-p" "--permission-mode" (if gate? "default" "acceptEdits")]
+                       (when gate? ["--disallowedTools=Edit" "--disallowedTools=Write" "--disallowedTools=NotebookEdit"])
                        (when (and model (not= "inherit" model)) ["--model" model])
                        (extra-args "SWARMFORGE_CLAUDE_ARGS")
                        [prompt])
-      "codex" (concat ["codex" "exec" "--full-auto" "-c" (str "model_reasoning_effort=\"" model "\"")]
+      "codex" (concat ["codex" "exec"] (if gate? ["--sandbox" "read-only"] ["--full-auto"])
+                      ["-c" (str "model_reasoning_effort=\"" model "\"")]
                       (extra-args "SWARMFORGE_CODEX_ARGS")
                       [prompt])
       "copilot" (concat ["copilot" "-p" prompt "--model" (str model)]
+                        (when gate? ["--deny-tool=write"])
                         (extra-args "SWARMFORGE_COPILOT_ARGS"))
       (shell/die "unknown backend '" backend "'"))))
 
@@ -47,7 +56,8 @@
         command (vec (command-for backend role (role-prompt role id)))
         dir (task/worktree! id)
         _ (flush)
-        {:keys [exit]} (try (p/shell {:cmd command :dir dir :continue true})
+        {:keys [exit]} (try (p/shell {:cmd command :dir dir :continue true
+                                      :extra-env {"SWARMFORGE_DISPATCHED" role}})
                             (catch java.io.IOException e
                               (shell/die backend ": " (ex-message e))))]
     (when-not (zero? exit) (shell/fail exit nil))))
@@ -74,7 +84,8 @@
 (defn run
   "Dispatches stage after stage until the task is done (exit 0) or waits on the
   operator (exit 2). When a stage it dispatched asked for approval, it first
-  runs the gates on that specification."
+  runs the gates on that specification. It stops when a stage it dispatched
+  added a record of the operator's."
   [[id-arg backend]]
   (let [id (store/resolve-id id-arg)]
     (loop [dispatched? false]
@@ -90,8 +101,11 @@
               (shell/fail 2 nil))
 
           :else
-          (do (dispatch [stage id backend])
-              (when (let [after (store/state id)]
-                      (and (= stage (:stage after)) (not (flow/waiting? after))))
-                (shell/die "stage:" stage " made no progress"))
-              (recur true)))))))
+          (let [before (count (store/open-records id))]
+            (dispatch [stage id backend])
+            (when-let [{:keys [record]} (flow/operator-record (drop before (store/open-records id)))]
+              (shell/die "stage:" stage " added the operator's " record " record; only the operator approves, rejects, answers and routes"))
+            (when (let [after (store/state id)]
+                    (and (= stage (:stage after)) (not (flow/waiting? after))))
+              (shell/die "stage:" stage " made no progress"))
+            (recur true)))))))

@@ -68,9 +68,16 @@ Use `sf show <id>` when the brief omits needed history or evidence.
 | `sf review` | Specifier requests operator approval of its committed specification. |
 | `sf approve` / `sf reject` | Approve advances the specifier; reject requests changes. Approval must match the reviewed role commit; a new specification needs review again. An answer or rejection is not approval. |
 | `sf ask` / `sf answer` | Block for an operator decision, then resume the same role. |
-| `sf handoff` | Requires a clean task worktree and needs `none`; records HEAD and advances to the next route role, then `done`. Use `--to` only as the role prompt directs. |
+| `sf handoff` | Requires a clean task worktree and needs `none`; records HEAD and advances to the next route role, then `done`. Use `--to` only as the role prompt directs; it names the current stage or a later route role, and `done` only after the route's last role. |
 | `sf route <id> <route>` | Changes an open task's route, retaining the current stage. Roles must follow catalogue order. |
 | `sf next <role>` | Lists open tasks at that stage needing nothing; blocked tasks stay hidden. |
+
+`sf new`, `sf approve`, `sf reject`, `sf answer`, `sf finish` and a route
+change are the operator's. `sf dispatch` and `sf run` start each role and gate with
+`SWARMFORGE_DISPATCHED` set to its name, and those commands refuse to run
+under it. `sf run` also stops when a stage it dispatched added an operator
+record. Subagents that the session starts share the session's environment,
+so for them this rule rests on the role prompts.
 
 For an `audit` role, the first handoff or review at a HEAD exits 3 with
 `AUDIT_REQUIRED`, recording nothing. Complete the self-review before retrying
@@ -91,16 +98,23 @@ force, then removes the branch. Rerun it to complete interrupted cleanup.
 Finished tasks refuse `sf start` and further records.
 
 If the merge conflicts, resolve and commit it in the main checkout, then
-rerun `sf finish`. It verifies that committed merge before recording and
-cleaning up. If verification fails, fix it and retry. A HEAD that contains
-the branch tip some other way, such as a host's merge, is verified and kept
-as it is. Nobody writes the finished-record trailers manually.
+rerun `sf finish`. It verifies that committed merge in the task worktree,
+detached at HEAD, before recording and cleaning up, so an uncommitted fix in
+the main checkout does not count. If verification fails, commit the fix and
+retry. When HEAD contains the branch tip without the finished record (a
+merge committed with another message, or a host's merge, with or without
+commits after it), `sf finish` commits the finished record on top of HEAD as
+a merge of the tip. It never rewrites a commit HEAD already has. Nobody
+writes the finished-record trailers manually.
 
 ## Sharing
 
 Push `swarm/<id>` to share its work and records; fetch it in another clone.
-Record commits change no files, so rebasing them introduces no conflicts; the
-newest record supplies the state.
+Record commits change no files, so a rebase replays them without conflicts,
+but onto other role commits: a record then sits on a commit its role never
+saw. Merge a fetched task branch rather than rebasing it. A `review` record
+names the commit it reviewed, so `sf approve` refuses a review that a rebase
+moved; run `sf review` again.
 
 Mutation manifests live on the orphan branch `swarmforge/metrics`, mirroring
 `.metrics/mutate/` and `.metrics/gherkin/`. `sf start` loads missing files;

@@ -54,6 +54,10 @@ Hook commands
 Environment
   SWARMFORGE_ROUTE     default route for `new` (default: feature, else non-optional roles)
   SWARMFORGE_ROLE      role name used for `from:` (default: the task's stage)
+  SWARMFORGE_DISPATCHED
+                       set by dispatch and run to the role or gate they start;
+                       new, approve, reject, answer, route changes and finish
+                       refuse to run under it
   SWARMFORGE_BACKEND   default backend for dispatch/run
   SWARMFORGE_USER, SWARMFORGE_EMAIL
                        author of record commits when git has no identity

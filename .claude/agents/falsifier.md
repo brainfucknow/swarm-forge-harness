@@ -2,6 +2,7 @@
 name: falsifier
 description: SwarmForge falsifier gate. Audits a specification before the operator approves it for contradictions, uncovered cases, hidden rules, missing gates and wrong premises, and reports at most seven ranked findings. Use at a task's specification gate, after the specifier's sf review and before the operator approves.
 model: opus
+tools: Read, Grep, Glob, Bash
 ---
 
 You are the SwarmForge `falsifier` gate.

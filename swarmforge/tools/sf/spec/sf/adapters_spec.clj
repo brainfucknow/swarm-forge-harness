@@ -78,6 +78,27 @@
       (should= 0 (:status (captured #(adapters/adapters []))))
       (should= before (snapshot))))
 
+  (it "gives the Claude and Copilot gate adapters read-only tools, and every stage all tools"
+    (write-gate!)
+    (adapters/adapters [])
+    (let [read #(slurp (str (fs/path *dir* %)))]
+      (should-contain "\ntools: Read, Grep, Glob, Bash\n" (read ".claude/agents/falsifier.md"))
+      (should-contain "\ntools: [\"read\", \"search\", \"shell\"]\n" (read ".github/agents/falsifier.agent.md"))
+      (should-not-contain "tools:" (read ".claude/agents/coder.md"))
+      (should-contain "\ntools: [\"*\"]\n" (read ".github/agents/coder.agent.md"))))
+
+  (it "replaces gate adapters that an older sf wrote with all tools, without ownership state"
+    (write-gate!)
+    (adapters/adapters [])
+    (let [before (snapshot)
+          claude (fs/path *dir* ".claude/agents/falsifier.md")
+          copilot (fs/path *dir* ".github/agents/falsifier.agent.md")]
+      (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
+      (spit (str claude) (str/replace (slurp (str claude)) "tools: Read, Grep, Glob, Bash\n" ""))
+      (spit (str copilot) (str/replace (slurp (str copilot)) "tools: [\"read\", \"search\", \"shell\"]" "tools: [\"*\"]"))
+      (should= 0 (:status (captured #(adapters/adapters []))))
+      (should= before (snapshot))))
+
   (it "removes the adapters of a gate whose row is deleted, without ownership state"
     (write-gate!)
     (adapters/adapters [])

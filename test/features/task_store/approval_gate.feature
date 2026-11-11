@@ -6,6 +6,11 @@ Feature: sf specification approval
   omit the specifier keep their normal handoffs. This is a workflow invariant,
   not authentication against someone who can edit Git directly.
 
+  The review record names the commit it reviewed in a SwarmForge-Reviewed
+  trailer. A rebase that moves the record onto another commit keeps that
+  name, so sf approve refuses it with "sf: specification changed since
+  review; run sf review again" and records nothing.
+
   Background:
     Given a project with swarmforge initialized
     And task "A" titled "Add login" was started on route "specifier,coder,qa"
@@ -81,4 +86,16 @@ Feature: sf specification approval
     And I ran "sf answer $A clarified"
     When I run "sf handoff $A"
     Then the exit status is 1
+    And the branch of task "A" did not move
+
+  # sf specification approval 8
+  Scenario: sf specification approval 8: a review that a rebase moved onto another commit is not approved
+    Given I ran "sf review $A"
+    And I ran "git checkout -q -b other C1" in the worktree of task "A"
+    And I ran "git commit -q --no-verify --allow-empty -m Other" in the worktree of task "A"
+    And I ran "git checkout -q swarm/$A" in the worktree of task "A"
+    And I ran "git rebase -q other" in the worktree of task "A"
+    When I run "sf approve $A"
+    Then the exit status is 1
+    And the error output has the line "sf: specification changed since review; run sf review again"
     And the branch of task "A" did not move

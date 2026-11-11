@@ -56,7 +56,7 @@
 (def ^:private trailers
   [["SwarmForge-Task" :task] ["SwarmForge-Record" :record] ["SwarmForge-From" :from]
    ["SwarmForge-Stage" :stage] ["SwarmForge-Route" :route] ["SwarmForge-Needs" :needs]
-   ["SwarmForge-Merged-Into" :merged-into]])
+   ["SwarmForge-Merged-Into" :merged-into] ["SwarmForge-Reviewed" :reviewed]])
 
 (defn message
   "The commit message of a record."
@@ -88,6 +88,12 @@
     (cond-> (assoc fields :sha sha
                    :commit (if (= "created" (:record fields)) sha (first parents)))
       (not (str/blank? text)) (assoc :text text))))
+
+(defn same-commit?
+  "True when a and b name the same commit, each a full or an abbreviated sha."
+  [a b]
+  (boolean (and (not (str/blank? a)) (not (str/blank? b))
+                (or (str/starts-with? a b) (str/starts-with? b a)))))
 
 (defn role-commits
   "The records, oldest first, with each :commit that names an earlier record

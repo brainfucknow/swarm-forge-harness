@@ -21,6 +21,13 @@ Feature: sf task state
   that was squash-merged while its branch remains is not finished; it stays
   at its stage until sf finish merges it.
 
+  sf handoff --to <role> names where the task goes: its stage or a later role
+  on its route, or done when the stage is the route's last role. Any other
+  --to exits 1 with "sf: --to <role> is not on route '<route>' at or after
+  stage:<stage>", or for done "sf: --to done skips the rest of route
+  '<route>' after stage:<stage>; hand off to the next role", and records
+  nothing. Only sf route, the operator's, changes which roles a task visits.
+
   Background:
     Given a project with swarmforge initialized
     And task "A" titled "Add login" was created on route "specifier,coder"
@@ -117,3 +124,16 @@ Feature: sf task state
     Then the exit status is 1
     And the error output has the line "sf: task $B is finished"
     And the branch "swarm/$B" does not exist
+
+  # sf task state 11
+  Scenario Outline: sf task state 11: sf handoff --to stays on the rest of the route
+    When I run "sf handoff $B --to <to>"
+    Then the exit status is 1
+    And the error output has the line "<error>"
+    And the branch of task "B" did not move
+
+    Examples:
+      | to        | error                                                                                         |
+      | done      | sf: --to done skips the rest of route 'coder,qa' after stage:coder; hand off to the next role |
+      | cleaner   | sf: --to cleaner is not on route 'coder,qa' at or after stage:coder                           |
+      | specifier | sf: --to specifier is not on route 'coder,qa' at or after stage:coder                         |

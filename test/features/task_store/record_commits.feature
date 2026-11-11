@@ -7,8 +7,9 @@ Feature: sf record commits
   has any, then a blank line and the trailers:
   SwarmForge-Task, SwarmForge-Record, SwarmForge-From, and the state after
   the record as SwarmForge-Stage, SwarmForge-Route and SwarmForge-Needs (none,
-  operator or approval). Free text keeps its newlines. Several arguments are
-  joined with spaces.
+  operator or approval). A review record ends with SwarmForge-Reviewed, the
+  full SHA of the commit it reviewed. Free text keeps its newlines. Several
+  arguments are joined with spaces.
 
   A record never touches the files or the index of a worktree: staged and
   unstaged changes stay as they were. A command that is refused adds no
@@ -23,12 +24,12 @@ Feature: sf record commits
     When I run "<command>"
     Then the exit status is 0
     And the tip commit of task "A" changes no file
-    And the tip commit of task "A" has the message "sf <record>: $A<text>\n\nSwarmForge-Task: $A\nSwarmForge-Record: <record>\nSwarmForge-From: specifier\nSwarmForge-Stage: specifier\nSwarmForge-Route: specifier,coder,qa\nSwarmForge-Needs: <needs>"
+    And the tip commit of task "A" has the message "sf <record>: $A<text>\n\nSwarmForge-Task: $A\nSwarmForge-Record: <record>\nSwarmForge-From: specifier\nSwarmForge-Stage: specifier\nSwarmForge-Route: specifier,coder,qa\nSwarmForge-Needs: <needs><reviewed>"
 
     Examples:
-      | command                 | record   | text            | needs    |
-      | sf ask $A Which hash?   | question | \n\nWhich hash? | operator |
-      | sf review $A spec ready | review   | \n\nspec ready  | approval |
+      | command                 | record   | text            | needs    | reviewed                                |
+      | sf ask $A Which hash?   | question | \n\nWhich hash? | operator |                                         |
+      | sf review $A spec ready | review   | \n\nspec ready  | approval | \nSwarmForge-Reviewed: $A:created-sha |
 
   # sf record commits 2
   Scenario: sf record commits 2: sf answer adds an answer record from the operator

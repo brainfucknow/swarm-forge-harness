@@ -18,6 +18,17 @@
   [{:keys [stage route]} to]
   (or (not-empty to) (second (drop-while #(not= stage %) (route-list route))) "done"))
 
+(defn to-refusal
+  "Refuses a --to that skips past the route: to must be the stage, a later role
+  on the route, or done after the route's last role."
+  [{:keys [stage route] :as state} to]
+  (when-not (or (str/blank? to)
+                (some #{to} (drop-while #(not= stage %) (route-list route)))
+                (= to (next-stage state nil)))
+    (if (= "done" to)
+      (str "--to done skips the rest of route '" route "' after stage:" stage "; hand off to the next role")
+      (str "--to " to " is not on route '" route "' at or after stage:" stage))))
+
 (defn handoff-refusal
   ([state] (handoff-refusal state (:commit state)))
   ([state head]
@@ -36,11 +47,29 @@
    (when (not= "approval" (:needs state)) "task is not waiting for approval"))
   ([state reviewed head]
    (or (approval-refusal state)
-       (when (or (nil? reviewed) (not= reviewed head))
+       (when-not (record/same-commit? reviewed head)
          "specification changed since review; run sf review again"))))
 
-(defn reviewed-commit [records]
-  (:commit (last (filter #(= "review" (:record %)) records))))
+(defn operator-refusal
+  "Refuses the operator's command when dispatched names the role or gate that
+  sf dispatch runs: new tasks, approval, answers, rejections, routes and
+  finishing are the operator's."
+  [command dispatched]
+  (when-not (str/blank? dispatched)
+    (str command " is the operator's; the dispatched " dispatched " cannot run it")))
+
+(defn operator-record
+  "The first record that the operator wrote among records, or nil."
+  [records]
+  (first (filter #(= "operator" (:from %)) records)))
+
+(defn reviewed-commit
+  "The commit the newest review record reviewed: the one it names, else, for a
+  review made before sf named it, the commit the record sits on. A rebase
+  moves the record onto another commit but keeps the one it names."
+  [records]
+  (let [{:keys [reviewed commit]} (last (filter #(= "review" (:record %)) records))]
+    (or reviewed commit)))
 
 (defn route-refusal
   "Refuses a route that drops the stage of an open task."
@@ -75,17 +104,16 @@
 
 (defn finish-action
   "What sf finish does with a done task, from whether HEAD's history has its
-  finished record (recorded?), its branch tip (nil when it has no branch),
-  HEAD's parents and whether HEAD contains the tip (tip-merged?): :merge the
-  branch when HEAD has neither, :keep HEAD when it contains the tip,
-  :unmerged when the branch moved after the recorded merge, :reword HEAD when
-  it is the merge of the tip without the record, else nil: the task is
-  finished."
-  [recorded? tip head-parents tip-merged?]
+  finished record (recorded?), its branch tip (nil when it has no branch) and
+  whether HEAD contains the tip (tip-merged?): :merge the branch when HEAD has
+  neither, :record the finished merge on top of HEAD when HEAD contains the
+  tip without the record, :keep HEAD when it has both, :unmerged when the
+  branch moved after the recorded merge, else nil: the task is finished. No
+  action rewrites a commit HEAD already has."
+  [recorded? tip tip-merged?]
   (cond (nil? tip) nil
         recorded? (if tip-merged? :keep :unmerged)
-        (and (= 2 (count head-parents)) (= tip (second head-parents))) :reword
-        tip-merged? :keep
+        tip-merged? :record
         :else :merge))
 
 (defn role-commit

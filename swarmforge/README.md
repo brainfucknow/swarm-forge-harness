@@ -27,7 +27,8 @@ this repository.
 The [handoff protocol](handoff-protocol.md) covers task state, approval, merge
 recovery, and sharing the mutation cache on `swarmforge/metrics`.
 
-Prerequisites: `git`, `bash`, and [Babashka](https://babashka.org) (`bb`).
+Prerequisites: `git`, `bash`, and [Babashka](https://babashka.org) (`bb`) 1.12.205
+or newer; `sf` refuses an older `bb`.
 Run `swarmforge/bin/sf init` once per clone.
 
 Start a task from the harness with `/swarm <feature request>`, or by hand:
@@ -68,7 +69,13 @@ Catalogue settings:
 - `gate` makes a read-only subagent that audits each specification after
   `sf review` and before approval; it is not a stage and cannot be on a route.
   The orchestrator shows its report at the gate. `sf run` dispatches the gates
-  when a specification it produced waits for approval. With the operator's
+  when a specification it produced waits for approval. `sf dispatch` starts a
+  gate without edit permissions: claude in its default permission mode with
+  Edit, Write and NotebookEdit disallowed, codex in its read-only sandbox,
+  copilot with the write tool denied. The Claude and Copilot gate adapters
+  list only reading, search and shell tools. The shell can still write, so
+  `sf run` also stops when a gate records, commits or changes the task
+  worktree. With the operator's
   consent, the orchestrator sends CRITICAL and HIGH findings back to the
   specifier once per task with `sf reject`. The shipped
   [falsifier](roles/falsifier.md) is a gate; delete its line to turn it off.

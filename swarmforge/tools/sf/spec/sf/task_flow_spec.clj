@@ -210,9 +210,10 @@
                (select-keys (captured #(task/finish [id])) [:status :err]))
       (should= tip (git *dir* "rev-parse" "MERGE_HEAD"))
       (git *dir* "commit" "-q" "--no-verify" "-m" "Resolve")
-      (let [resolved (git *dir* "log" "-1" "--format=%P %T")]
+      (let [resolved (git *dir* "rev-parse" "HEAD")]
         (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id]))
-        (should= resolved (git *dir* "log" "-1" "--format=%P %T")))
+        (should= (str resolved " " tip) (git *dir* "log" "-1" "--format=%P"))
+        (should= (git *dir* "rev-parse" (str resolved "^{tree}")) (git *dir* "rev-parse" "HEAD^{tree}")))
       (should= (str "sf finished: " id) (git *dir* "log" "-1" "--format=%s"))
       (should-contain "SwarmForge-Merged-Into: main" (git *dir* "log" "-1" "--format=%B"))
       (should-not (fs/exists? dir))
@@ -254,15 +255,18 @@
       (should= (str "sf finished: " id) (git *dir* "log" "-1" "--format=%s"))
       (should-contain "STATUS: finished" (out task/show [id]))))
 
-  (it "keeps a merge of the branch tip that the host made, below later commits"
-    (let [id (done-task)]
+  (it "keeps a merge of the branch tip that the host made, below later commits, and records the finish on top"
+    (let [id (done-task)
+          tip (git *dir* "rev-parse" (str "swarm/" id))]
       (git *dir* "merge" "-q" "--no-ff" "--no-edit" (str "swarm/" id))
       (commit-on-main "later" "x")
       (let [head (git *dir* "rev-parse" "HEAD")]
         (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id]))
-        (should= head (git *dir* "rev-parse" "HEAD")))
+        (should= (str head " " tip) (git *dir* "log" "-1" "--format=%P"))
+        (should= (str "sf finished: " id) (git *dir* "log" "-1" "--format=%s")))
       (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))
-      (should-not (fs/exists? (worktree id)))))
+      (should-not (fs/exists? (worktree id)))
+      (should-contain "STATUS: finished" (out task/show [id]))))
 
   (it "refuses to finish while the worktree has uncommitted changes, and keeps them"
     (let [id (done-task)
@@ -343,7 +347,7 @@
       (should-not (fs/exists? (worktree id)))
       (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
 
-  (it "verifies the committed conflict resolution before it rewords HEAD or removes anything"
+  (it "verifies the committed conflict resolution before it records the finish or removes anything"
     (commit-on-main "swarmforge/verify.conf" "grep -qv resolved a\n")
     (let [id (conflicting-task)
           dir (worktree id)]
@@ -361,6 +365,20 @@
       (should= (str "VERIFY: passed: grep -qv resolved a\nFINISHED: " id " merged into main") (out task/finish [id]))
       (should= (str "sf finished: " id) (git *dir* "log" "-1" "--format=%s"))
       (should-not (fs/exists? dir))))
+
+  (it "refuses a --to that leaves the route or skips it to done, and moves nothing"
+    (let [id (new-id "Add login" "--route" "coder,cleaner")
+          tip #(git *dir* "rev-parse" (str "swarm/" id))
+          before (tip)]
+      (fails-with "--to done skips the rest of route 'coder,cleaner' after stage:coder"
+                  #(task/handoff [id "--to" "done"] {:audit-passed? true}))
+      (fails-with "--to qa is not on route 'coder,cleaner' at or after stage:coder"
+                  #(task/handoff [id "--to" "qa"] {:audit-passed? true}))
+      (should= before (tip))
+      (should-contain "coder -> cleaner" (out task/handoff [id "--to" "cleaner"] {:audit-passed? true}))
+      (fails-with "--to coder is not on route 'coder,cleaner' at or after stage:cleaner"
+                  #(task/handoff [id "--to" "coder"] {:audit-passed? true}))
+      (should-contain "cleaner -> done" (out task/handoff [id "--to" "done"] {:audit-passed? true}))))
 
   (it "hands a non-specifier task to done and refuses to finish an unfinished one"
     (let [id (new-id "Add login" "--route" "coder")]

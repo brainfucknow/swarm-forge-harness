@@ -30,6 +30,40 @@
   (it "is the role that --to names"
     (should= "qa" (flow/next-stage at-coder "qa"))))
 
+(describe "reviewed-commit"
+  (it "is the commit the newest review names"
+    (should= "0123456789" (flow/reviewed-commit [{:record "review" :commit "aaaaaaa" :reviewed "aaaaaaa000"}
+                                                 {:record "review" :commit "bbbbbbb" :reviewed "0123456789"}
+                                                 {:record "approval" :commit "bbbbbbb"}])))
+
+  (it "is the commit under a review that names none"
+    (should= "bbbbbbb" (flow/reviewed-commit [{:record "review" :commit "bbbbbbb"}]))))
+
+(describe "approval of a moved review"
+  (it "accepts the reviewed commit, full or abbreviated"
+    (should-be-nil (flow/approval-refusal {:needs "approval"} "0123456789abcdef" "0123456")))
+
+  (it "refuses a head that is not the reviewed commit"
+    (should= "specification changed since review; run sf review again"
+             (flow/approval-refusal {:needs "approval"} "0123456789abcdef" "fedcba9"))))
+
+(describe "to-refusal"
+  (it "lets --to name the stage or a later role on the route"
+    (should-be-nil (flow/to-refusal at-coder nil))
+    (should-be-nil (flow/to-refusal at-coder "coder"))
+    (should-be-nil (flow/to-refusal at-coder "cleaner")))
+
+  (it "lets --to name done only after the route's last role"
+    (should-be-nil (flow/to-refusal (assoc at-coder :stage "cleaner") "done"))
+    (should= "--to done skips the rest of route 'specifier,coder,cleaner' after stage:coder; hand off to the next role"
+             (flow/to-refusal at-coder "done")))
+
+  (it "refuses an earlier role and a role off the route"
+    (should= "--to specifier is not on route 'specifier,coder,cleaner' at or after stage:coder"
+             (flow/to-refusal at-coder "specifier"))
+    (should= "--to qa is not on route 'specifier,coder,cleaner' at or after stage:coder"
+             (flow/to-refusal at-coder "qa"))))
+
 (describe "refusals"
   (it "refuses a handoff while the task waits on the operator"
     (should-be-nil (flow/handoff-refusal at-coder))
@@ -106,21 +140,38 @@
 
 (describe "what sf finish does with a done task"
   (it "merges a branch that HEAD neither contains nor has the finished record of"
-    (should= :merge (flow/finish-action false "t1" ["m0"] false))
-    (should= :merge (flow/finish-action false "t1" ["m0" "t2"] false)))
+    (should= :merge (flow/finish-action false "t1" false)))
 
   (it "keeps HEAD when HEAD's history has the finished record and the branch tip"
-    (should= :keep (flow/finish-action true "t1" ["m0"] true)))
+    (should= :keep (flow/finish-action true "t1" true)))
 
   (it "stops when the branch moved after the recorded merge"
-    (should= :unmerged (flow/finish-action true "t1" ["m0"] false)))
+    (should= :unmerged (flow/finish-action true "t1" false)))
 
-  (it "rewords HEAD when it is the merge of the branch tip without the record"
-    (should= :reword (flow/finish-action false "t1" ["m0" "t1"] true)))
+  (it "records the finished merge on HEAD when HEAD contains the branch tip without the record"
+    (should= :record (flow/finish-action false "t1" true)))
 
   (it "refuses a task without a branch"
-    (should-be-nil (flow/finish-action true nil ["m0" "t1"] false)))
+    (should-be-nil (flow/finish-action true nil false))
+    (should-be-nil (flow/finish-action false nil true))))
 
-  (it "keeps HEAD when it contains the branch tip some other way and has no record"
-    (should= :keep (flow/finish-action false "t1" ["t1" "m0"] true))
-    (should= :keep (flow/finish-action false "t1" ["m0"] true))))
+(describe "operator commands"
+  (it "are refused to a dispatched role or gate"
+    (should= "approve is the operator's; the dispatched specifier cannot run it"
+             (flow/operator-refusal "approve" "specifier")))
+
+  (it "run when sf dispatch started nothing"
+    (should-be-nil (flow/operator-refusal "approve" nil))
+    (should-be-nil (flow/operator-refusal "approve" ""))))
+
+(describe "operator-record"
+  (it "finds the first record the operator wrote"
+    (should= {:record "approval" :from "operator"}
+             (flow/operator-record [{:record "review" :from "specifier"}
+                                    {:record "approval" :from "operator"}
+                                    {:record "handoff" :from "specifier"}])))
+
+  (it "is nil when roles wrote every record"
+    (should-be-nil (flow/operator-record [{:record "review" :from "specifier"}]))
+    (should-be-nil (flow/operator-record []))))
+

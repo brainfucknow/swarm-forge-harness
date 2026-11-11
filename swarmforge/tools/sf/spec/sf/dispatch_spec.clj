@@ -88,6 +88,11 @@
                (take 6 cmd))
       (should-contain (str "do your role's work for task " id) (last cmd))))
 
+  (it "tells the backend which role it runs, so operator commands refuse it"
+    (doseq [backend dispatch/backends]
+      (let [id (new-id (str "Mark " backend))]
+        (should= [{"SWARMFORGE_DISPATCHED" "coder"}] (map :extra-env (dispatched "coder" id backend))))))
+
   (it "runs every backend in the task worktree, created on the task branch when missing"
     (doseq [backend dispatch/backends]
       (let [id (new-id (str "Add " backend))
@@ -150,10 +155,21 @@
     (let [id (new-id "Add login" "--route" "specifier,coder")
           [{:keys [cmd dir]}] (dispatched "falsifier" id "claude")]
       (should= (str *dir* "/.worktrees/" id) dir)
-      (should= ["claude" "-p" "--permission-mode" "acceptEdits" "--model" "opus"] (take 6 cmd))
+      (should= ["claude" "-p" "--permission-mode" "default"
+                "--disallowedTools=Edit" "--disallowedTools=Write" "--disallowedTools=NotebookEdit"
+                "--model" "opus"]
+               (take 9 cmd))
       (should-contain "swarmforge/roles/falsifier.md" (last cmd))
       (should-contain (str "swarmforge/bin/sf show " id) (last cmd))
       (should-not-contain "sf start" (last cmd))))
+
+  (it "dispatches a gate on codex and copilot without edit permissions, keeping the extra arguments"
+    (support/write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\n")
+    (with-redefs [shell/env (env-of {"SWARMFORGE_CODEX_ARGS" "--y" "SWARMFORGE_COPILOT_ARGS" "--allow-all-tools"})]
+      (should= ["codex" "exec" "--sandbox" "read-only" "-c" "model_reasoning_effort=\"medium\"" "--y" "prompt"]
+               (vec (command-for "codex" "falsifier" "prompt")))
+      (should= ["copilot" "-p" "prompt" "--model" "gpt-5" "--deny-tool=write" "--allow-all-tools"]
+               (vec (command-for "copilot" "falsifier" "prompt")))))
 
   (it "needs a known role"
     (should-contain "dispatch needs a role" (:err (support/captured #(dispatch/dispatch []))))
@@ -222,6 +238,24 @@
           (let [result (support/captured #(dispatch/run [id]))]
             (should= 1 (:status result))
             (should-contain (str "gate falsifier changed task " id) (:err result)))))))
+
+  (it "stops when a stage records what only the operator records"
+    (doseq [[title stage operator] [["Approve" "specifier" #(task/approve [%])]
+                                    ["Answer" "coder" #(do (task/ask [% "Which?"]) (task/answer [% "This."]))]
+                                    ["Route" "coder" #(task/route [% "coder,cleaner"])]]]
+      (let [id (new-id title "--route" "specifier,coder,cleaner")
+            ran (atom [])]
+        (when (= "coder" stage)
+          (task/review [id "-m" "spec"])
+          (task/approve [id]))
+        (with-redefs [dispatch/dispatch (fn [[role id _]]
+                                          (swap! ran conj role)
+                                          (when (= "specifier" role) (task/review [id "-m" "spec"]))
+                                          (operator id))]
+          (let [result (support/captured #(dispatch/run [id]))]
+            (should= 1 (:status result))
+            (should-contain (str "stage:" stage " added the operator's ") (:err result))))
+        (should= [stage] @ran))))
 
   (it "stops when a stage makes no progress"
     (let [id (new-id "Add login")]
