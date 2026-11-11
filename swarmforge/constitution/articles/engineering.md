@@ -32,6 +32,12 @@
 - IO-near modules must call existing high-level policy and translate the result, not recompute the same domain answer.
 - Exclude environmentally unsuitable adapters from any analysis that runs tests: unit, acceptance, property, coverage, mutation, CRAP, and test-running DRY checks.
 - Keep property tests separate from normal verification. Do not include property-test tags in normal unit coverage, Gherkin acceptance mutation, language mutation tools, CRAP, or coverage commands unless the role owns property-test verification or the user explicitly asks for property tests.
+- In each increment, settle the shape of the data the slice needs before writing its logic.
+- Make illegal combinations of the values the slice handles unrepresentable, including invariants a runtime check guards today: construct those values only through a validating constructor or a closed type, so no other code path can create an invalid one. Do not model states for future behavior.
+- Parse outside data once, in a testable module right after the adapter receives it, and trust the parsed value inside. Boundary parsing does not replace authorization or escaping at sensitive sinks.
+- Lines the task's diff adds against the merge base must not suppress compiler, type-checker, or linter diagnostics. When a suppression is unavoidable, scope it as narrowly as the tool allows and record the reason in a Lore `Constraint`.
+- Operations that may be retried or re-run (commands, handlers, migrations) must end in the same state when run twice: a retried handler that marks an order paid leaves it paid once. Where a write can be interrupted midway, re-running after the interruption must also end in that state. Exempt only relative effects (advance, increment, toggle, accumulate) and effects the specification explicitly says are not idempotent.
+- Give parties that do not need the same mutable state their own copies. Give state they must share exactly one writer, enforced by ownership (module privacy, a single owning process or type).
 
 ## Acceptance Pipeline
 - When executable Gherkin acceptance tests are useful, use github.com/unclebob/Acceptance-Pipeline-Specification and reuse the project's existing pipeline. Do not create acceptance scaffolding merely because a task visits a role.
