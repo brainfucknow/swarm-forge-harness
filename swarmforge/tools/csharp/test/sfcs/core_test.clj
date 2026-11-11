@@ -833,6 +833,12 @@
        (is (= [(str "$ dotnet test --filter " filter " --no-build")]
               (:lines (sfcs {"LANGUAGE" "fsharp"} command "--no-build")))))))
 
+(deftest symlinked-directories-are-not-walked-for-projects
+  (in-tree {"tests/Laws/Laws.fsproj" (declared "Laws")}
+    #(do (fs/create-sym-link (fs/path *repo* "linked") (fs/path *repo* "tests"))
+         (is (= ["$ dotnet test tests/Laws/Laws.fsproj --filter FullyQualifiedName~Laws."]
+                (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))))))
+
 (deftest only-sf-fs-looks-for-expecto
   (in-tree mixed-tree
     #(doseq [language [nil "vbnet"]
