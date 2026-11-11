@@ -460,6 +460,8 @@ assert_eq "a finished legacy task leaves no file" "$(git ls-tree -r --name-only 
 
 idt="$(sf new "$(printf 'Two\nlines')" -m x --route coder)"
 assert_match "a title with a line break is listed as one line" "$(sf ls)" "^$idt	coder		coder	Two lines$"
+assert_match "new writes å as aa, æ as ae and ø as oe" "$(sf new "Blåbærsyltetøy" -m x --route coder)" '^blaabaersyltetoey-[0-9a-f]{7}$'
+assert_match "new drops the accents of other letters" "$(sf new "Crème brûlée" -m x --route coder)" '^creme-brulee-[0-9a-f]{7}$'
 
 assert_fails "move-tasks is gone" sf move-tasks tasks
 printf 'tasks-dir somewhere\n' > swarmforge/project.conf

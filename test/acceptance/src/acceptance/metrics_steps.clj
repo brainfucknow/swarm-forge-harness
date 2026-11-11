@@ -59,6 +59,13 @@
 (defn- holds? [file text]
   (and (fs/exists? file) (= (str text "\n") (slurp (str file)))))
 
+(defn snapshot
+  "Each file under dir, .git included, by its path, with its bytes."
+  [dir]
+  (into {} (for [file (file-seq (fs/file dir))
+                 :when (.isFile file)]
+             [(str (fs/relativize dir file)) (vec (fs/read-all-bytes file))])))
+
 (def ^:private metrics-handlers
   [;; Given
    [#"a project with swarmforge initialized and .metrics/ ignored"
@@ -104,11 +111,14 @@
       (let [wrapper (str (fs/path (:repo world) ".swarmforge" "bin" "gherkin-mutator"))]
         (when-step world #(run-in % (str (fs/path (worktree % name) (or dir ""))) (cons wrapper (str/split args #" "))))))]
 
-   [#"I run install.sh into it (\d+) times"
-    (fn [world times]
+   [#"I run install.sh into it (\d+) times( from that working directory)?"
+    (fn [world times elsewhere]
       (let [install (str (fs/path support/checkout "install.sh"))
-            result (last (repeatedly (parse-long times) #(support/run (:repo world) [install (:repo world)])))]
-        (assoc world :exit (:exit result) :out (:out result) :err (:err result))))]
+            dir (if elsewhere (:workdir world) (:repo world))
+            env (if (:path world) {"PATH" (:path world)} {})
+            before (snapshot (:repo world))
+            result (last (repeatedly (parse-long times) #(support/run dir [install (:repo world)] env)))]
+        (assoc world :exit (:exit result) :out (:out result) :err (:err result) :snapshot before)))]
 
    ;; Then
    [#"the file \"([^\"]+)\" in the worktree of task \"(\w)\" holds \"(.*)\""
