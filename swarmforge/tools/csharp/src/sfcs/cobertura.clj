@@ -51,7 +51,7 @@
          :last-line (apply max numbers)}))))
 
 (defn parse-cobertura
-  "Reads every method out of a coverlet Cobertura file: its class, the source
+  "Reads every method out of a Cobertura file: its class, the source
   file (resolved against <source> entries when relative), cyclomatic
   complexity, line coverage, and the span of coverable lines."
   ([xml-text] (parse-cobertura xml-text nil))
