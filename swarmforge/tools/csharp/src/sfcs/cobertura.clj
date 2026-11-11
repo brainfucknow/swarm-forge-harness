@@ -67,11 +67,19 @@
                 :when entry]
             entry)))))
 
+(defn- files-under
+  "Every file under `directory`, walked rather than globbed: fs/glob reads [ ] { }
+  in `directory` itself as pattern syntax."
+  [directory]
+  (let [found (volatile! [])]
+    (fs/walk-file-tree directory {:visit-file (fn [path _] (vswap! found conj path) :continue)})
+    @found))
+
 (defn find-cobertura-files
   "coverage.cobertura.xml files under a results directory, newest first."
   [directory]
   (if (fs/exists? directory)
-    (->> (fs/glob directory "**")
+    (->> (files-under directory)
          (filter #(= "coverage.cobertura.xml" (fs/file-name %)))
          (sort-by #(- (fs/file-time->millis (fs/last-modified-time %))))
          (mapv str))

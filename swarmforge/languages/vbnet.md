@@ -26,8 +26,9 @@ CRAP scores what the compiler emitted, not source procedures. It uses the
 reported compiled-method span without C# signature expansion; VB marks the
 `Function` or `Sub` line as coverable, so that span starts at the declaration.
 `Async` and `Iterator` methods compile into state machines, scored as
-`VB$StateMachine_*.MoveNext` rows. Coverlet reports no methods for VB lambda
-closures, so a lambda's branches count toward no row. Use the CRAP `cc` column
+`VB$StateMachine_*.MoveNext` rows. A multi-line lambda is scored as its own
+`_Closure$__._Lambda$__*` row, starting at the line that opens it, so its
+branches do not count toward the enclosing method. Use the CRAP `cc` column
 as a complexity hint when reviewing module boundaries.
 
 jscpd's `visual-basic` grammar reads VB.NET syntax; its older `vbnet` grammar

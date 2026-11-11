@@ -107,6 +107,16 @@
       (is (= [] (cob/find-cobertura-files (str (fs/path dir "missing")))))
       (finally (fs/delete-tree dir)))))
 
+(deftest cobertura-files-are-found-under-a-directory-with-glob-characters
+  (let [dir (fs/create-temp-dir {:prefix "sfcs-cov"})
+        results (fs/path dir "lab[x]{2}" "tmp" "coverage")
+        report (fs/path results "run-1" "coverage.cobertura.xml")]
+    (try
+      (fs/create-dirs (fs/parent report))
+      (spit (str report) "x")
+      (is (= [(str report)] (cob/find-cobertura-files (str results))))
+      (finally (fs/delete-tree dir)))))
+
 (deftest method-rows-name-the-signature-line-when-known
   (let [method {:class-name "A.B" :name "M" :first-line 7 :crap 1.0 :complexity 1.0 :coverage 1.0 :file "a.cs"}]
     (is (= "ok   crap    1.0  cc   1  cov 100%  a.cs:7 B.M" (cob/format-method crap/crap-limit method)))
