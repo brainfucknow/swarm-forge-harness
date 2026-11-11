@@ -88,14 +88,33 @@
    ["SwarmForge-Stage" :stage] ["SwarmForge-Route" :route] ["SwarmForge-Needs" :needs]
    ["SwarmForge-Merged-Into" :merged-into] ["SwarmForge-Reviewed" :reviewed]])
 
+(defn rejected-refusal
+  "Why value cannot be the value of a `Rejected: <finding> | <reason>` trailer,
+  or nil: it must be one line, split at its last ` | ` into a finding and a
+  reason that are not blank."
+  [value]
+  (let [at (str/last-index-of value " | ")]
+    (cond (re-find #"[\r\n]" value) "--rejected takes one line"
+          (nil? at) (str "--rejected needs '<finding> | <reason>', got '" value "'")
+          (or (str/blank? (subs value 0 at)) (str/blank? (subs value (+ at 3))))
+          (str "--rejected needs a finding and a reason around its last ' | ', got '" value "'"))))
+
+(defn- lore-trailers
+  "The Lore-id and Rejected trailer lines of a record that has a :lore-id."
+  [{:keys [lore-id rejected]}]
+  (when lore-id
+    (cons (str "Lore-id: " lore-id) (map #(str "Rejected: " %) rejected))))
+
 (defn message
   "The commit message of a record."
   [{:keys [task record text] :as rec}]
   (str "sf " record ": " task
        (when-not (str/blank? text) (str "\n\n" text))
        "\n\n"
-       (apply str (for [[key field] trailers :when (rec field)]
-                    (str key ": " (rec field) "\n")))))
+       (apply str (for [line (concat (lore-trailers rec)
+                                     (for [[key field] trailers :when (rec field)]
+                                       (str key ": " (rec field))))]
+                    (str line "\n")))))
 
 (defn- message-text
   "The paragraphs between the subject and the trailer block."
