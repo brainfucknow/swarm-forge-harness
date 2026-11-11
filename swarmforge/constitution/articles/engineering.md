@@ -16,6 +16,7 @@
   | JavaScript/TypeScript | StrykerJS | oxlint or ESLint + Istanbul | jscpd | [`sf-js tools`](../../languages/javascript.md) |
   | Ruby | mutant (optional: needs the project's mutant usage) | RuboCop or flog + SimpleCov | jscpd or flay | [`sf-rb`](../../languages/ruby.md) |
 
+- Stryker.NET is pinned by the project's committed dotnet tool manifest instead of `swarmforge/tools.conf`; `sf-cs tools` restores it and `sf-cs mutate` refuses any other copy.
 - Install every listed tool with `sf tool ensure <tool>` and check it with `sf tool require <tool>`; `sf tool list` prints the catalogue. Cite the `@<ref>` that ends each `INSTALLED:` line of `sf tool ensure` for each tool you ran in your `Tested` trailers. Wrappers land in `.swarmforge/bin/` at the repository root, ignored by git and shared by every task worktree, so a tool install never writes outside the project. Run tools through those wrappers (`sf tool bin` prints the directory to put on PATH); they carry the argument guardrails below.
 
 ## Language Defaults
@@ -30,6 +31,7 @@
 - Keep tests close to the behavior being changed.
 - Separate testable modules from environmentally unsuitable modules that open GUIs, depend on external devices, throw environment errors, emit system errors, or hang under automated tests. Maximize testable code and minimize the unsuitable boundary.
 - IO-near modules must call existing high-level policy and translate the result, not recompute the same domain answer.
+- Ask the toolchain (dotnet, msbuild, maven, the package manager) for its facts instead of re-implementing its rules in wrapper code.
 - Exclude environmentally unsuitable adapters from any analysis that runs tests: unit, acceptance, property, coverage, mutation, CRAP, and test-running DRY checks.
 - Keep property tests separate from normal verification. Do not include property-test tags in normal unit coverage, Gherkin acceptance mutation, language mutation tools, CRAP, or coverage commands unless the role owns property-test verification or the user explicitly asks for property tests.
 - In each increment, settle the shape of the data the slice needs before writing its logic.

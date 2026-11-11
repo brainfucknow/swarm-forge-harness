@@ -11,6 +11,7 @@
             [sfcore.shell :as shell]
             [sfcore.stryker :as stryker]
             [sfcs.cobertura :as cob]
+            [sfcs.pin :as pin]
             [sfcs.project :as project]))
 
 (def tmp "tmp")
@@ -32,7 +33,7 @@
 (defn- usage []
   (str "usage: " (:name *language*) " <command> [options]
 
-  tools                       " (if (:no-mutation *language*) "check dotnet, node, npx and prepare jscpd" "install dotnet-stryker locally and check node, npx, dotnet") "
+  tools                       " (if (:no-mutation *language*) "check dotnet, node, npx and prepare jscpd" "restore local dotnet tools and check node, npx, dotnet") "
   test [dotnet test args]     unit and acceptance tests (Category!=Property" (when (:expecto? *language*) "; Expecto: outside the SwarmForgePropertyTestList list") ")
   property                    property tests only (Category=Property" (when (:expecto? *language*) "; Expecto: the SwarmForgePropertyTestList list") ")
   coverage [dotnet test args] tests with coverlet; cobertura files under " coverage-dir "/
@@ -40,7 +41,10 @@
   dry [--all] [--base REF] [--min-tokens N]
                               jscpd clones touching changed lines; exit 1 if any
   mutate [--base REF] [--all] [--report-only] [-- stryker args]
-                              " (if (:no-mutation *language*) (str "unsupported for " (:label *language*) "; exit 2") "Stryker on changed files (--since); exit 1 on survivors") "
+                              " (if (:no-mutation *language*) (str "unsupported for " (:label *language*) "; exit 2")
+                                    (str "Stryker on changed files (--since); exit 1 on survivors;
+                              needs dotnet-stryker pinned in a committed tool manifest
+                              at the repository root")) "
 
 Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, main, or master."))
 
@@ -62,12 +66,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
     (when (seq missing)
       (throw (outcome/usage-error (str "missing on PATH: " (str/join ", " missing))))))
   (when-not (:no-mutation *language*)
-    (let [manifest (str (fs/path ".config" "dotnet-tools.json"))]
-      (when-not (shell/exists? manifest)
-        (require-tool-run "dotnet" ["new" "tool-manifest"]))
-      (when-not (get-in (shell/read-json manifest) ["tools" "dotnet-stryker"])
-        (require-tool-run "dotnet" ["tool" "install" "dotnet-stryker"]))
-      (require-tool-run "dotnet" ["tool" "restore"])))
+    (require-tool-run "dotnet" ["tool" "restore"]))
   (shell/run "npx" ["--yes" "jscpd@4" "--version"]))
 
 (def ^:private skipped-dir-names #{"bin" "obj" "tmp" "node_modules"})
@@ -229,20 +228,50 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
                   changed (changed-for opts)]
               (shell/emit (jscpd/review clones changed (when changed (git/repo-root))))))))
 
+(defn- committed?
+  "Whether `relative` is in HEAD with no uncommitted changes."
+  [root relative]
+  (and (git/succeeds? ["cat-file" "-e" (str "HEAD:" relative)] :dir root)
+       (git/succeeds? ["diff" "--quiet" "HEAD" "--" relative] :dir root)))
+
+(defn- pin-refusal
+  "Why the dotnet-stryker pin that `dotnet tool list` reports cannot be used, or nil."
+  [root listed]
+  (if-let [listed-path (pin/listed-manifest listed)]
+    (let [manifest (str (fs/real-path listed-path))
+          relative (pin/relative-to-root root manifest)]
+      (cond
+        (nil? relative) (pin/outside root manifest)
+        (not (contains? pin/root-manifests relative)) (pin/below-root root manifest)
+        (not (committed? root relative)) (pin/not-committed manifest)))
+    (pin/not-found root (:exit listed))))
+
+(defn- require-runnable-stryker
+  "Stops unless a committed root manifest pins dotnet-stryker and `dotnet stryker` starts."
+  []
+  (let [root (str (fs/real-path (git/repo-root)))]
+    (when-let [refusal (pin-refusal root (shell/capture "dotnet" pin/list-args))]
+      (throw (outcome/usage-error refusal))))
+  (let [{:keys [exit]} (shell/capture "dotnet" ["stryker" "--help"])]
+    (when-not (zero? exit)
+      (throw (outcome/usage-error (pin/not-runnable exit))))))
+
 (defn- cmd-mutate [{:keys [opts extra]}]
   (when-let [reason (:no-mutation *language*)]
     (throw (outcome/usage-error (str (:label *language*) " mutation is unsupported; " reason))))
   (let [report-path (str (fs/path stryker-dir "reports" "mutation-report.json"))
         status (if (:report-only opts)
                  outcome/exit-ok
-                 (do (fs/create-dirs (shell/in-dir stryker-dir))
+                 (do (require-runnable-stryker)
+                     (fs/create-dirs (shell/in-dir stryker-dir))
                      (fs/delete-if-exists (shell/in-dir report-path))
                      (shell/run "dotnet"
                                 (into (cond-> ["stryker" "--reporter" "json" "--reporter" "progress" "--output" stryker-dir]
                                         (not (:all opts)) (conj (str "--since:" (git/base-ref opts))))
                                       extra))))]
     (cond
-      (and (not (zero? status)) (not (shell/exists? report-path))) status
+      (and (not (zero? status)) (not (shell/exists? report-path)))
+      (throw (outcome/usage-error (str "dotnet stryker exited " status " and wrote no report")))
       (not (shell/exists? report-path)) (throw (outcome/usage-error (str report-path " not found")))
       :else (shell/emit (stryker/review (stryker/parse-mutants (shell/read-json report-path)))))))
 

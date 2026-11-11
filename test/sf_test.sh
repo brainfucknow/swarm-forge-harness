@@ -189,6 +189,54 @@ assert_match "a finished task shows its request" "$(sf show "$id")" "^Users can 
 assert_eq "no path in HEAD names the finished task" "$(git ls-tree -r --name-only HEAD | grep -c "$id" || true)" "0"
 assert_fails "a finished task cannot be started" sf start "$id"
 
+# approval over gate findings
+reviewed_task() {
+  local t
+  t="$(sf new "$1" -m x --route specifier,coder)"
+  sf start "$t" >/dev/null
+  git -C ".worktrees/$t" commit -q --allow-empty -m "Spec"
+  sf review "$t" >/dev/null
+  echo "$t"
+}
+assert_match "help lists approve --rejected" "$(sf help)" '^  approve <id> \[--rejected "<finding> \| <reason>"\]\.\.\.$'
+ida="$(reviewed_task "Approve over findings")"
+spec_sha="$(git rev-parse --short "swarm/$ida^")"
+out="$(sf approve "$ida" --rejected "DEFECT, LOW: a | b | accepted by the operator at the gate" --rejected "  C | d  ")"
+assert_match "approve --rejected hands off as a plain approve" "$out" "^HANDOFF: $ida specifier -> coder at $spec_sha$"
+approval="$(git rev-parse --short "swarm/$ida^")"
+assert_match "the approval record is the commit under the handoff" "$(git log -1 --format=%s "$approval")" "^sf approval: $ida$"
+assert_eq "the approval record holds one Rejected trailer per option, trimmed, in order" \
+  "$(git log -1 --format='%(trailers:key=Rejected,valueonly)' "$approval")" \
+  "$(printf 'DEFECT, LOW: a | b | accepted by the operator at the gate\nC | d')"
+assert_match "the approval record holds one Lore-id" "$(git log -1 --format='%(trailers:key=Lore-id,valueonly)' "$approval")" '^[0-9a-f]{8}$'
+assert_match "show prints each Rejected trailer as a LORE line with role -" "$(sf show "$ida")" \
+  "^LORE: $approval - Rejected: DEFECT, LOW: a \| b \| accepted by the operator at the gate$"
+assert_match "start prints them in the next stage" "$(sf start "$ida")" "^LORE: $approval - Rejected: C \| d$"
+idp="$(reviewed_task "Plain approve")"
+sf approve "$idp" >/dev/null
+assert_eq "a plain approve writes no Lore trailer" "$(git log -1 --format='%(trailers:key=Rejected,key=Lore-id)' "swarm/$idp^")" ""
+idb="$(reviewed_task "Bad rejected")"
+tip="$(git rev-parse "swarm/$idb")"
+refused_approve() {
+  local name="$1"; shift
+  assert_match "approve refuses $name" "$(sf approve "$idb" "$@" 2>&1 || true)" "^sf: "
+}
+refused_approve "--rejected with no value" --rejected
+refused_approve "a value without ' | '" --rejected "A|b"
+refused_approve "a value blank after its last ' | '" --rejected "A | "
+refused_approve "a value blank before its last ' | '" --rejected " | b"
+refused_approve "a value with a newline" --rejected "$(printf 'A | b\nc')"
+refused_approve "a mistyped option" --rejectd "A | b"
+refused_approve "an extra argument" --rejected "A | b" extra
+assert_eq "the refused approvals write no record" "$(git rev-parse "swarm/$idb")" "$tip"
+assert_match "the refused approvals leave the task waiting for approval" "$(sf ls --needs)" "^$idb	specifier	approval	"
+assert_match "a dispatched role cannot approve with --rejected" "$(SWARMFORGE_DISPATCHED=specifier sf approve "$idb" --rejected "A | b" 2>&1 || true)" "^sf: approve is the operator's"
+git -C ".worktrees/$idb" commit -q --allow-empty -m "After review"
+tip="$(git rev-parse "swarm/$idb")"
+assert_match "approve --rejected refuses a moved review commit" "$(sf approve "$idb" --rejected "A | b" 2>&1 || true)" "changed since review"
+assert_eq "the moved-commit refusal writes no record" "$(git rev-parse "swarm/$idb")" "$tip"
+assert_match "approve --rejected refuses a task not waiting for approval" "$(sf approve "$ida" --rejected "A | b" 2>&1 || true)" "not waiting for approval"
+
 # routes
 assert_eq "routes lists the presets" "$(sf routes | awk '{print $1}' | paste -sd ' ' -)" "feature bugfix refactor harden spike"
 id2="$(sf new "Fix rounding" -m "x" --route bugfix)"

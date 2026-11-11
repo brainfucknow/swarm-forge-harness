@@ -142,13 +142,25 @@
 (defn- git [& args]
   (apply p/shell {:dir *repo* :out :string :err :string} "git" args))
 
+(defn- fake-launch
+  "Prints the command line, then runs `command` from the fake tools in *bin* with `env` for the fakes."
+  [env command args]
+  (println (str "$ " (str/join " " (cons command args))))
+  (apply p/shell {:dir *repo* :out :string :err :string :continue true :extra-env env}
+         (str (fs/path *bin* command)) args))
+
 (defn- fake-run
-  "shell/run against the fake tools in *bin*, with `env` for the fakes."
+  "shell/run against the fake tools in *bin*."
+  [env]
+  (fn [command args] (:exit (fake-launch env command args))))
+
+(defn- fake-capture
+  "shell/capture against the fake tools in *bin*; stderr goes to *err*."
   [env]
   (fn [command args]
-    (println (str "$ " (str/join " " (cons command args))))
-    (:exit (apply p/shell {:dir *repo* :out :string :err :string :continue true :extra-env env}
-                  (str (fs/path *bin* command)) args))))
+    (let [result (fake-launch env command args)]
+      (binding [*out* *err*] (print (:err result)))
+      (select-keys result [:exit :out]))))
 
 (defn- sfcs
   "Runs sf-cs in-process in the scratch repository. `env` feeds the fakes;
@@ -157,8 +169,10 @@
   (let [out (java.io.StringWriter.)
         err (java.io.StringWriter.)
         missing (set (str/split (get env "MISSING" "") #","))
+        _ (when-let [log (get env "FAKE_DOTNET_LOG")] (spit log ""))
         status (binding [shell/*dir* *repo* *out* out *err* err]
                  (with-redefs [shell/run (fake-run env)
+                               shell/capture (fake-capture env)
                                shell/available? (complement missing)]
                    (try (if-let [language (get env "LANGUAGE")]
                           (cli/main (keyword language) (vec args))
@@ -176,24 +190,32 @@
                       "bash" (str (fs/path here ".." ".." "bin" (get wrappers (get env "LANGUAGE") "sf-cs"))) args)]
     {:status (:exit result) :lines (vec (str/split-lines (str/trimr (:out result)))) :err (:err result)}))
 
+(def stryker-manifest
+  "{\"version\":1,\"isRoot\":true,\"tools\":{\"dotnet-stryker\":{\"version\":\"4.16.0\",\"commands\":[\"dotnet-stryker\"]}}}\n")
+
 (defn- seed-repo [f]
   (let [repo (str (fs/create-temp-dir {:prefix "sfcs"}))
         bin (str (fs/path repo "fakebin"))]
     (fs/create-dirs bin)
     (spit (str (fs/path bin "dotnet"))
           (str "#!/usr/bin/env bash\n"
-               "[ -n \"$FAKE_DOTNET_LOG\" ] && printf '%s\\n' \"$@\" > \"$FAKE_DOTNET_LOG\"\n"
+               "if [ -n \"$FAKE_DOTNET_LOG\" ]; then (IFS=$'\\t'; printf '%s\\n' \"$*\") >> \"$FAKE_DOTNET_LOG\"; fi\n"
                "if [ \"$1 $2\" = \"$FAKE_FAIL_STEP\" ]; then exit 7; fi\n"
+               "if [ \"$1 $2\" = 'tool list' ]; then\n"
+               "  if [ -n \"${FAKE_LIST_JSON+set}\" ]; then printf '%s' \"$FAKE_LIST_JSON\"\n"
+               "  else printf '{\"version\":1,\"data\":[{\"packageId\":\"dotnet-stryker\",\"version\":\"4.16.0\",\"commands\":[\"dotnet-stryker\"],\"manifest\":\"%s/dotnet-tools.json\"}]}' \"$(pwd -P)\"; fi\n"
+               "  exit ${FAKE_LIST_EXIT:-0}\n"
+               "fi\n"
+               "if [ \"$1 $2\" = 'stryker --help' ]; then exit ${FAKE_STRYKER_EXIT:-0}; fi\n"
                "if [ \"$1\" = test ] && [ -n \"$FAKE_COVERAGE\" ]; then mkdir -p tmp/coverage/run && cp \"$FAKE_COVERAGE\" tmp/coverage/run/coverage.cobertura.xml; fi\n"
                "for pair in ${FAKE_PROJECT_EXITS//,/ }; do if [ \"$2\" = \"${pair%%=*}\" ]; then exit \"${pair#*=}\"; fi; done\n"
                "if [ \"$1\" = stryker ] && [ -n \"$FAKE_REPORT\" ]; then mkdir -p tmp/stryker/reports && cp \"$FAKE_REPORT\" tmp/stryker/reports/mutation-report.json; fi\n"
-               "if [ \"$1\" = new ]; then mkdir -p .config && echo '{\"tools\":{}}' > .config/dotnet-tools.json; fi\n"
                "exit ${FAKE_EXIT:-0}\n"))
     (doseq [tool ["node" "npx"]]
       (spit (str (fs/path bin tool))
             (str "#!/usr/bin/env bash\n"
                  "if [ -n \"$FAKE_JSCPD_REPORT\" ]; then mkdir -p tmp/jscpd && cp \"$FAKE_JSCPD_REPORT\" tmp/jscpd/jscpd-report.json; fi\n"
-                 "exit ${FAKE_EXIT:-0}\n"))
+                 "exit ${FAKE_NPX_EXIT:-${FAKE_EXIT:-0}}\n"))
       (fs/set-posix-file-permissions (fs/path bin tool) "rwxr-xr-x"))
     (fs/set-posix-file-permissions (fs/path bin "dotnet") "rwxr-xr-x")
     (binding [*repo* repo *bin* bin]
@@ -203,6 +225,7 @@
       (fs/create-dirs (fs/path repo "Bank"))
       (spit (str (fs/path repo "Bank" "Ledger.cs")) (fixture "Ledger.cs.txt"))
       (spit (str (fs/path repo "Bank" "Legacy.cs")) "namespace Bank { }\n")
+      (spit (str (fs/path repo "dotnet-tools.json")) stryker-manifest)
       (git "add" ".")
       (git "commit" "--quiet" "-m" "base")
       (git "switch" "--quiet" "-c" "swarm/abc1234")
@@ -247,15 +270,23 @@
     (is (= "NoCoverage Bank/Ledger.cs:14  Boolean mutation  true" (nth lines 1)))
     (is (str/starts-with? (nth lines 2) "mutation score 50.0% ("))))
 
+(defn- dotnet-calls
+  "The fake dotnet's logged calls, one argument vector per call."
+  [log]
+  (mapv #(str/split % #"\t") (str/split-lines (slurp log))))
+
 (deftest dotnet-command-lines
   (let [log (str (fs/path *repo* "dotnet.log"))
         calls (fn [env & args]
                 (let [result (apply sfcs (assoc env "FAKE_DOTNET_LOG" log) args)]
-                  (assoc result :args (str/split-lines (str/trimr (slurp log))))))]
+                  (assoc result :calls (dotnet-calls log) :args (last (dotnet-calls log)))))]
     (is (= ["test" "--filter" "Category!=Property" "--no-build"] (:args (calls {} "test" "--no-build"))))
     (is (= ["test" "--filter" "Category=Property"] (:args (calls {} "property"))))
-    (is (= ["stryker" "--reporter" "json" "--reporter" "progress" "--output" "tmp/stryker" "--since:main" "--project" "Bank.csproj"]
-           (:args (calls {} "mutate" "--base" "main" "--" "--project" "Bank.csproj"))))
+    (is (= [["tool" "list" "--local" "dotnet-stryker" "--format" "json"]
+            ["stryker" "--help"]
+            ["stryker" "--reporter" "json" "--reporter" "progress" "--output" "tmp/stryker" "--since:main" "--project" "Bank.csproj"]]
+           (:calls (calls {} "mutate" "--base" "main" "--" "--project" "Bank.csproj"))))
+    (is (= [["tool" "restore"]] (:calls (calls {} "tools"))) "tools never installs, updates or creates a manifest")
     (let [coverage (calls {"FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))} "coverage")]
       (is (= 0 (:status coverage)) (:err coverage))
       (is (= ["test" "--filter" "Category!=Property" "--collect" "XPlat Code Coverage" "--results-directory" "tmp/coverage"]
@@ -281,27 +312,20 @@
     (is (= 2 status))
     (is (= "sf-cs: missing on PATH: node, npx\n" err))))
 
-(deftest tools-installs-what-is-missing
-  (let [run-tools (fn []
-                    (fs/delete-tree (fs/path *repo* ".config"))
-                    (sfcs {} "tools"))]
-    (testing "no manifest: create it, install Stryker, restore, check jscpd"
-      (let [{:keys [status lines err]} (run-tools)]
-        (is (= 0 status) err)
-        (is (= ["$ dotnet new tool-manifest" "$ dotnet tool install dotnet-stryker"
-                "$ dotnet tool restore" "$ npx --yes jscpd@4 --version"]
-               lines))))
-    (testing "a manifest that lists Stryker is only restored"
-      (fs/create-dirs (fs/path *repo* ".config"))
-      (spit (str (fs/path *repo* ".config" "dotnet-tools.json")) "{\"tools\":{\"dotnet-stryker\":{}}}")
-      (let [{:keys [status lines]} (sfcs {} "tools")]
-        (is (= 0 status))
-        (is (= ["$ dotnet tool restore" "$ npx --yes jscpd@4 --version"] lines))))
-    (testing "a manifest without Stryker installs it"
-      (spit (str (fs/path *repo* ".config" "dotnet-tools.json")) "{\"tools\":{}}")
-      (is (= ["$ dotnet tool install dotnet-stryker" "$ dotnet tool restore" "$ npx --yes jscpd@4 --version"]
-             (:lines (sfcs {} "tools")))))
-    (fs/delete-tree (fs/path *repo* ".config"))))
+(deftest tools-restores-the-pinned-tools
+  (testing "restore, then the jscpd check, whose exit is the status"
+    (let [{:keys [status lines err]} (sfcs {"FAKE_NPX_EXIT" "3"} "tools")]
+      (is (= 3 status) err)
+      (is (= ["$ dotnet tool restore" "$ npx --yes jscpd@4 --version"] lines))))
+  (testing "no tool manifest is written"
+    (is (= 0 (:status (sfcs {} "tools"))))
+    (is (not (fs/exists? (fs/path *repo* ".config"))))
+    (is (= stryker-manifest (slurp (str (fs/path *repo* "dotnet-tools.json"))))))
+  (testing "a failed restore stops before npx"
+    (let [{:keys [status lines err]} (sfcs {"FAKE_FAIL_STEP" "tool restore"} "tools")]
+      (is (= 2 status))
+      (is (= ["$ dotnet tool restore"] lines))
+      (is (= "sf-cs: dotnet tool restore exited 7\n" err)))))
 
 (deftest coverage-passes-on-a-failing-test-run
   (is (= 3 (:status (sfcs {"FAKE_EXIT" "3"} "coverage")))))
@@ -342,14 +366,122 @@
           (is (= 1 status) err)))
       (finally (fs/delete-tree plain)))))
 
-(deftest mutate-exits-with-stryker-when-it-leaves-no-report
+(defn- last-line [text]
+  (last (str/split-lines text)))
+
+(deftest mutate-without-a-report-after-a-failed-stryker-is-a-usage-error
   (fs/delete-tree (fs/path *repo* "tmp" "stryker"))
-  (is (= 4 (:status (sfcs {"FAKE_EXIT" "4"} "mutate" "--all"))))
+  (let [{:keys [status err]} (sfcs {"FAKE_EXIT" "4"} "mutate" "--all")]
+    (is (= 2 status))
+    (is (= "sf-cs: dotnet stryker exited 4 and wrote no report" (last-line err))))
   (testing "with a report the survivors decide"
     (let [{:keys [status lines]} (sfcs {"FAKE_REPORT" (str (fs/path fixtures "mutation-report.json"))} "mutate" "--all")]
       (is (= 1 status))
-      (is (str/starts-with? (first lines) "$ dotnet stryker"))
+      (is (= ["$ dotnet tool list --local dotnet-stryker --format json"
+              "$ dotnet stryker --help"
+              "$ dotnet stryker --reporter json --reporter progress --output tmp/stryker"]
+             (take 3 lines)))
       (is (some #(str/starts-with? % "Survived") lines)))))
+
+(defn- real-root []
+  (str (fs/real-path *repo*)))
+
+(defn- list-answer
+  "Fake `dotnet tool list` stdout naming `manifest` as the dotnet-stryker pin."
+  [manifest]
+  (json/generate-string {"version" 1 "data" [{"packageId" "dotnet-stryker" "version" "4.16.0"
+                                             "commands" ["dotnet-stryker"] "manifest" (str manifest)}]}))
+
+(defn- pin-instructions [root]
+  (str "in " root ": dotnet new tool-manifest (when the root has none), then dotnet tool install dotnet-stryker"
+       " --version <version>, then commit the manifest"))
+
+(defn- refused-mutate
+  "Runs mutate with `env`; asserts exit 2, `echoes` echo lines, an untouched tmp/stryker; returns stderr's last line."
+  [env echoes]
+  (let [sentinel (fs/path *repo* "tmp" "stryker" "keep")]
+    (fs/create-dirs (fs/parent sentinel))
+    (spit (str sentinel) "x")
+    (let [{:keys [status lines err]} (sfcs env "mutate" "--all")]
+      (is (= 2 status) err)
+      (is (= echoes (count lines)) (str lines))
+      (is (fs/exists? sentinel))
+      (last-line err))))
+
+(deftest mutate-needs-a-stryker-pin
+  (doseq [[env exit] [[{"FAKE_LIST_EXIT" "1" "FAKE_LIST_JSON" "{\"version\":1,\"data\":[]}"} 1]
+                      [{"FAKE_LIST_EXIT" "1" "FAKE_LIST_JSON" ""} 1]
+                      [{"FAKE_LIST_JSON" "{\"version\":1,\"data\":[{\"packageId\":\"other\",\"manifest\":\"/x\"}]}"} 0]
+                      [{"FAKE_LIST_JSON" "not json"} 0]
+                      [{"FAKE_LIST_JSON" "[1]"} 0]]]
+    (is (= (str "sf-cs: dotnet tool list --local dotnet-stryker found no dotnet-stryker (exit " exit "); "
+                "ask the operator to pin one in a committed tool manifest at the repository root ("
+                (pin-instructions (real-root)) ")")
+           (refused-mutate env 1))
+        (str env))))
+
+(deftest mutate-refuses-a-pin-outside-the-repository
+  (let [outside (fs/create-temp-dir {:prefix "sfcs-above"})
+        manifest (fs/path outside "dotnet-tools.json")]
+    (try
+      (spit (str manifest) stryker-manifest)
+      (is (= (str "sf-cs: dotnet-stryker is pinned in " (fs/real-path manifest) ", outside this repository; "
+                  "ask the operator to pin it in a committed tool manifest at the repository root ("
+                  (pin-instructions (real-root)) ")")
+             (refused-mutate {"FAKE_LIST_JSON" (list-answer manifest)} 1)))
+      (finally (fs/delete-tree outside)))))
+
+(deftest mutate-refuses-a-pin-below-the-repository-root
+  (doseq [relative ["Bank/dotnet-tools.json" "Bank/.config/dotnet-tools.json" ".config/sub/dotnet-tools.json"]]
+    (let [manifest (fs/path *repo* relative)]
+      (fs/create-dirs (fs/parent manifest))
+      (spit (str manifest) stryker-manifest)
+      (git "add" relative)
+      (git "commit" "--quiet" "-m" "pin below the root")
+      (is (= (str "sf-cs: dotnet-stryker is pinned in " (fs/real-path manifest) ", not at the repository root, "
+                  "so sf-cs tools does not restore it; ask the operator to pin it in a committed tool manifest "
+                  "at the repository root (" (pin-instructions (real-root)) ") and remove this pin")
+             (refused-mutate {"FAKE_LIST_JSON" (list-answer manifest)} 1))
+          relative)
+      (git "rm" "--quiet" relative)
+      (git "commit" "--quiet" "-m" "unpin below the root"))))
+
+(deftest mutate-needs-the-pin-committed
+  (let [relative ".config/dotnet-tools.json"
+        manifest (fs/path *repo* relative)
+        env {"FAKE_LIST_JSON" (list-answer manifest) "FAKE_REPORT" (str (fs/path fixtures "mutation-report.json"))}
+        refusal (fn [] (str "sf-cs: dotnet-stryker is pinned in " (fs/real-path manifest)
+                            ", which is not committed; ask the operator to commit or remove it"))]
+    (fs/create-dirs (fs/parent manifest))
+    (spit (str manifest) stryker-manifest)
+    (testing "untracked"
+      (is (= (refusal) (refused-mutate env 1))))
+    (testing "committed under .config/ it is the pin"
+      (git "add" relative)
+      (git "commit" "--quiet" "-m" "pin under .config")
+      (let [{:keys [status err]} (sfcs env "mutate" "--all")]
+        (is (= 1 status) err)))
+    (testing "committed, then changed"
+      (spit (str manifest) (str/replace stryker-manifest "4.16.0" "4.17.0"))
+      (is (= (refusal) (refused-mutate env 1))))
+    (git "rm" "--quiet" "--force" relative)
+    (git "commit" "--quiet" "-m" "unpin .config")))
+
+(deftest mutate-needs-a-runnable-stryker
+  (is (= "sf-cs: dotnet stryker --help exited 1; run sf-cs tools to restore the pinned Stryker"
+         (refused-mutate {"FAKE_STRYKER_EXIT" "1"} 2))))
+
+(deftest mutate-without-dotnet-keeps-the-launch-failure
+  (let [bin (fs/create-temp-dir {:prefix "sfcs-nodotnet"})]
+    (try
+      (doseq [tool ["bb" "git" "dirname" "bash"]]
+        (fs/create-sym-link (fs/path bin tool) (fs/which tool)))
+      (let [result (p/shell {:dir *repo* :out :string :err :string :continue true
+                             :extra-env {"PATH" (str bin)}}
+                            (str (fs/which "bash")) (str (fs/path here ".." ".." "bin" "sf-cs")) "mutate" "--all")]
+        (is (= 2 (:exit result)) (:err result))
+        (is (str/starts-with? (last-line (:err result)) "sf-cs: dotnet: ") (:err result)))
+      (finally (fs/delete-tree bin)))))
 
 (deftest crap-reads-sources-named-by-absolute-path
   (let [dir (fs/path *repo* "abs-coverage")
@@ -387,20 +519,6 @@
     (is (= 0 status))
     (is (str/starts-with? (first lines) "usage: sf-cs"))))
 
-(deftest tools-stop-at-the-first-failed-step
-  (doseq [[step manifest calls] [["new tool-manifest" nil 1]
-                               ["tool install" "{\"tools\":{}}" 1]
-                               ["tool restore" "{\"tools\":{\"dotnet-stryker\":{}}}" 1]]]
-    (fs/delete-tree (fs/path *repo* ".config"))
-    (when manifest
-      (fs/create-dirs (fs/path *repo* ".config"))
-      (spit (str (fs/path *repo* ".config" "dotnet-tools.json")) manifest))
-    (let [{:keys [status lines err]} (sfcs {"FAKE_FAIL_STEP" step} "tools")]
-      (is (= 2 status) step)
-      (is (= calls (count lines)) step)
-      (is (str/includes? err "exited 7") err)))
-  (fs/delete-tree (fs/path *repo* ".config")))
-
 (deftest fresh-report-required-after-running-a-tool
   (doseq [[command report] [["dry" "tmp/jscpd/jscpd-report.json"]
                             ["mutate" "tmp/stryker/reports/mutation-report.json"]]
@@ -409,9 +527,9 @@
       (fs/create-dirs (fs/parent path))
       (spit (str path) (if (= command "dry") "{\"duplicates\":[]}" "{\"files\":{}}"))
       (let [{:keys [status lines err]} (sfcs {"FAKE_EXIT" exit} command "--all")]
-        (is (= (if (= "0" exit) 2 5) status) (str command " exit " exit))
+        (is (= (if (and (= "dry" command) (= "5" exit)) 5 2) status) (str command " exit " exit))
         (is (not (fs/exists? path)))
-        (is (= 1 (count lines)))
+        (is (= (if (= "dry" command) 1 3) (count lines)))
         (when (= "0" exit) (is (str/includes? err "not found")))))))
 
 (def compiled-languages
@@ -435,8 +553,10 @@
   (let [{:keys [status lines]} (sfcs {} "help")
         help (str/join "\n" lines)]
     (is (= 0 status))
-    (is (str/includes? help "install dotnet-stryker locally"))
-    (is (str/includes? help "Stryker on changed files")))
+    (is (str/includes? help "tools                       restore local dotnet tools and check node, npx, dotnet\n"))
+    (is (not (str/includes? help "install dotnet-stryker")))
+    (is (str/includes? help "Stryker on changed files"))
+    (is (str/includes? help "needs dotnet-stryker pinned in a committed tool manifest")))
   (doseq [{:keys [label] :as profile} compiled-languages]
     (let [{:keys [status lines]} (in-language profile {} "help")
           help (str/join "\n" lines)]
@@ -460,7 +580,7 @@
     (doseq [profile compiled-languages
             [command category] [["test" "Category!=Property"] ["property" "Category=Property"]]]
       (is (= 7 (:status (in-language profile {"FAKE_DOTNET_LOG" log "FAKE_EXIT" "7"} command "--no-build"))))
-      (is (= ["test" "--filter" category "--no-build"] (str/split-lines (slurp log)))))))
+      (is (= [["test" "--filter" category "--no-build"]] (dotnet-calls log))))))
 
 (deftest compiled-methods-use-report-spans
   (doseq [{:keys [language source] :as profile} compiled-languages]

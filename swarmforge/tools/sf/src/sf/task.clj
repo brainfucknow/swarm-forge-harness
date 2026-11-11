@@ -8,6 +8,7 @@
             [sf.git :as plumbing]
             [sf.history :as history]
             [sf.hook :as hook]
+            [sf.lore :as lore]
             [sf.metrics :as metrics]
             [sf.options :as options]
             [sf.record :as record]
@@ -215,9 +216,17 @@
                                           :reviewed (git (shell/repo-root) "rev-parse" head)}))
     (println (str "REVIEW: " id " waits for operator approval"))))
 
-(defn approve [[id-arg]]
+(defn- approval-fields
+  "The approval record's fields: with a Lore-id and the rejected values when
+  the operator approved over any findings."
+  [rejected]
+  (cond-> {:needs "none"}
+    (seq rejected) (assoc :lore-id (lore/new-id) :rejected rejected)))
+
+(defn approve [[id-arg & args]]
   (operator-only! "approve")
   (let [id (open-task id-arg)
+        rejected (options/rejections args)
         state (store/state id)
         to (flow/next-stage state nil)]
     (refuse (flow/approval-refusal state))
@@ -228,7 +237,7 @@
                   (fn [records]
                     (let [state (last records)]
                       (refuse (flow/approval-refusal state (flow/reviewed-commit records) (role-head id)))
-                      (flow/follow state "approval" "operator" {:needs "none"}))))
+                      (flow/follow state "approval" "operator" (approval-fields rejected)))))
     ;; The review that asked for approval passed the audit gate at this commit.
     ;; Thus the handoff must not run the gate again.
     (handoff [id] {:role (acting-role state) :audit-passed? true})))

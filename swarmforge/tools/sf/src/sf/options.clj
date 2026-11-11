@@ -51,3 +51,16 @@
       (do (when (= at (dec (count args))) (shell/die "--to needs a value"))
           {:to (nth args (inc at))
            :summary (message nil (concat (take at args) (drop (+ at 2) args)))}))))
+
+(defn rejections
+  "The values of the `--rejected <finding> | <reason>` options that make up
+  args, each trimmed, in order; stops on any other argument and on a value that
+  record/rejected-refusal refuses."
+  [args]
+  (loop [values [] [flag value :as args] args]
+    (cond
+      (empty? args) values
+      (not= "--rejected" flag) (shell/die "unknown approve argument '" flag "'")
+      :else (let [value (do (require-value args) (str/trim value))]
+              (some-> (record/rejected-refusal value) shell/die)
+              (recur (conj values value) (drop 2 args))))))

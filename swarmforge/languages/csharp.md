@@ -3,15 +3,29 @@
 Run `swarmforge/bin/sf-cs` from the task worktree. It needs Babashka, the
 .NET SDK, and Node with `npx`; reports go under `./tmp/`.
 
+The minimum supported .NET SDK is 10, the currently supported one. .NET 8 is
+out of support; do not work around it. Ask `dotnet` and MSBuild for toolchain
+facts (SDK version, project and MSBuild properties, packages) instead of
+re-implementing their rules in `sf-cs`.
+
 | Constitution tool | Command | Behind it |
 |---|---|---|
-| Startup tools | `sf-cs tools` | `dotnet tool install dotnet-stryker` in a local manifest, `dotnet tool restore`, and a check that `node`, `npx`, and `dotnet` are on PATH. |
+| Startup tools | `sf-cs tools` | A check that `dotnet`, `node`, and `npx` are on PATH, `dotnet tool restore`, then `npx --yes jscpd@4 --version`. It installs nothing and writes no tool manifest. |
 | Unit and acceptance tests | `sf-cs test [dotnet test args]` | `dotnet test --filter Category!=Property`. |
 | Property tests | `sf-cs property` | `dotnet test --filter Category=Property`. |
 | Coverage | `sf-cs coverage [dotnet test args]` | `dotnet test --collect "XPlat Code Coverage"` (coverlet) writing Cobertura files under `tmp/coverage/`. |
 | CRAP | `sf-cs crap [--all] [--base REF]` | CRAP per method from the Cobertura files: `comp² × (1 − line coverage)³ + comp`, using coverlet's own per-method complexity. Lists changed methods, or all with `--all`. Exit 1 when any is over 10. |
 | DRY | `sf-cs dry [--all] [--base REF] [--min-tokens N]` | `npx jscpd@4 --format csharp` with a JSON report under `tmp/jscpd/`, then the clones that touch a changed line. Exit 1 when any. |
-| Language mutation | `sf-cs mutate [--base REF] [--all] [-- stryker args]` | `dotnet stryker --since:<base>` (differential: only files changed since the base branch) with the JSON report under `tmp/stryker/`, then every `Survived` or `NoCoverage` mutant. Exit 1 when any. `--all` drops `--since`. |
+| Language mutation | `sf-cs mutate [--base REF] [--all] [-- stryker args]` | First `dotnet tool list --local dotnet-stryker --format json`: exit 2 unless it names a pin in a committed `dotnet-tools.json` or `.config/dotnet-tools.json` at the repository root. Then `dotnet stryker --help`: exit 2 when it fails (run `sf-cs tools`). Then `dotnet stryker --since:<base>` (differential: only files changed since the base branch) with the JSON report under `tmp/stryker/`, then every `Survived` or `NoCoverage` mutant. Exit 1 when any; exit 2 when Stryker fails without a report. `--all` drops `--since`. |
+
+Stryker.NET's version is pinned by the project's committed dotnet tool
+manifest at the repository root, not by `swarmforge/tools.conf`; global and
+preinstalled copies are not used. Roles never pin, install or commit it: when
+`sf-cs mutate` refuses the pin, the role reports and stops, and the operator
+pins it from the repository root (`dotnet new tool-manifest` when the root has
+no manifest, then `dotnet tool install dotnet-stryker --version <version>`)
+and commits the manifest. An untracked `dotnet-tools.json` left by an older
+`sf-cs tools` must be committed or deleted by the operator.
 
 Every command exits 0 when clean, 1 on a finding, and 2 on a usage or input
 error such as a missing report. `--report-only` on `dry` and `mutate` re-reads
@@ -73,10 +87,8 @@ means no test reaches the line.
 
 - Dependency audit, when the task changes a `*.csproj`,
   `Directory.Packages.props`, `Directory.Build.props` or `packages.lock.json`:
-  `dotnet restore <project>` on SDKs before .NET 10, then
-  `dotnet list <project> package --vulnerable --include-transitive`
-  (`dotnet package list ...` on .NET 10+). It needs the NuGet feeds. Read its
-  output, not only its exit status.
+  `dotnet package list <project> --vulnerable --include-transitive`. It needs
+  the NuGet feeds. Read its output, not only its exit status.
 
 ## Code-smell check
 
