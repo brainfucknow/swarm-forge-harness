@@ -97,6 +97,7 @@
   (println (str "routes: " (str/join " " (map first (config/named-routes))))))
 
 (defn new-task [[title & args]]
+  (operator-only! "new")
   (when (str/blank? title) (shell/die "new needs a title"))
   (let [{:keys [body route] :or {body title}}
         (options/parse "new" args {"-m" :body "-F" [:body options/read-file] "--route" :route} {})

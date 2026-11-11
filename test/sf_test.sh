@@ -127,6 +127,9 @@ assert_fails "a dispatched role cannot reject" env SWARMFORGE_DISPATCHED=specifi
 assert_fails "a dispatched role cannot change the route" env SWARMFORGE_DISPATCHED=specifier sf route "$id" specifier,coder
 assert_fails "a dispatched role cannot answer" env SWARMFORGE_DISPATCHED=specifier sf answer "$id" "yes"
 assert_fails "a dispatched role cannot finish" env SWARMFORGE_DISPATCHED=specifier sf finish "$id"
+branches="$(git for-each-ref --format='%(refname)' refs/heads/swarm/)"
+assert_match "a dispatched gate cannot create a task" "$(SWARMFORGE_DISPATCHED=falsifier sf new "Gate task" -m x 2>&1 || true)" "^sf: new is the operator's; the dispatched falsifier cannot run it$"
+assert_eq "the refused new makes no task branch" "$(git for-each-ref --format='%(refname)' refs/heads/swarm/)" "$branches"
 assert_match "a dispatched role can still read the route" "$(SWARMFORGE_DISPATCHED=specifier sf route "$id")" "^specifier,"
 assert_match "the refused commands leave the task waiting for approval" "$(sf ls --needs)" "^$id	specifier	approval	"
 assert_match "reject keeps the stage" "$(sf reject "$id" "split the scenarios")" "stays at stage:specifier"

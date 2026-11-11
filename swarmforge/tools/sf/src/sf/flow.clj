@@ -52,8 +52,8 @@
 
 (defn operator-refusal
   "Refuses the operator's command when dispatched names the role or gate that
-  sf dispatch runs: approval, answers, rejections, routes and finishing are
-  the operator's."
+  sf dispatch runs: new tasks, approval, answers, rejections, routes and
+  finishing are the operator's."
   [command dispatched]
   (when-not (str/blank? dispatched)
     (str command " is the operator's; the dispatched " dispatched " cannot run it")))
