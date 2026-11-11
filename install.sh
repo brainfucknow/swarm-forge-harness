@@ -11,6 +11,22 @@ target="$(cd "${1:-.}" && pwd)"
 
 [ -d "$target/.git" ] || { echo "$target is not a git repository" >&2; exit 1; }
 
+# bin/sf refuses a Babashka too old for sf; ask it before changing the target.
+# It runs from $HERE, which has no bb.edn, so a bb.edn where install.sh was
+# started cannot affect it.
+minimum="$(sed -n 's/.*:min-bb-version "\([^"]*\)".*/\1/p' "$HERE/swarmforge/tools/sf/bb.edn")"
+needs="install.sh: SwarmForge needs Babashka $minimum or newer: https://babashka.org"
+command -v bb >/dev/null || { echo "$needs" >&2; exit 1; }
+if ! check_err="$(cd "$HERE" && bb "$HERE/swarmforge/bin/sf" help 2>&1 >/dev/null)"; then
+  [ -z "$check_err" ] || echo "$check_err" >&2
+  if echo "$check_err" | grep -q '^sf: Babashka .* is too old; sf needs '; then
+    echo "$needs" >&2
+  else
+    echo "install.sh: the Babashka check failed" >&2
+  fi
+  exit 1
+fi
+
 copy_tree() {
   local src="$1" dst="$2"
   mkdir -p "$dst"

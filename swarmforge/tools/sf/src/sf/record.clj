@@ -3,18 +3,48 @@
   title and request of a task, and the key: value blocks that sf start and sf
   show print."
   (:refer-clojure :exclude [resolve])
-  (:require [clojure.string :as str])
-  (:import (java.text Normalizer Normalizer$Form)))
+  (:require [clojure.string :as str]))
 
 (def ^:private slug-limit 30)
 
+(def ^:private bases
+  "Each letter of U+00C0..U+024F and U+1E00..U+1EFF that has a canonical
+  decomposition, followed by the letter its decomposition starts with: the
+  rest of the decomposition is combining marks, which slug drops."
+  (apply hash-map (seq (str
+   "ÀAÁAÂAÃAÄAÅAÇCÈEÉEÊEËEÌIÍIÎIÏIÑNÒOÓOÔOÕOÖOÙUÚUÛU"
+   "ÜUÝYàaáaâaãaäaåaçcèeéeêeëeìiíiîiïiñnòoóoôoõoöoùu"
+   "úuûuüuýyÿyĀAāaĂAăaĄAąaĆCćcĈCĉcĊCċcČCčcĎDďdĒEēeĔE"
+   "ĕeĖEėeĘEęeĚEěeĜGĝgĞGğgĠGġgĢGģgĤHĥhĨIĩiĪIīiĬIĭiĮI"
+   "įiİIĴJĵjĶKķkĹLĺlĻLļlĽLľlŃNńnŅNņnŇNňnŌOōoŎOŏoŐOőo"
+   "ŔRŕrŖRŗrŘRřrŚSśsŜSŝsŞSşsŠSšsŢTţtŤTťtŨUũuŪUūuŬUŭu"
+   "ŮUůuŰUűuŲUųuŴWŵwŶYŷyŸYŹZźzŻZżzŽZžzƠOơoƯUưuǍAǎaǏI"
+   "ǐiǑOǒoǓUǔuǕUǖuǗUǘuǙUǚuǛUǜuǞAǟaǠAǡaǢÆǣæǦGǧgǨKǩkǪO"
+   "ǫoǬOǭoǮƷǯʒǰjǴGǵgǸNǹnǺAǻaǼÆǽæǾØǿøȀAȁaȂAȃaȄEȅeȆEȇe"
+   "ȈIȉiȊIȋiȌOȍoȎOȏoȐRȑrȒRȓrȔUȕuȖUȗuȘSșsȚTțtȞHȟhȦAȧa"
+   "ȨEȩeȪOȫoȬOȭoȮOȯoȰOȱoȲYȳyḀAḁaḂBḃbḄBḅbḆBḇbḈCḉcḊDḋd"
+   "ḌDḍdḎDḏdḐDḑdḒDḓdḔEḕeḖEḗeḘEḙeḚEḛeḜEḝeḞFḟfḠGḡgḢHḣh"
+   "ḤHḥhḦHḧhḨHḩhḪHḫhḬIḭiḮIḯiḰKḱkḲKḳkḴKḵkḶLḷlḸLḹlḺLḻl"
+   "ḼLḽlḾMḿmṀMṁmṂMṃmṄNṅnṆNṇnṈNṉnṊNṋnṌOṍoṎOṏoṐOṑoṒOṓo"
+   "ṔPṕpṖPṗpṘRṙrṚRṛrṜRṝrṞRṟrṠSṡsṢSṣsṤSṥsṦSṧsṨSṩsṪTṫt"
+   "ṬTṭtṮTṯtṰTṱtṲUṳuṴUṵuṶUṷuṸUṹuṺUṻuṼVṽvṾVṿvẀWẁwẂWẃw"
+   "ẄWẅwẆWẇwẈWẉwẊXẋxẌXẍxẎYẏyẐZẑzẒZẓzẔZẕzẖhẗtẘwẙyẛſẠA"
+   "ạaẢAảaẤAấaẦAầaẨAẩaẪAẫaẬAậaẮAắaẰAằaẲAẳaẴAẵaẶAặaẸE"
+   "ẹeẺEẻeẼEẽeẾEếeỀEềeỂEểeỄEễeỆEệeỈIỉiỊIịiỌOọoỎOỏoỐO"
+   "ốoỒOồoỔOổoỖOỗoỘOộoỚOớoỜOờoỞOởoỠOỡoỢOợoỤUụuỦUủuỨU"
+   "ứuỪUừuỬUửuỮUữuỰUựuỲYỳyỴYỵyỶYỷyỸYỹy"))))
+
+(def ^:private folds
+  (merge bases {\å "aa" \ä "ae" \æ "ae" \ö "oe" \ø "oe"}))
+
 (defn slug
-  "The title in lowercase ASCII, each run of other characters one -, cut to at
-  most 30 characters just before a -."
+  "The title in lowercase ASCII, cut to at most 30 characters just before a -:
+  å becomes aa, ä and æ ae, ö and ø oe, other accented letters lose their
+  accents, and each run of other characters becomes one -."
   [title]
-  (let [plain (-> (Normalizer/normalize title Normalizer$Form/NFD)
+  (let [plain (-> (str/lower-case title)
+                  (str/escape folds)
                   (str/replace #"\p{M}" "")
-                  str/lower-case
                   (str/replace #"[^a-z0-9]+" "-")
                   (str/replace #"^-|-$" ""))
         cut (str/last-index-of plain "-" slug-limit)]

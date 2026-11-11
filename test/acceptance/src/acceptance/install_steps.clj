@@ -23,14 +23,72 @@
 (defn- file-lines [world path]
   (str/split-lines (slurp (str (fs/path (:repo world) path)))))
 
+(defn- path-without-bb
+  "The PATH of the clean environment with each directory that holds bb replaced
+  by a scratch directory of links to its other programs."
+  []
+  (let [path (get (support/clean-env nil) "PATH")]
+    (str/join ":" (for [[index dir] (map-indexed vector (str/split path #":"))]
+                    (if-not (fs/exists? (fs/path dir "bb"))
+                      dir
+                      (let [links (fs/path @support/scratch "path-without-bb" (str index))]
+                        (when-not (fs/exists? links)
+                          (fs/create-dirs links)
+                          (doseq [program (fs/list-dir dir)
+                                  :when (not= "bb" (str (fs/file-name program)))]
+                            (fs/create-sym-link (fs/path links (fs/file-name program)) program)))
+                        (str links)))))))
+
+(defn- err-lines [world]
+  (str/split-lines (str (:err world))))
+
 (def ^:private install-handlers
   [;; Given
+   [#"no directory on PATH holds bb"
+    (fn [world] (assoc world :path (path-without-bb)))]
+
+   [#"a working directory outside the repository holds a bb.edn that requires Babashka \"([^\"]+)\""
+    (fn [world version]
+      (let [dir (str (fs/path @support/scratch (str "workdir-" (random-uuid))))]
+        (write-file dir "bb.edn" (pr-str {:min-bb-version version}))
+        (assoc world :workdir dir)))]
+
    [#"the file \"([^\"]+)\" in the repository holds \"(.*)\""
     (fn [world path text]
       (write-file (:repo world) path (str (unescape text) "\n"))
       world)]
 
    ;; Then
+   [#"the exit status is not 0"
+    (fn [world]
+      (check (not= 0 (:exit world)) (str "exit status 0, stderr: " (str/trim (str (:err world)))))
+      world)]
+
+   [#"the error output has a line containing \"([^\"]+)\" and \"([^\"]+)\""
+    (fn [world one other]
+      (check (some #(and (str/includes? % one) (str/includes? % other)) (err-lines world))
+             (str "error output was " (pr-str (:err world))))
+      world)]
+
+   [#"the error output has no line containing \"([^\"]+)\""
+    (fn [world text]
+      (let [found (filter #(str/includes? % text) (err-lines world))]
+        (check (empty? found) (str "error output has " (pr-str found)))
+        world))]
+
+   [#"the repository has the same files with the same contents as before install.sh ran"
+    (fn [world]
+      (let [before (:snapshot world)
+            after (metrics/snapshot (:repo world))
+            changed (sort (filter #(not= (get before %) (get after %)) (set (concat (keys before) (keys after)))))]
+        (check (empty? changed) (str "changed: " (pr-str changed)))
+        world))]
+
+   [#"the repository has no file \"([^\"]+)\""
+    (fn [world path]
+      (check (not (fs/exists? (fs/path (:repo world) path))) (str path " exists"))
+      world)]
+
    [#"git add -A in the repository stages every file under \"([^\"]+)\""
     (fn [world dir]
       (let [present (lines-of (in-repo world "find" dir "-type" "f"))

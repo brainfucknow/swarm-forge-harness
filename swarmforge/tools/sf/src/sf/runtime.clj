@@ -3,8 +3,9 @@
   other, so an older Babashka gets a clear refusal instead of a load error.")
 
 (def minimum
-  "The oldest Babashka that loads sf: 1.12.205 added java.text.Normalizer."
-  "1.12.205")
+  "The oldest Babashka sf is tested on: the sf-min-bb job of
+  .github/workflows/test.yml runs test/sf_test.sh on it."
+  "1.12.200")
 
 (defn- parts
   "The major, minor and patch numbers of version, 0 when missing."
