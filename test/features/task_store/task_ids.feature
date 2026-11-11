@@ -1,9 +1,10 @@
 Feature: sf task ids
 
   sf new makes a task id from the title: a slug, "-", and 7 random lowercase
-  hexadecimal digits, and prints it. The slug is the title with each letter
-  of U+00C0 to U+024F and U+1E00 to U+1EFF that has a canonical
-  decomposition replaced by its base letter, lowercased, and each run of
+  hexadecimal digits, and prints it. The slug is the title lowercased, with
+  å made "aa", ä and æ made "ae", ö and ø made "oe", each other letter of
+  U+00C0 to U+024F and U+1E00 to U+1EFF that has a canonical decomposition
+  made its base letter, every combining mark dropped, and each run of
   characters other than a-z and 0-9 made one "-", with "-" removed at both
   ends. An empty slug is "task". A slug longer than 30 characters is cut to
   its longest prefix of at most 30 characters that ends just before a "-";
@@ -30,7 +31,9 @@ Feature: sf task ids
       | title                                   | slug                           |
       | Add login                               | add-login                      |
       | Fix: the API's 2 bugs!                  | fix-the-api-s-2-bugs           |
-      | Ändra inloggningen för användare        | andra-inloggningen-for         |
+      | Ändra inloggningen för användare        | aendra-inloggningen-foer       |
+      | Blåbærsyltetøy                          | blaabaersyltetoey              |
+      | ØL OG ÆBLE PÅ ÖN                        | oel-og-aeble-paa-oen           |
       | Crème brûlée                            | creme-brulee                   |
       | Tiếng Việt                              | tieng-viet                     |
       | Pīnyīn ǎ ǜ                              | pinyin-a-u                     |

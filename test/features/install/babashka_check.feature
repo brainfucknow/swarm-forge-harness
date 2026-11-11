@@ -4,14 +4,14 @@ Feature: install.sh checks Babashka before it changes the project
   argument and git-repository checks, and before it copies, creates or
   edits anything in the target project, it runs sf help from its own
   checkout with the bb on PATH, so the guard in swarmforge/bin/sf decides.
-  A bb.edn in the directory install.sh runs from does not affect that
-  check. If no bb is on PATH, or the check fails, install.sh exits
-  non-zero, its error output names Babashka and the minimum version, and
-  the target project is exactly as it was. A bb older than the minimum is
-  refused the same way, with the refusal line sf itself prints; that case
-  runs against real Babashka binaries and is verified by manual QA,
-  because a test cannot make bb report another version. Install failures
-  not caused by bb are out of scope.
+  A bb.edn in the directory install.sh runs from, outside the target, does
+  not affect that check. If no bb is on PATH, or the check fails,
+  install.sh exits non-zero, its error output names Babashka and the
+  minimum version, and the target project is exactly as it was. A bb older
+  than the minimum is refused the same way, with the refusal line sf
+  itself prints; that case runs against real Babashka binaries and is
+  verified by manual QA, because a test cannot make bb report another
+  version. Install failures not caused by bb are out of scope.
 
   Background:
     Given a git repository with one commit and no swarmforge
@@ -30,8 +30,8 @@ Feature: install.sh checks Babashka before it changes the project
 
   # install.sh checks Babashka before it changes the project 2
   Scenario: install.sh checks Babashka before it changes the project 2: a bb.edn in the working directory does not affect the check
-    Given the repository holds a bb.edn that requires Babashka "99.0.0"
-    When I run install.sh into it 1 times
+    Given a working directory outside the repository holds a bb.edn that requires Babashka "99.0.0"
+    When I run install.sh into it 1 times from that working directory
     Then the exit status is 0
     And the error output has no line containing "99.0.0"
     And git add -A in the repository stages every file under "swarmforge/bin"
