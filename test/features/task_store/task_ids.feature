@@ -1,15 +1,16 @@
 Feature: sf task ids
 
   sf new makes a task id from the title: a slug, "-", and 7 random lowercase
-  hexadecimal digits, and prints it. The slug is the title lowercased, with
-  å made "aa", ä and æ made "ae", ö and ø made "oe", each other letter of
-  U+00C0 to U+024F and U+1E00 to U+1EFF that has a canonical decomposition
-  made its base letter, every combining mark dropped, and each run of
-  characters other than a-z and 0-9 made one "-", with "-" removed at both
-  ends. An empty slug is "task". A slug longer than 30 characters is cut to
-  its longest prefix of at most 30 characters that ends just before a "-";
-  when the first word alone is longer than 30 characters, it is cut at 30.
-  The task branch is swarm/<id>.
+  hexadecimal digits, and prints it. The slug is the title lowercased; each
+  letter of U+00C0 to U+024F and U+1E00 to U+1EFF with a canonical
+  decomposition decomposed; then a followed by a ring (U+030A) made "aa", a
+  followed by a diaeresis (U+0308) and æ made "ae", o followed by a
+  diaeresis and ø made "oe"; every remaining combining mark dropped; and
+  each run of characters other than a-z and 0-9 made one "-", with "-"
+  removed at both ends. An empty slug is "task". A slug longer than 30
+  characters is cut to its longest prefix of at most 30 characters that ends
+  just before a "-"; when the first word alone is longer than 30 characters,
+  it is cut at 30. The task branch is swarm/<id>.
 
   A command takes a task as the full id, as the 7-digit hex part of exactly
   one task, or as a prefix of exactly one full id. An argument that matches
@@ -34,6 +35,7 @@ Feature: sf task ids
       | Ändra inloggningen för användare        | aendra-inloggningen-foer       |
       | Blåbærsyltetøy                          | blaabaersyltetoey              |
       | ØL OG ÆBLE PÅ ÖN                        | oel-og-aeble-paa-oen           |
+      | Ǿre ǣ ǻ                                 | oere-ae-aa                     |
       | Crème brûlée                            | creme-brulee                   |
       | Tiếng Việt                              | tieng-viet                     |
       | Pīnyīn ǎ ǜ                              | pinyin-a-u                     |
