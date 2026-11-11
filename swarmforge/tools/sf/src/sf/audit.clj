@@ -3,6 +3,7 @@
   to record a commit is refused with a self-review; the next attempt at the
   same commit goes through."
   (:require [babashka.fs :as fs]
+            [clojure.string :as str]
             [sf.config :as config]
             [sf.flow :as flow]
             [sf.shell :as shell]
@@ -17,14 +18,36 @@ Before running this command again:
 - Read the whole diff since the previous record (git diff " (flow/last-milestone-commit (store/records-at (store/ref-of id) id)) "..HEAD), the tests, and anything generated or left in the working tree.
 - Fix every finding, commit, rerun the checks, then run this command again. It records the handoff when HEAD is still " head "; a new commit starts a new audit."))
 
+(defn- path-of [id]
+  (fs/path (shell/repo-root) ".swarmforge" "audit" id))
+
+(defn- pending
+  "The :head the gate refused last and the number of :refusals since the
+  task's last audited record, from the pending audit file. A file an earlier sf
+  wrote holds only the head; it stands for one refusal."
+  [path]
+  (if (fs/exists? path)
+    (let [[head refusals] (str/split-lines (slurp (str path)))]
+      {:head (str/trim (or head "")) :refusals (or (some-> refusals str/trim parse-long) 1)})
+    {:head nil :refusals 0}))
+
 (defn gate
-  "Stops with exit 3 when it refuses role's attempt to record head."
+  "nil when role does not audit. Otherwise stops with exit 3 when it refuses
+  role's attempt to record head, or returns the number of refusals the record
+  carries. The count stays pending until clear! runs after the record is
+  written."
   [id role head]
   (when (config/role-audits? role)
-    (let [file (fs/path (shell/repo-root) ".swarmforge" "audit" id)]
-      (if (and (fs/exists? file) (= head (shell/chomp (slurp (str file)))))
-        (fs/delete file)
-        (do (fs/create-dirs (fs/parent file))
-            (spit (str file) (str head "\n"))
+    (let [path (path-of id)
+          {:keys [refusals] refused :head} (pending path)]
+      (if (= head refused)
+        refusals
+        (do (fs/create-dirs (fs/parent path))
+            (spit (str path) (str head "\n" (inc refusals) "\n"))
             (println (refusal id head))
             (shell/fail 3 nil))))))
+
+(defn clear!
+  "Removes the task's pending audit state once its record is written."
+  [id]
+  (fs/delete-if-exists (path-of id)))

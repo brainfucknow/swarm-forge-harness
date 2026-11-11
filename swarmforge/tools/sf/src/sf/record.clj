@@ -86,7 +86,8 @@
 (def ^:private trailers
   [["SwarmForge-Task" :task] ["SwarmForge-Record" :record] ["SwarmForge-From" :from]
    ["SwarmForge-Stage" :stage] ["SwarmForge-Route" :route] ["SwarmForge-Needs" :needs]
-   ["SwarmForge-Merged-Into" :merged-into] ["SwarmForge-Reviewed" :reviewed]])
+   ["SwarmForge-Merged-Into" :merged-into] ["SwarmForge-Reviewed" :reviewed]
+   ["SwarmForge-Audit-Refusals" :audit-refusals]])
 
 (defn rejected-refusal
   "Why value cannot be the value of a `Rejected: <finding> | <reason>` trailer,
@@ -98,6 +99,16 @@
           (nil? at) (str "--rejected needs '<finding> | <reason>', got '" value "'")
           (or (str/blank? (subs value 0 at)) (str/blank? (subs value (+ at 3))))
           (str "--rejected needs a finding and a reason around its last ' | ', got '" value "'"))))
+
+(defn rejected-finding
+  "The :finding and :reason of a `Rejected:` value, split at its last ` | `, and
+  the :kind and :severity of a finding that starts with `<KIND>, <SEVERITY>: `
+  (KIND DEFECT or PREMISE, SEVERITY CRITICAL, HIGH, MEDIUM or LOW), else nil."
+  [value]
+  (let [at (str/last-index-of value " | ")
+        finding (if at (subs value 0 at) value)
+        [_ kind severity] (re-find #"^(DEFECT|PREMISE), (CRITICAL|HIGH|MEDIUM|LOW): " finding)]
+    {:finding finding :reason (when at (subs value (+ at 3))) :kind kind :severity severity}))
 
 (defn- lore-trailers
   "The Lore-id and Rejected trailer lines of a record that has a :lore-id."
@@ -126,17 +137,21 @@
 (defn parse
   "The record in a commit, given as :sha, :parents, :message and :trailers
   (the unfolded trailer lines). Its :commit is its own sha for a created
-  record, else its first parent: the role's commit it was made on."
+  record, else its first parent: the role's commit it was made on. An
+  approval also has the values of its `Rejected:` trailers, in order, as
+  :rejected."
   [{:keys [sha parents message] :as commit}]
-  (let [by-key (into {} (for [line (:trailers commit)
-                              :let [[_ k v] (re-matches #"([^:]+): ?(.*)" line)]
-                              :when k]
-                          [k v]))
+  (let [pairs (for [line (:trailers commit)
+                    :let [[_ k v] (re-matches #"([^:]+): ?(.*)" line)]
+                    :when k]
+                [k v])
+        by-key (into {} pairs)
         fields (into {} (for [[key field] trailers :when (by-key key)] [field (by-key key)]))
         text (message-text message)]
     (cond-> (assoc fields :sha sha
                    :commit (if (= "created" (:record fields)) sha (first parents)))
-      (not (str/blank? text)) (assoc :text text))))
+      (not (str/blank? text)) (assoc :text text)
+      (= "approval" (:record fields)) (assoc :rejected (vec (for [[k v] pairs :when (= "Rejected" k)] v))))))
 
 (defn same-commit?
   "True when a and b name the same commit, each a full or an abbreviated sha."
@@ -194,7 +209,7 @@
     {:records (keep-indexed #(when-not (dropped %1) %2) records)
      :omitted omitted}))
 
-(defn- fields [{:keys [task record from text stage route commit files merged-into]}]
+(defn- fields [{:keys [task record from text stage route commit files merged-into audit-refusals]}]
   (concat
    [["type" record] ["from" from]]
    (case record
@@ -207,7 +222,9 @@
      "handoff" [["to" stage] ["branch" (branch task)] ["commit" commit] ["files" files] ["summary" text]]
      "finished" [["merged-into" merged-into]]
      "moved" [["path" text]]
-     [])))
+     [])
+   (when (and audit-refusals (#{"review" "handoff"} record))
+     [["audit-refusals" audit-refusals]])))
 
 (defn block
   "The record as key: value lines; later lines of a value are indented by two spaces."

@@ -133,7 +133,38 @@
                                                :trailers ["SwarmForge-Record: created"]}))))
 
   (it "keeps a value with a colon"
-    (should= "a: b" (:route (record/parse {:sha "s" :parents [] :message "" :trailers ["SwarmForge-Route: a: b"]})))))
+    (should= "a: b" (:route (record/parse {:sha "s" :parents [] :message "" :trailers ["SwarmForge-Route: a: b"]}))))
+
+  (it "reads the Rejected trailers of an approval in order, none as an empty list"
+    (should= ["DEFECT, LOW: a | b | reason" "C | d"]
+             (:rejected (record/parse {:sha "s" :parents ["p"] :message ""
+                                       :trailers ["Lore-id: 0badc0de" "Rejected: DEFECT, LOW: a | b | reason"
+                                                  "Rejected: C | d" "SwarmForge-Record: approval"]})))
+    (should= [] (:rejected (record/parse {:sha "s" :parents ["p"] :message "" :trailers ["SwarmForge-Record: approval"]})))
+    (should-be-nil (:rejected (record/parse {:sha "s" :parents ["p"] :message ""
+                                             :trailers ["Rejected: x | y" "SwarmForge-Record: handoff"]}))))
+
+  (it "writes the audit refusals of a record as a trailer and reads them back"
+    (let [handoff {:task "t-1" :record "handoff" :from "coder" :stage "qa" :route "coder,qa" :needs "none"
+                   :commit "c1" :text "done" :audit-refusals 2}
+          message (record/message handoff)]
+      (should= "SwarmForge-Audit-Refusals: 2" (last (clojure.string/split-lines message)))
+      (should= "2" (:audit-refusals (record/parse {:sha "s" :parents ["c1"] :message message
+                                                   :trailers (drop 4 (clojure.string/split-lines message))}))))))
+
+(describe "rejected-finding"
+  (it "splits a Rejected value at its last ' | ' and reads the kind and severity of its prefix"
+    (should= {:finding "DEFECT, LOW: a | b" :reason "accepted" :kind "DEFECT" :severity "LOW"}
+             (record/rejected-finding "DEFECT, LOW: a | b | accepted"))
+    (should= {:finding "PREMISE, CRITICAL: x" :reason "y" :kind "PREMISE" :severity "CRITICAL"}
+             (record/rejected-finding "PREMISE, CRITICAL: x | y")))
+
+  (it "has no kind or severity without the prefix"
+    (doseq [value ["C | d" "DEFECT, SEVERE: x | y" "defect, low: x | y" "NOTE, LOW: x | y" "DEFECT LOW: x | y"]]
+      (should= [nil nil] ((juxt :kind :severity) (record/rejected-finding value)))))
+
+  (it "keeps a value without ' | ' whole as the finding"
+    (should= {:finding "x" :reason nil :kind nil :severity nil} (record/rejected-finding "x"))))
 
 (describe "role-commits"
   (it "takes the commit of a record made on another record from that record"
@@ -186,6 +217,13 @@
              (record/block {:record "changes-requested" :from "operator" :text "vague"}))
     (should= "type: route\nfrom: operator\nroute: coder,qa"
              (record/block {:record "route" :from "operator" :route "coder,qa"})))
+
+  (it "renders the audit refusals of a review and a handoff that carry them"
+    (should= "type: review\nfrom: specifier\ncommit: c1\nfiles: -\nsummary: ready\naudit-refusals: 2"
+             (record/block {:record "review" :from "specifier" :commit "c1" :files "-" :text "ready" :audit-refusals "2"}))
+    (should= "type: handoff\nfrom: coder\nto: qa\nbranch: swarm/t-1\ncommit: c1\nfiles: -\nsummary: done\naudit-refusals: 1"
+             (record/block {:task "t-1" :record "handoff" :from "coder" :stage "qa" :commit "c1"
+                            :files "-" :text "done" :audit-refusals "1"})))
 
   (it "renders only the type and the sender of a record without fields"
     (should= "type: approval\nfrom: operator"

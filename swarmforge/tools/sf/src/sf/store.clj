@@ -36,6 +36,14 @@
            (map record/parse)
            (filter #(and (= "finished" (:record %)) (or (nil? id) (= id (:task %)))))))))
 
+(defn finished-tasks
+  "The newest finished record of each task in HEAD's history, the task whose
+  record is the oldest first."
+  []
+  (let [newest-first (finished-records)]
+    (reverse (for [id (distinct (map :task newest-first))]
+               (first (filter #(= id (:task %)) newest-first))))))
+
 (defn finished-ids []
   (distinct (map :task (finished-records))))
 
@@ -46,6 +54,11 @@
 
 (defn finished? [id]
   (some? (finished-record id)))
+
+(defn open-ids
+  "The ids of the task branches whose task is not finished, sorted."
+  []
+  (sort (remove (set (finished-ids)) (branch-ids))))
 
 (defn tip
   "The commit at the tip of the task branch, or nil."
