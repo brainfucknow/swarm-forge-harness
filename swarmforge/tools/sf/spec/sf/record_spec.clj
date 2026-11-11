@@ -9,8 +9,21 @@
   (it "makes each run of other characters one - and trims - at both ends"
     (should= "fix-the-api-s-2-bugs" (record/slug "Fix: the API's 2 bugs!")))
 
-  (it "drops the combining marks of decomposed letters"
-    (should= "andra-inloggningen-for" (record/slug "Ändra inloggningen för användare")))
+  (it "writes å as aa, ä and æ as ae, ö and ø as oe"
+    (should= "aendra-inloggningen-foer" (record/slug "Ändra inloggningen för användare"))
+    (should= "blaabaersyltetoey" (record/slug "Blåbærsyltetøy"))
+    (should= "oel-og-aeble-paa-oen" (record/slug "ØL OG ÆBLE PÅ ÖN")))
+
+  (it "drops the marks of other accented letters"
+    (should= "creme-brulee" (record/slug "Crème brûlée"))
+    (should= "tieng-viet" (record/slug "Tiếng Việt"))
+    (should= "pinyin-a-u" (record/slug "Pīnyīn ǎ ǜ")))
+
+  (it "makes letters with no decomposition one -"
+    (should= "odz-stra-e" (record/slug "Łódź Straße")))
+
+  (it "drops a combining mark after a plain letter"
+    (should= "andra" (record/slug "A\u0308ndra")))
 
   (it "keeps a slug of 30 characters"
     (should= "twelve-chars-one-two-three-fou" (record/slug "twelve chars one two three fou")))

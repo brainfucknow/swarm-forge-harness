@@ -1,4 +1,4 @@
-{:min-bb-version "1.12.205"
+{:min-bb-version "1.12.200"
  :paths ["src" "resources" "spec" "property" "hardening"]
  :deps {speclj/speclj {:mvn/version "3.12.2"}}
  :tasks

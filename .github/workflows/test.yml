@@ -3,6 +3,25 @@ on:
   push:
   pull_request:
 jobs:
+  sf-min-bb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the oldest Babashka sf supports
+        env:
+          BB_VERSION: 1.12.200
+          BB_SHA256: c38adba2954b52f2ba410e24c94ef42c3f7285335f253e9f8125c47ae0b4aeae
+        run: |
+          mkdir -p "$HOME/bin"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          curl -fsSL --retry 5 --retry-all-errors -o bb.tar.gz \
+            "https://github.com/babashka/babashka/releases/download/v$BB_VERSION/babashka-$BB_VERSION-linux-amd64.tar.gz"
+          echo "$BB_SHA256  bb.tar.gz" | sha256sum --check
+          tar -xzf bb.tar.gz -C "$HOME/bin"
+          rm bb.tar.gz
+          "$HOME/bin/bb" --version
+      - name: Test sf
+        run: bash test/sf_test.sh
   sf:
     runs-on: ubuntu-latest
     steps:
