@@ -125,6 +125,7 @@ bb --config swarmforge/tools/sf/bb.edn property
 swarmforge/bin/sf tool ensure gherkin-parser
 bash test/acceptance.sh
 bb --config swarmforge/tools/csharp/bb.edn test
+bb --config swarmforge/tools/csharp/bb.edn property
 bb --config swarmforge/tools/javascript/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn property
 bb --config swarmforge/tools/javascript/bb.edn acceptance
