@@ -12,7 +12,11 @@ target="$(cd "${1:-.}" && pwd)"
 [ -d "$target/.git" ] || { echo "$target is not a git repository" >&2; exit 1; }
 
 # Run from $HERE, which has no bb.edn, so the caller's bb.edn cannot affect it.
-minimum="$(sed -n 's/.*:min-bb-version "\([^"]*\)".*/\1/p' "$HERE/swarmforge/tools/sf/bb.edn")"
+minimum=""
+min_pattern=':min-bb-version "([^"]*)"'
+while IFS= read -r line; do
+  [[ $line =~ $min_pattern ]] && minimum="${BASH_REMATCH[1]}"
+done < "$HERE/swarmforge/tools/sf/bb.edn"
 needs="install.sh: SwarmForge needs Babashka $minimum or newer: https://babashka.org"
 command -v bb >/dev/null || { echo "$needs" >&2; exit 1; }
 if ! check_err="$(cd "$HERE" && bb "$HERE/swarmforge/bin/sf" help 2>&1 >/dev/null)"; then
