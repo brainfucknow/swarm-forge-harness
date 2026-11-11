@@ -1,8 +1,9 @@
 Feature: sf task ids
 
   sf new makes a task id from the title: a slug, "-", and 7 random lowercase
-  hexadecimal digits, and prints it. The slug is the title with its letters
-  decomposed and their combining marks dropped, lowercased, and each run of
+  hexadecimal digits, and prints it. The slug is the title with each letter
+  of U+00C0 to U+024F and U+1E00 to U+1EFF that has a canonical
+  decomposition replaced by its base letter, lowercased, and each run of
   characters other than a-z and 0-9 made one "-", with "-" removed at both
   ends. An empty slug is "task". A slug longer than 30 characters is cut to
   its longest prefix of at most 30 characters that ends just before a "-";
@@ -30,6 +31,10 @@ Feature: sf task ids
       | Add login                               | add-login                      |
       | Fix: the API's 2 bugs!                  | fix-the-api-s-2-bugs           |
       | Ändra inloggningen för användare        | andra-inloggningen-for         |
+      | Crème brûlée                            | creme-brulee                   |
+      | Tiếng Việt                              | tieng-viet                     |
+      | Pīnyīn ǎ ǜ                              | pinyin-a-u                     |
+      | Łódź Straße                             | odz-stra-e                     |
       | twelve chars one two three fou          | twelve-chars-one-two-three-fou |
       | twelve chars one two three four         | twelve-chars-one-two-three     |
       | Supercalifragilisticexpialidocious word | supercalifragilisticexpialidoc |
