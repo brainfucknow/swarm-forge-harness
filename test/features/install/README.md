@@ -3,6 +3,8 @@
 `bin_tracked.feature` verifies that installed `swarmforge/bin` files remain
 trackable under project ignore rules such as Visual Studio's `[Bb]in/`.
 It also checks reinstall behavior and duplicate ignore entries.
+`babashka_check.feature` verifies that install.sh, with no `bb` on PATH,
+refuses before it changes the target project.
 
 Run `bash test/acceptance.sh` from the repository root. The fixtures use the
 real installer, Git, and Babashka in scratch repositories. See the
