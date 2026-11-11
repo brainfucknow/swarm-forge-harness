@@ -16,12 +16,16 @@
       (throw (ex-info (str "git " (str/join " " args) ": " (str/trim (:err result))) {})))
     (:out result)))
 
+(defn succeeds?
+  "Whether git exits 0 with the given arguments; its output is discarded."
+  [args & {:keys [dir]}]
+  (zero? (:exit (apply p/shell {:out :string :err :string :dir (or dir shell/*dir*) :continue true} "git" args))))
+
 (defn repo-root [& {:keys [dir]}]
   (str/trim (git ["rev-parse" "--show-toplevel"] :dir dir)))
 
 (defn ref-exists? [ref dir]
-  (zero? (:exit (p/shell {:out :string :err :string :dir (or dir shell/*dir*) :continue true}
-                         "git" "rev-parse" "--verify" "--quiet" (str ref "^{commit}")))))
+  (succeeds? ["rev-parse" "--verify" "--quiet" (str ref "^{commit}")] :dir dir))
 
 (defn first-existing
   "The first of `refs` that is non-nil and satisfies `exists?`."
