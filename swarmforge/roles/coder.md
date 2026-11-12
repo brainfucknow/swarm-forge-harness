@@ -30,8 +30,5 @@ You are the coder.
 - Do not run Gherkin acceptance mutation.
 
 ## Handoff
-- `sf start <id>`; work in the printed `DIR:`.
 - If the specification is ambiguous or contradicts itself, `sf ask <id> "<question>"` and stop.
-- Record decisions and evidence under the shared [Lore rules](../constitution/articles/workflow.md#lore-trailers).
-- When applicable unit and acceptance verification is satisfied under the shared evidence rules, commit (`By coder.`) and run `sf handoff <id> -m "<one line>"`.
-- Report the handoff line and stop.
+- When applicable unit and acceptance verification is satisfied under the shared evidence rules, commit as `By coder.` and follow the shared [handoff rules](../constitution/articles/handoffs.md).

@@ -23,6 +23,9 @@ committed or not, plus untracked `.cs` files. `--base` defaults to
 any line from its signature (attributes and wrapped parameters included) to
 its last coverable line changed.
 
+Mutation must be differential: use `sf-cs mutate` without `--all`, so Stryker
+mutates only files changed since the base branch.
+
 ## Reading the output
 
 ```text
@@ -59,17 +62,8 @@ means no test reaches the line.
   The log's analyzer summary must list a `NetAnalyzers` assembly; otherwise
   the analyzers did not run and the scan is Not-tested, not clean.
 - Extra, encouraged but not blocking (not the code scanner): Semgrep on the
-  changed `.cs` files, with rules from a pinned semgrep-rules commit in `tmp/`
-  (never commit them: Semgrep Rules License). The fetch and the first uvx run
-  reach github.com and pypi.org. When it cannot run, record
-  `Not-tested: semgrep: <reason>` and continue:
-
-  ```sh
-  git init -q tmp/semgrep-rules
-  git -C tmp/semgrep-rules fetch -q --depth 1 https://github.com/semgrep/semgrep-rules.git 16b9e6d45f10649f6a531ec4838ed9924372c3bc
-  git -C tmp/semgrep-rules checkout -q FETCH_HEAD
-  uvx semgrep@1.183.0 scan --config tmp/semgrep-rules/csharp --metrics=off --disable-version-check --error <changed files>
-  ```
+  changed `.cs` files. Read and follow the [shared Semgrep setup](semgrep.md)
+  with `--config tmp/semgrep-rules/csharp`.
 
 - Dependency audit, when the task changes a `*.csproj`,
   `Directory.Packages.props`, `Directory.Build.props` or `packages.lock.json`:
