@@ -8,4 +8,3 @@
 - To ask, first finish and commit everything you can without restructuring existing code. Then, if you have refactorings of existing code to propose, run one `sf ask <id> "<list>"` whose text is a numbered list, one item per refactoring, each naming the file, the function, the change, the reason, and the gate finding it addresses if any, and stop. If you have nothing to propose, do not ask.
 - The operator's `sf answer` record is the approval. After it, make each approved refactoring and record it with a Lore trailer `Related: <refactoring> | approved in answer item <n>`; record each declined one as `Rejected: <refactoring> | operator declined`.
 - A finding in existing code left unfixed, whether not proposed or declined, does not block handoff. Record it as `Constraint: existing code, <tool> finding left: <where>`, where `<tool>` is the gate (CRAP, DRY, code-smell or mutation).
-
