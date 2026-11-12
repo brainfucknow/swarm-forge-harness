@@ -14,7 +14,7 @@
 (defn- role-prompt [role short]
   (if (config/gate? role)
     (str "You are the SwarmForge '" role "' gate. Read swarmforge/roles/" role ".md, then audit the specification of task " short " that waits for approval. Start with: swarmforge/bin/sf show " short ". Change nothing: no edits, no commits, no sf command that records. End with your report.")
-    (str "You are the SwarmForge '" role "' role. Read swarmforge/constitution.md and every file it names, then read swarmforge/roles/" role ".md, then do your role's work for task " short ". Start with: swarmforge/bin/sf start " short)))
+    (str "You are the SwarmForge '" role "' role. Read swarmforge/constitution.md and follow its reading instructions, then read swarmforge/roles/" role ".md, then do your role's work for task " short ". Start with: swarmforge/bin/sf start " short)))
 
 (defn- detect-backend []
   (or (shell/env "SWARMFORGE_BACKEND" nil)
