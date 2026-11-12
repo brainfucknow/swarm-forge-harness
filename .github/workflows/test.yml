@@ -59,6 +59,8 @@ jobs:
           bash test/acceptance.sh
       - name: Test sf-cs
         run: bb --config swarmforge/tools/csharp/bb.edn test
+      - name: Property-test sf-cs
+        run: bb --config swarmforge/tools/csharp/bb.edn property
       - name: Test sf-js
         run: bb --config swarmforge/tools/javascript/bb.edn test
       - name: Property-test sf-js

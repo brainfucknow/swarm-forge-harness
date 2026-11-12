@@ -10,13 +10,13 @@
   | Go | `github.com/unclebob/mutate4go` | `github.com/unclebob/crap4go` | `github.com/unclebob/dry4go` | `go install` |
   | Clojure | `github.com/unclebob/clj-mutate` | `github.com/unclebob/crap4clj` | `github.com/unclebob/dry4clj` | Clojure CLI/deps.edn; [Babashka guide](../../languages/clojure.md) |
   | Java | `github.com/unclebob/mutate4java` | `github.com/unclebob/crap4java` | `github.com/unclebob/dry4java` | [`sf-java`](../../languages/java.md) |
-  | C# | Stryker.NET | Coverlet | jscpd | [`sf-cs tools`](../../languages/csharp.md) |
-  | F# | Unsupported (exit 2) | Coverlet compiled methods | jscpd | [`sf-fs tools`](../../languages/fsharp.md) |
-  | VB.NET | Unsupported (exit 2) | Coverlet compiled methods | jscpd | [`sf-vb tools`](../../languages/vbnet.md) |
+  | C# | Stryker.NET | dotnet-coverage | jscpd | [`sf-cs tools`](../../languages/csharp.md) |
+  | F# | Unsupported (exit 2) | dotnet-coverage compiled methods | jscpd | [`sf-fs tools`](../../languages/fsharp.md) |
+  | VB.NET | Unsupported (exit 2) | dotnet-coverage compiled methods | jscpd | [`sf-vb tools`](../../languages/vbnet.md) |
   | JavaScript/TypeScript | StrykerJS | oxlint or ESLint + Istanbul | jscpd | [`sf-js tools`](../../languages/javascript.md) |
   | Ruby | mutant (optional: needs the project's mutant usage) | RuboCop or flog + SimpleCov | jscpd or flay | [`sf-rb`](../../languages/ruby.md) |
 
-- Stryker.NET is pinned by the project's committed dotnet tool manifest instead of `swarmforge/tools.conf`; `sf-cs tools` restores it and `sf-cs mutate` refuses any other copy.
+- Stryker.NET and dotnet-coverage are pinned by the project's committed dotnet tool manifest instead of `swarmforge/tools.conf`; `sf-cs tools` (and `sf-fs`/`sf-vb tools` for dotnet-coverage) restores them, and `sf-cs mutate` and `coverage` refuse any other copy.
 - Install every listed tool with `sf tool ensure <tool>` and check it with `sf tool require <tool>`; `sf tool list` prints the catalogue. Cite the `@<ref>` that ends each `INSTALLED:` line of `sf tool ensure` for each tool you ran in your `Tested` trailers. Wrappers land in `.swarmforge/bin/` at the repository root, ignored by git and shared by every task worktree, so a tool install never writes outside the project. Run tools through those wrappers (`sf tool bin` prints the directory to put on PATH); they carry the argument guardrails below.
 
 ## Language Defaults

@@ -11,11 +11,13 @@
             [sfcore.shell :as shell]
             [sfcore.stryker :as stryker]
             [sfcs.cobertura :as cob]
+            [sfcs.coverage :as coverage]
             [sfcs.pin :as pin]
             [sfcs.project :as project]))
 
 (def tmp "tmp")
 (def coverage-dir (str (fs/path tmp "coverage")))
+(def coverage-settings (str (fs/path tmp "dotnet-coverage.xml")))
 (def jscpd-dir (str (fs/path tmp "jscpd")))
 (def stryker-dir (str (fs/path tmp "stryker")))
 
@@ -33,10 +35,12 @@
 (defn- usage []
   (str "usage: " (:name *language*) " <command> [options]
 
-  tools                       " (if (:no-mutation *language*) "check dotnet, node, npx and prepare jscpd" "restore local dotnet tools and check node, npx, dotnet") "
+  tools                       restore local dotnet tools and check node, npx, dotnet
   test [dotnet test args]     unit and acceptance tests (Category!=Property" (when (:expecto? *language*) "; Expecto: outside the SwarmForgePropertyTestList list") ")
   property                    property tests only (Category=Property" (when (:expecto? *language*) "; Expecto: the SwarmForgePropertyTestList list") ")
-  coverage [dotnet test args] tests with coverlet; cobertura files under " coverage-dir "/
+  coverage [dotnet test args] tests under dotnet-coverage; cobertura files under " coverage-dir "/;
+                              needs dotnet-coverage pinned in a committed tool manifest
+                              at the repository root
   crap [--all] [--base REF]   CRAP per changed method from " coverage-dir "/; exit 1 over " crap/crap-limit "
   dry [--all] [--base REF] [--min-tokens N]
                               jscpd clones touching changed lines; exit 1 if any
@@ -65,8 +69,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
   (let [missing (remove shell/available? ["dotnet" "node" "npx"])]
     (when (seq missing)
       (throw (outcome/usage-error (str "missing on PATH: " (str/join ", " missing))))))
-  (when-not (:no-mutation *language*)
-    (require-tool-run "dotnet" ["tool" "restore"]))
+  (require-tool-run "dotnet" ["tool" "restore"])
   (shell/run "npx" ["--yes" "jscpd@4" "--version"]))
 
 (def ^:private skipped-dir-names #{"bin" "obj" "tmp" "node_modules"})
@@ -141,22 +144,101 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
 (defn- cmd-property [{:keys [args]}]
   (run-tests (test-runs true) args))
 
+(defn- committed?
+  "Whether `relative` is in HEAD with no uncommitted changes."
+  [root relative]
+  (and (git/succeeds? ["cat-file" "-e" (str "HEAD:" relative)] :dir root)
+       (git/succeeds? ["diff" "--quiet" "HEAD" "--" relative] :dir root)))
+
+(defn- pin-refusal
+  "Why the pin of `tool` that `dotnet tool list` reports cannot be used, or nil."
+  [tool root listed]
+  (if-let [listed-path (pin/listed-manifest tool listed)]
+    (let [manifest (str (fs/real-path listed-path))
+          relative (pin/relative-to-root root manifest)]
+      (cond
+        (nil? relative) (pin/outside tool root manifest)
+        (not (contains? pin/root-manifests relative)) (pin/below-root tool (:name *language*) root manifest)
+        (not (committed? root relative)) (pin/not-committed tool manifest)))
+    (pin/not-found tool root (:exit listed))))
+
+(defn- require-pinned-tool
+  "Stops unless a committed root manifest pins `tool` and its probe command starts."
+  [tool]
+  (let [root (str (fs/real-path (git/repo-root)))]
+    (when-let [refusal (pin-refusal tool root (shell/capture "dotnet" (pin/list-args tool)))]
+      (throw (outcome/usage-error refusal))))
+  (let [{:keys [exit]} (shell/capture "dotnet" (:probe tool))]
+    (when-not (zero? exit)
+      (throw (outcome/usage-error (pin/not-runnable tool (:name *language*) exit))))))
+
+(defn- remove-stale-coverage []
+  (fs/create-dirs (shell/in-dir coverage-dir))
+  (doseq [stale (cob/find-cobertura-files (shell/in-dir coverage-dir))]
+    (fs/delete-tree (fs/parent stale))))
+
+(defn- walked-projects
+  "The projects under `root`, as sorted paths relative to it."
+  [root]
+  (sort (map #(str (fs/relativize root %)) (project-paths root))))
+
+(defn- nothing-to-measure [root]
+  (outcome/usage-error (str "no project to measure under " root ": it holds no project, or only test projects; run "
+                            (:name *language*) " coverage from the repository or solution root")))
+
+(defn- restored?
+  "Restores `project` so its evaluation reads restored values; warns when that fails."
+  [project]
+  (or (zero? (shell/run "dotnet" ["restore" project]))
+      (do (shell/warn (:name *language*) (str "dotnet restore " project " failed; it is not evaluated, "
+                                              "so if it is a test project its test code is scored"))
+          false)))
+
+(defn- evaluations
+  "The MSBuild evaluation of each of `projects` whose restore passed."
+  [projects]
+  (->> projects
+       (filter restored?)
+       (mapv #(shell/capture "dotnet" (coverage/evaluate-args %)))))
+
+(defn- measured-test-assemblies
+  "The test assemblies of the projects under `root`; stops when there is no project
+  to measure: none at all, or only test projects among those restored."
+  [root]
+  (let [projects (walked-projects root)
+        evaluated (evaluations projects)]
+    (when (or (empty? projects) (and (seq evaluated) (every? coverage/test-project? evaluated)))
+      (throw (nothing-to-measure root)))
+    (keep coverage/test-assembly evaluated)))
+
+(defn- collect-run
+  "Runs one `dotnet` run under dotnet-coverage into tmp/coverage/run-<i>/; returns its status."
+  [i run args]
+  (let [dir (fs/path coverage-dir (str "run-" i))]
+    (fs/create-dirs (shell/in-dir dir))
+    (shell/run "dotnet" (-> ["dotnet-coverage" "collect" "-s" coverage-settings "-f" "cobertura"
+                             "-o" (str (fs/path dir "coverage.cobertura.xml")) "--" "dotnet"]
+                            (into run)
+                            (into args)))))
+
+(defn- report-coverage-files []
+  (let [files (cob/find-cobertura-files (shell/in-dir coverage-dir))]
+    (when (empty? files)
+      (throw (outcome/usage-error (str "no coverage.cobertura.xml under " coverage-dir
+                                       "; dotnet-coverage wrote no Cobertura file"))))
+    (println (count files) "coverage file(s) under" coverage-dir)
+    outcome/exit-ok))
+
 (defn- cmd-coverage [{:keys [args]}]
-  (let [runs (test-runs false)]
-    (fs/create-dirs (shell/in-dir coverage-dir))
-    (doseq [stale (cob/find-cobertura-files (shell/in-dir coverage-dir))]
-      (fs/delete-tree (fs/parent stale)))
-    (let [status (run-tests runs (-> ["--collect" "XPlat Code Coverage" "--results-directory" coverage-dir]
-                                     (into args)
-                                     (conj "--" "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura")))]
-      (if-not (zero? status)
-        status
-        (let [files (cob/find-cobertura-files (shell/in-dir coverage-dir))]
-          (when (empty? files)
-            (throw (ex-info (str "no coverage.cobertura.xml under " coverage-dir
-                                 "; is coverlet.collector referenced by the test projects?") {})))
-          (println (count files) "coverage file(s) under" coverage-dir)
-          outcome/exit-ok)))))
+  (require-pinned-tool pin/dotnet-coverage)
+  (let [runs (test-runs false)
+        root (str (fs/real-path (shell/in-dir ".")))]
+    (remove-stale-coverage)
+    (shell/write-file coverage-settings (coverage/settings-xml root (measured-test-assemblies root)))
+    (let [statuses (doall (map-indexed (fn [i run] (collect-run (inc i) run args)) runs))]
+      (if (every? coverage/run-passed? statuses)
+        (report-coverage-files)
+        outcome/exit-findings))))
 
 (defn- merge-methods
   "Keeps the best-covered entry when several test runs cover the same method."
@@ -228,41 +310,13 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
                   changed (changed-for opts)]
               (shell/emit (jscpd/review clones changed (when changed (git/repo-root))))))))
 
-(defn- committed?
-  "Whether `relative` is in HEAD with no uncommitted changes."
-  [root relative]
-  (and (git/succeeds? ["cat-file" "-e" (str "HEAD:" relative)] :dir root)
-       (git/succeeds? ["diff" "--quiet" "HEAD" "--" relative] :dir root)))
-
-(defn- pin-refusal
-  "Why the dotnet-stryker pin that `dotnet tool list` reports cannot be used, or nil."
-  [root listed]
-  (if-let [listed-path (pin/listed-manifest listed)]
-    (let [manifest (str (fs/real-path listed-path))
-          relative (pin/relative-to-root root manifest)]
-      (cond
-        (nil? relative) (pin/outside root manifest)
-        (not (contains? pin/root-manifests relative)) (pin/below-root root manifest)
-        (not (committed? root relative)) (pin/not-committed manifest)))
-    (pin/not-found root (:exit listed))))
-
-(defn- require-runnable-stryker
-  "Stops unless a committed root manifest pins dotnet-stryker and `dotnet stryker` starts."
-  []
-  (let [root (str (fs/real-path (git/repo-root)))]
-    (when-let [refusal (pin-refusal root (shell/capture "dotnet" pin/list-args))]
-      (throw (outcome/usage-error refusal))))
-  (let [{:keys [exit]} (shell/capture "dotnet" ["stryker" "--help"])]
-    (when-not (zero? exit)
-      (throw (outcome/usage-error (pin/not-runnable exit))))))
-
 (defn- cmd-mutate [{:keys [opts extra]}]
   (when-let [reason (:no-mutation *language*)]
     (throw (outcome/usage-error (str (:label *language*) " mutation is unsupported; " reason))))
   (let [report-path (str (fs/path stryker-dir "reports" "mutation-report.json"))
         status (if (:report-only opts)
                  outcome/exit-ok
-                 (do (require-runnable-stryker)
+                 (do (require-pinned-tool pin/stryker)
                      (fs/create-dirs (shell/in-dir stryker-dir))
                      (fs/delete-if-exists (shell/in-dir report-path))
                      (shell/run "dotnet"
