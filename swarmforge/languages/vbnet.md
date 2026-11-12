@@ -13,7 +13,7 @@ no coverage package, on VSTest or Microsoft.Testing.Platform.
 | `tools` | Check prerequisites, `dotnet tool restore` (it installs nothing), and prepare jscpd. |
 | `test [dotnet test args]` | `dotnet test --filter Category!=Property`. |
 | `property [dotnet test args]` | `dotnet test --filter Category=Property`. Mark property tests with `<Trait("Category", "Property")>`. |
-| `coverage [dotnet test args]` | The C# `coverage` (see [C#](csharp.md)): each run of `test` under `dotnet dotnet-coverage collect`, a fresh Cobertura report per run in `tmp/coverage/`, test projects' sources left out. |
+| `coverage [dotnet test args]` | The C# `coverage` (see [C#](csharp.md)): each run of `test` under `dotnet dotnet-coverage collect`, each walked project restored and evaluated, a fresh Cobertura report per run in `tmp/coverage/`, test projects' assemblies left out; exit 2 when no project or only test projects are under the current directory. |
 | `crap [--all] [--base REF] [--report DIR]` | Compiled `.vb` methods using dotnet-coverage's complexity, line coverage and coverable source span. CRAP = complexity² × (1 − coverage)³ + complexity; fail above 10. Missing or unusable method data is an input error. |
 | `dry [--all] [--base REF] [--min-tokens N] [--report-only]` | `jscpd@4 --format visual-basic --formats-exts visual-basic:vb`; report clones touching changed `.vb` lines in `tmp/jscpd/`. Generated `*.Designer.vb` files are ignored. `--report-only` reuses the last report; new runs discard it first. |
 | `mutate` | Unsupported: exit 2. Stryker.NET loads only C# and F# projects; there is no VB.NET mutation or scan/count mode. |

@@ -207,7 +207,9 @@
 (def fake-dotnet
   "The fake dotnet. `dotnet-coverage collect` copies FAKE_COVERAGE to its -o file
   (into a directory sf must have created) and exits with the wrapped command's
-  status; `msbuild` reads FAKE_TEST_PROJECTS and FAKE_MTP_PROJECTS."
+  status; `restore <project>` fails for the projects in FAKE_RESTORE_FAILS and a
+  bare `restore` exits FAKE_BARE_RESTORE_EXIT; `msbuild` reads FAKE_TEST_PROJECTS,
+  FAKE_MTP_PROJECTS and FAKE_ASSEMBLY_NAMES (project=name; else the file name)."
   (str "#!/usr/bin/env bash\n"
        "if [ -n \"$FAKE_DOTNET_LOG\" ]; then (IFS=$'\\t'; printf '%s\\n' \"$*\") >> \"$FAKE_DOTNET_LOG\"; fi\n"
        "if [ \"$1 $2\" = \"$FAKE_FAIL_STEP\" ]; then exit 7; fi\n"
@@ -218,13 +220,15 @@
        "fi\n"
        "if [ \"$1 $2\" = 'stryker --help' ]; then exit ${FAKE_STRYKER_EXIT:-0}; fi\n"
        "if [ \"$1 $2\" = 'dotnet-coverage --version' ]; then exit ${FAKE_COVERAGE_TOOL_EXIT:-0}; fi\n"
-       "if [ \"$1\" = restore ]; then exit ${FAKE_RESTORE_EXIT:-0}; fi\n"
+       "if [ \"$1\" = restore ] && [ -z \"$2\" ]; then exit ${FAKE_BARE_RESTORE_EXIT:-0}; fi\n"
+       "if [ \"$1\" = restore ]; then case \",$FAKE_RESTORE_FAILS,\" in *\",$2,\"*) exit 1;; esac; exit 0; fi\n"
        "for pair in ${FAKE_PROJECT_EXITS//,/ }; do if [ \"$2\" = \"${pair%%=*}\" ]; then exit \"${pair#*=}\"; fi; done\n"
        "if [ \"$1\" = msbuild ]; then\n"
-       "  test=; mtp=\n"
+       "  test=; mtp=; name=$(basename \"$2\"); name=${name%.*}\n"
        "  case \",$FAKE_TEST_PROJECTS,\" in *\",$2,\"*) test=true;; esac\n"
        "  case \",$FAKE_MTP_PROJECTS,\" in *\",$2,\"*) mtp=true;; esac\n"
-       "  printf '{\\n  \"Properties\": {\\n    \"IsTestProject\": \"%s\",\\n    \"IsTestingPlatformApplication\": \"%s\"\\n  }\\n}\\n' \"$test\" \"$mtp\"\n"
+       "  for pair in ${FAKE_ASSEMBLY_NAMES//,/ }; do if [ \"$2\" = \"${pair%%=*}\" ]; then name=${pair#*=}; fi; done\n"
+       "  printf '{\\n  \"Properties\": {\\n    \"IsTestProject\": \"%s\",\\n    \"IsTestingPlatformApplication\": \"%s\",\\n    \"AssemblyName\": \"%s\"\\n  }\\n}\\n' \"$test\" \"$mtp\" \"$name\"\n"
        "  exit 0\n"
        "fi\n"
        "if [ \"$1 $2\" = 'dotnet-coverage collect' ]; then\n"
@@ -256,6 +260,7 @@
       (fs/create-dirs (fs/path repo "Bank"))
       (spit (str (fs/path repo "Bank" "Ledger.cs")) (fixture "Ledger.cs.txt"))
       (spit (str (fs/path repo "Bank" "Legacy.cs")) "namespace Bank { }\n")
+      (spit (str (fs/path repo "Bank" "Bank.csproj")) "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>\n")
       (spit (str (fs/path repo "dotnet-tools.json")) stryker-manifest)
       (git "add" ".")
       (git "commit" "--quiet" "-m" "base")
@@ -318,14 +323,18 @@
             ["stryker" "--reporter" "json" "--reporter" "progress" "--output" "tmp/stryker" "--since:main" "--project" "Bank.csproj"]]
            (:calls (calls {} "mutate" "--base" "main" "--" "--project" "Bank.csproj"))))
     (is (= [["tool" "restore"]] (:calls (calls {} "tools"))) "tools never installs, updates or creates a manifest")
-    (let [coverage (calls {"FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))} "coverage" "--no-build")]
+    (let [coverage (calls {"FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))
+                           "FAKE_BARE_RESTORE_EXIT" "1"}
+                          "coverage" "App.sln" "--no-build")]
       (is (= 0 (:status coverage)) (:err coverage))
       (is (= [["tool" "list" "--local" "dotnet-coverage" "--format" "json"]
               ["dotnet-coverage" "--version"]
-              ["restore"]
+              ["restore" "Bank/Bank.csproj"]
+              ["msbuild" "Bank/Bank.csproj" "-getProperty:IsTestProject" "-getProperty:IsTestingPlatformApplication"
+               "-getProperty:AssemblyName"]
               ["dotnet-coverage" "collect" "-s" "tmp/dotnet-coverage.xml" "-f" "cobertura"
                "-o" "tmp/coverage/run-1/coverage.cobertura.xml"
-               "--" "dotnet" "test" "--filter" "Category!=Property" "--no-build"]]
+               "--" "dotnet" "test" "--filter" "Category!=Property" "App.sln" "--no-build"]]
              (:calls coverage)))
       (is (= "1 coverage file(s) under tmp/coverage" (last (:lines coverage))))
       (is (fs/exists? (fs/path *repo* "tmp" "coverage" "run-1" "coverage.cobertura.xml"))))))
@@ -372,10 +381,15 @@
     (testing "any other status, MTP's 2 for a failing test included, is 1"
       (doseq [exit ["1" "2" "3"]]
         (is (= 1 (:status (sfcs {"FAKE_COVERAGE" report "FAKE_EXIT" exit} "coverage"))) exit)))
-    (testing "a failed restore is 1 and runs nothing"
-      (let [{:keys [status lines]} (sfcs {"FAKE_COVERAGE" report "FAKE_RESTORE_EXIT" "1"} "coverage")]
-        (is (= 1 status))
-        (is (= "$ dotnet restore" (last lines)))))
+    (testing "a failed project restore warns, and the run goes on and exits by the test status"
+      (doseq [[exit status] [["0" 0] ["3" 1]]]
+        (let [{:keys [lines err] :as result} (sfcs {"FAKE_COVERAGE" report "FAKE_RESTORE_FAILS" "Bank/Bank.csproj"
+                                                    "FAKE_EXIT" exit}
+                                                   "coverage")]
+          (is (= status (:status result)) err)
+          (is (str/includes? err "warning: dotnet restore Bank/Bank.csproj failed"))
+          (is (not-any? #(str/starts-with? % "$ dotnet msbuild") lines))
+          (is (some #(str/includes? % "collect") lines)))))
     (testing "passing runs that wrote no Cobertura file are an input error"
       (let [{:keys [status err]} (sfcs {} "coverage")]
         (is (= 2 status))
@@ -966,27 +980,47 @@
 (def odd-dir "odd/a.b+(c) [d]{e}^$|?*#&x")
 
 (def settings-tree
-  {"src/Lib/Lib.csproj" "<Project/>"
-   "tests/Unit/Unit.csproj" "<Project/>"
+  {"Root.Tests.csproj" "<Project/>"
+   "src/Lib/Lib.csproj" "<Project/>"
+   "src/Lib/Account.cs" "class Account {}"
+   "Mixed/Mixed.csproj" "<Project/>"
+   "Mixed/Mixed.Tests.csproj" "<Project/>"
    "tests/Mtp/Mtp.fsproj" "<Project/>"
    "tests/Broken/Broken.csproj" "<Project/>"
+   "Bad/Bad.csproj" "<Project/>"
    (str odd-dir "/Odd.vbproj") "<Project/>"
    "bin/Old/Old.csproj" "<Project/>"
    ".hidden/H.csproj" "<Project/>"})
 
+(def settings-projects
+  (sort ["Root.Tests.csproj" "src/Lib/Lib.csproj" "Mixed/Mixed.csproj" "Mixed/Mixed.Tests.csproj"
+         "tests/Mtp/Mtp.fsproj" "tests/Broken/Broken.csproj" "Bad/Bad.csproj" (str odd-dir "/Odd.vbproj")]))
+
 (defn- sources [xml section]
-  (->> (re-find (re-pattern (str "(?s)<" section ">(.*?)</" section ">")) xml)
+  (->> (re-find (re-pattern (str "(?s)<Sources>.*?<" section ">(.*?)</" section ">")) xml)
        second
        (re-seq #"<Source>(.*?)</Source>")
        (mapv #(str/replace (second %) "&amp;" "&"))))
 
-(deftest coverage-settings-leave-out-test-projects
+(defn- excluded-modules [xml]
+  (->> (re-find #"(?s)<ModulePaths>\s*<Exclude>(.*?)</Exclude>" xml)
+       second
+       (re-seq #"<ModulePath>(.*?)</ModulePath>")
+       (mapv #(str/replace (second %) "&amp;" "&"))))
+
+(defn- evaluation [project]
+  ["msbuild" project "-getProperty:IsTestProject" "-getProperty:IsTestingPlatformApplication" "-getProperty:AssemblyName"])
+
+(deftest coverage-settings-leave-out-test-assemblies
   (in-tree settings-tree
     #(let [log (str (fs/path *repo* "tmp-dotnet.log"))
            env {"FAKE_DOTNET_LOG" log
                 "FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))
-                "FAKE_TEST_PROJECTS" (str "tests/Unit/Unit.csproj,tests/Broken/Broken.csproj," odd-dir "/Odd.vbproj")
+                "FAKE_TEST_PROJECTS" (str "Root.Tests.csproj,Mixed/Mixed.Tests.csproj,tests/Broken/Broken.csproj,"
+                                          "Bad/Bad.csproj," odd-dir "/Odd.vbproj")
                 "FAKE_MTP_PROJECTS" "tests/Mtp/Mtp.fsproj"
+                "FAKE_ASSEMBLY_NAMES" "Mixed/Mixed.Tests.csproj=Mixed.Specs,tests/Mtp/Mtp.fsproj=My.Mtp+Tests"
+                "FAKE_RESTORE_FAILS" "Bad/Bad.csproj"
                 "FAKE_PROJECT_EXITS" "tests/Broken/Broken.csproj=1"}
            {:keys [status err]} (sfcs env "coverage")
            root *repo*
@@ -994,28 +1028,66 @@
            xml (slurp (str (fs/path *repo* "tmp" "dotnet-coverage.xml")))]
        (is (= 0 status) err)
        (is (re-matches #"[A-Za-z0-9/_-]+" root) "the root needs no escaping")
-       (testing "every walked project is evaluated after one restore"
-         (is (= (into [["restore"]]
-                      (map (fn [p] ["msbuild" p "-getProperty:IsTestProject" "-getProperty:IsTestingPlatformApplication"]))
-                      (sort [(str odd-dir "/Odd.vbproj") "src/Lib/Lib.csproj" "tests/Broken/Broken.csproj"
-                             "tests/Mtp/Mtp.fsproj" "tests/Unit/Unit.csproj"]))
+       (testing "each walked project is restored, then evaluated when its restore passed; no bare restore"
+         (is (= (mapcat (fn [p] (if (= p "Bad/Bad.csproj") [["restore" p]] [["restore" p] (evaluation p)]))
+                        settings-projects)
                 (->> (dotnet-calls log) (drop 2) butlast vec))))
-       (is (= [(str rx ".*")] (sources xml "Include")))
-       (is (= [".*[\\\\/]obj[\\\\/].*"
-               (str rx "odd[\\\\/]a\\.b\\+\\(c\\)\\ \\[d\\]\\{e\\}\\^\\$\\|\\?\\*\\#&x[\\\\/].*")
-               (str rx "tests[\\\\/]Mtp[\\\\/].*")
-               (str rx "tests[\\\\/]Unit[\\\\/].*")]
-              (sources xml "Exclude")))
-       (is (str/includes? xml "#&amp;x") "the settings file is well-formed XML")
-       (testing "the patterns match source paths with either separator"
-         (let [[include obj odd mtp] (map re-pattern (concat (sources xml "Include") (sources xml "Exclude")))]
+       (testing "a failed restore is a warning naming the project, whose test code is then scored"
+         (is (= 1 (count (re-seq #"warning" err))) err)
+         (is (str/includes? err "warning: dotnet restore Bad/Bad.csproj failed")))
+       (testing "sources: everything under the root but obj/; no directory is excluded"
+         (is (= [(str rx ".*")] (sources xml "Include")))
+         (is (= [".*[\\\\/]obj[\\\\/].*"] (sources xml "Exclude"))))
+       (testing "one module pattern per evaluated test project, by its assembly name"
+         (is (= [".*[\\\\/]Mixed\\.Specs\\.(dll|exe)$"
+                 ".*[\\\\/]Root\\.Tests\\.(dll|exe)$"
+                 ".*[\\\\/]Odd\\.(dll|exe)$"
+                 ".*[\\\\/]My\\.Mtp\\+Tests\\.(dll|exe)$"]
+                (excluded-modules xml))))
+       (is (not (str/includes? xml "Bad")) "a project whose restore failed is not excluded")
+       (testing "the module patterns match test assemblies, dll or exe, under either separator, and nothing else"
+         (let [[mixed root-tests _ mtp] (map re-pattern (excluded-modules xml))]
+           (is (re-find mixed (str root "/Mixed/bin/Debug/net10.0/Mixed.Specs.dll")))
+           (is (re-find mixed "C:\\w\\Mixed\\bin\\Mixed.Specs.exe"))
+           (is (not (re-find mixed (str root "/Mixed/bin/Debug/net10.0/Mixed.dll"))))
+           (is (not (re-find mixed (str root "/Mixed/bin/Mixed.Specs.dll.config"))))
+           (is (not (re-find mixed (str root "/bin/XMixed.Specs.dll"))))
+           (is (not (re-find root-tests (str root "/bin/RootxTests.dll"))))
+           (is (re-find mtp (str root "/tests/Mtp/bin/My.Mtp+Tests.dll")))
+           (is (not (re-find mtp (str root "/tests/Mtp/bin/My.Mtp++Tests.dll"))))))
+       (testing "the sources pattern keeps production sources beside or below a test project"
+         (let [[include obj] (map re-pattern (concat (sources xml "Include") (sources xml "Exclude")))]
+           (is (re-matches include (str root "/Mixed/Calc.cs")))
            (is (re-matches include (str root "/src/Lib/Account.cs")))
            (is (re-matches include (str (str/replace root "/" "\\") "\\src\\Lib\\Account.cs")))
            (is (not (re-matches include (str root "-other/src/Lib/Account.cs"))))
-           (is (re-matches obj (str root "/src/Lib/obj/Debug/Gen.cs")))
-           (is (re-matches odd (str root "/" odd-dir "/Odd.vb")))
-           (is (not (re-matches odd (str root "/odd/aXb+(c) [d]{e}^$|?*#&x/Odd.vb"))))
-           (is (not (re-matches mtp (str root "/tests/Mtpx/T.fs")))))))))
+           (is (re-matches obj (str root "/src/Lib/obj/Debug/Gen.cs"))))))))
+
+(defn- stale-report []
+  (let [path (fs/path *repo* "tmp" "coverage" "old" "coverage.cobertura.xml")]
+    (fs/create-dirs (fs/parent path))
+    (spit (str path) "old")
+    path))
+
+(deftest coverage-refuses-a-tree-with-nothing-to-measure
+  (doseq [[case-name files env] [["no project" {"src/Account.cs" "class Account {}"} {}]
+                                 ["only test projects" {"T/T.csproj" "<Project/>" "U/U.csproj" "<Project/>"}
+                                  {"FAKE_TEST_PROJECTS" "T/T.csproj" "FAKE_MTP_PROJECTS" "U/U.csproj"}]
+                                 ["only test projects among those restored"
+                                  {"T/T.csproj" "<Project/>" "P/P.csproj" "<Project/>"}
+                                  {"FAKE_TEST_PROJECTS" "T/T.csproj" "FAKE_RESTORE_FAILS" "P/P.csproj"}]]]
+    (in-tree files
+      #(let [stale (stale-report)
+             {:keys [status lines err]} (sfcs (assoc env "FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml")))
+                                              "coverage" "../App.sln")]
+         (is (= 2 status) case-name)
+         (is (str/includes? err (str "no project to measure under " *repo*)) case-name)
+         (is (str/includes? err "run sf-cs coverage from the repository or solution root") case-name)
+         (is (not-any? (fn [line] (str/includes? line "collect")) lines) case-name)
+         (when (= case-name "no project")
+           (is (not-any? (fn [line] (str/starts-with? line "$ dotnet restore")) lines)))
+         (is (not (fs/exists? stale)) (str case-name ": the stale report is gone"))
+         (is (not (fs/exists? (fs/path *repo* "tmp" "dotnet-coverage.xml"))) case-name)))))
 
 (deftest coverage-creates-each-run-directory-and-replaces-stale-runs
   (in-tree {"a/A.fsproj" (declared "P") "b/B.fsproj" xunit-fsproj}

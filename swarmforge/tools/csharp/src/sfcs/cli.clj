@@ -177,14 +177,39 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
   (doseq [stale (cob/find-cobertura-files (shell/in-dir coverage-dir))]
     (fs/delete-tree (fs/parent stale))))
 
-(defn- test-project-dirs
-  "The directories of the projects under `root` that MSBuild evaluates as test projects."
+(defn- walked-projects
+  "The projects under `root`, as sorted paths relative to it."
   [root]
-  (->> (project-paths root)
-       (map #(str (fs/relativize root %)))
-       sort
-       (filter #(coverage/test-project? (shell/capture "dotnet" (coverage/evaluate-args %))))
-       (mapv #(str (fs/parent (fs/path root %))))))
+  (sort (map #(str (fs/relativize root %)) (project-paths root))))
+
+(defn- nothing-to-measure [root]
+  (outcome/usage-error (str "no project to measure under " root ": it holds no project, or only test projects; run "
+                            (:name *language*) " coverage from the repository or solution root")))
+
+(defn- restored?
+  "Restores `project` so its evaluation reads restored values; warns when that fails."
+  [project]
+  (or (zero? (shell/run "dotnet" ["restore" project]))
+      (do (shell/warn (:name *language*) (str "dotnet restore " project " failed; it is not evaluated, "
+                                              "so if it is a test project its test code is scored"))
+          false)))
+
+(defn- evaluations
+  "The MSBuild evaluation of each of `projects` whose restore passed."
+  [projects]
+  (->> projects
+       (filter restored?)
+       (mapv #(shell/capture "dotnet" (coverage/evaluate-args %)))))
+
+(defn- measured-test-assemblies
+  "The test assemblies of the projects under `root`; stops when there is no project
+  to measure: none at all, or only test projects among those restored."
+  [root]
+  (let [projects (walked-projects root)
+        evaluated (evaluations projects)]
+    (when (or (empty? projects) (and (seq evaluated) (every? coverage/test-project? evaluated)))
+      (throw (nothing-to-measure root)))
+    (keep coverage/test-assembly evaluated)))
 
 (defn- collect-run
   "Runs one `dotnet` run under dotnet-coverage into tmp/coverage/run-<i>/; returns its status."
@@ -209,13 +234,11 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
   (let [runs (test-runs false)
         root (str (fs/real-path (shell/in-dir ".")))]
     (remove-stale-coverage)
-    (if-not (zero? (shell/run "dotnet" ["restore"]))
-      outcome/exit-findings
-      (do (shell/write-file coverage-settings (coverage/settings-xml root (test-project-dirs root)))
-          (let [statuses (doall (map-indexed (fn [i run] (collect-run (inc i) run args)) runs))]
-            (if (every? coverage/run-passed? statuses)
-              (report-coverage-files)
-              outcome/exit-findings))))))
+    (shell/write-file coverage-settings (coverage/settings-xml root (measured-test-assemblies root)))
+    (let [statuses (doall (map-indexed (fn [i run] (collect-run (inc i) run args)) runs))]
+      (if (every? coverage/run-passed? statuses)
+        (report-coverage-files)
+        outcome/exit-findings))))
 
 (defn- merge-methods
   "Keeps the best-covered entry when several test runs cover the same method."
