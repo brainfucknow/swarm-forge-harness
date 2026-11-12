@@ -6,7 +6,7 @@
             [speclj.core :refer [describe it should]]
             [sf.harvest :as harvest]
             [sf.lore :as lore]
-            [sf.property-support :refer [hex7 passes? role sentence word]]
+            [sf.property-support :refer [commit-with hex7 passes? role sentence word]]
             [sf.record :as record]))
 
 (def ^:private kind (gen/elements ["DEFECT" "PREMISE"]))
@@ -42,14 +42,7 @@
                                       "Supersedes" "Co-Authored-By"])
                        sentence)))
 
-(def ^:private commit
-  "A commit with an optional Lore-id first, as the hook writes it."
-  (gen/let [sha hex7
-            r role
-            id (gen/one-of [(gen/return nil) hex7])
-            trailers (gen/vector lore-trailer 0 4)]
-    {:sha sha :id id :message (str "M\n\nBy " r ".\n")
-     :trailers (vec (cond->> trailers id (cons (str "Lore-id: " id))))}))
+(def ^:private commit (commit-with hex7 lore-trailer))
 
 (defn- lore-trailers [{:keys [trailers]}]
   (remove #(= "Lore-id" (lore/trailer-key %))
@@ -101,7 +94,7 @@
      :records records :commits commits}))
 
 (def ^:private record-keys
-  #{"type" "from" "stage" "needs" "route" "commit" "text" "merged_into" "rejected" "audit_refusals"})
+  #{"type" "from" "stage" "needs" "route" "commit" "text" "merged_into" "rejected" "audit_refusals" "verdict"})
 
 (describe "line"
   (it "is one line of JSON that reads back the task's id, status and newest state"

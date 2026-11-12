@@ -75,10 +75,15 @@ Catalogue settings:
   copilot with the write tool denied. The Claude and Copilot gate adapters
   list only reading, search and shell tools. The shell can still write, so
   `sf run` also stops when a gate records, commits or changes the task
-  worktree. With the operator's
-  consent, the orchestrator sends CRITICAL and HIGH findings back to the
-  specifier once per task with `sf reject`. The shipped
-  [falsifier](roles/falsifier.md) is a gate; delete its line to turn it off.
+  worktree. The shipped [falsifier](roles/falsifier.md) is a gate; delete its
+  line to turn it off.
+- `judge` makes the one read-only subagent that rules on each round of gate
+  findings: converged, continue, needs-operator or stuck. It is neither a stage
+  nor a gate and cannot be on a route. The orchestrator records its verdict with
+  `sf verdict`; continue sends the specification back automatically, and the
+  operator still approves. sf caps automatic send-backs and growth; see
+  [specification rounds](handoff-protocol.md#specification-rounds). The shipped
+  [judge](roles/judge.md) turns the loop on; delete its line to turn it off.
 - `optional` excludes a role from fallback routes. Include it explicitly in a
   named route, `--route`, or `SWARMFORGE_ROUTE` to enable it; it can also use `audit`.
 

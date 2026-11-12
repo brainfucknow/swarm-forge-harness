@@ -39,7 +39,7 @@ You are the specifier.
 
 ## When Resumed
 - After `type: answer`: continue from step 3 with the answers.
-- After `type: changes-requested`: rework to the reason, commit, and `sf review` again.
+- After `type: changes-requested`: rework to the reason, commit, and `sf review` again. A rework commit restates the whole specification, names the revision it replaces with `Supersedes: <Lore-id>`, and repeats that revision's `Constraint:`, `Rejected:` and `Directive:` trailers that still hold, since `sf start` drops a superseded commit's Lore. Trailers do not count toward the size that `sf rounds` measures; a rework without `Supersedes:` counts both messages.
 - When the reason quotes gate findings, settle each one it sends back: fix the specification, or keep it and record `Rejected: <finding> | <reason>` on the commit so the operator sees it at the gate. A finding that needs a product decision goes to the operator in one `sf ask` round. A quoted finding the reason does not send back needs no action; if it survives, the next gate round reports it again and the approval records it.
 
 ## Verification

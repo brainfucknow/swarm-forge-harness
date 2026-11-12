@@ -123,21 +123,24 @@
         :when (not= "Lore-id" (:key trailer))]
     (assoc trailer :lore-id lore-id)))
 
+(defn current
+  "The commits, in order, whose Lore-id no Supersedes trailer of commits names."
+  [commits]
+  (let [superseded (set (mapcat #(values-of "Supersedes" (commit-trailers %)) commits))]
+    (remove #(some superseded (values-of "Lore-id" (commit-trailers %))) commits)))
+
 (defn brief
   "The LORE: lines of commits that sf start prints, as :lines, and how many of
   the lines that sf show prints it leaves out, as :omitted. It leaves out the
   evidence trailers (Tested, Not-tested, Confidence, Lore-id) and every trailer
-  of a commit whose Lore-id a Supersedes trailer of the commits names."
+  of a commit that is not current."
   [commits]
-  (let [by-commit (map commit-trailers commits)
-        superseded (set (mapcat #(values-of "Supersedes" %) by-commit))
-        kept (for [trailers by-commit
-                   :when (not-any? superseded (values-of "Lore-id" trailers))
-                   trailer trailers
+  (let [kept (for [commit (current commits)
+                   trailer (commit-trailers commit)
                    :when (not (evidence-keys (:key trailer)))]
                trailer)]
     {:lines (map line kept)
-     :omitted (- (count (apply concat by-commit)) (count kept))}))
+     :omitted (- (count (mapcat commit-trailers commits)) (count kept))}))
 
 (def log-format
   "The git log --format that read-log reads."

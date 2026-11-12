@@ -87,6 +87,20 @@
       (should-not-contain "tools:" (read ".claude/agents/coder.md"))
       (should-contain "\ntools: [\"*\"]\n" (read ".github/agents/coder.agent.md"))))
 
+  (it "generates the judge's adapters from the judge template with a gate's read-only tools"
+    (write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\njudge strong subagent judge\ncoder strong subagent\ncleaner fast subagent\n")
+    (write-agent "swarmforge/roles/falsifier.md" "# falsifier\n\nAudits a specification.\n")
+    (write-agent "swarmforge/roles/judge.md" "# judge\n\nRules on a round.\n")
+    (should= 0 (:status (captured #(adapters/adapters []))))
+    (let [read #(slurp (str (fs/path *dir* %)))
+          body (str/replace (shell/template "judge-adapter.md") "{{role}}" "judge")]
+      (doseq [path [".claude/agents/judge.md" ".github/agents/judge.agent.md" ".codex/agents/judge.toml" ".kilo/agent/judge.md"]]
+        (should-contain body (read path))
+        (should-contain "Rules on a round." (read path)))
+      (should-contain "\ntools: Read, Grep, Glob, Bash\n" (read ".claude/agents/judge.md"))
+      (should-contain "\ntools: [\"read\", \"search\", \"shell\"]\n" (read ".github/agents/judge.agent.md"))
+      (should-contain "model: opus" (read ".claude/agents/judge.md"))))
+
   (it "replaces gate adapters that an older sf wrote with all tools, without ownership state"
     (write-gate!)
     (adapters/adapters [])

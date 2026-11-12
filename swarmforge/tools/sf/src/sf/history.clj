@@ -5,6 +5,7 @@
             [sf.flow :as flow]
             [sf.lore :as lore]
             [sf.record :as record]
+            [sf.rounds :as rounds]
             [sf.shell :as shell]
             [sf.store :as store]))
 
@@ -79,6 +80,33 @@
                     (str/join "\n\n" (map record/block shown))
                     (str/join "\n" (remove nil? (cons (omitted-line "LORE-OMITTED" lore-omitted "superseded or evidence lines" id)
                                                          lore))))))
+
+(defn- spec-commits
+  "The first-parent commits after created up to reviewed, as rounds/read-log
+  reads them; every commit up to reviewed when created is nil."
+  [created reviewed]
+  (rounds/read-log (shell/must {:dir (shell/repo-root)} "git" "log" "--first-parent" "--numstat"
+                               (str "--format=" rounds/log-format)
+                               (if created (str created ".." reviewed) reviewed) "--")))
+
+(defn- short-sha [rev]
+  (shell/chomp (shell/must {:dir (shell/repo-root)} "git" "rev-parse" "--short" rev)))
+
+(defn gate-rounds
+  "The rounds of the task whose records these are, oldest first, each with
+  its :size, :base (the size of its baseline round), :growth and :short
+  reviewed sha, and the :limits that hold for the newest round."
+  [records]
+  (let [created (flow/created-commit records)
+        found (rounds/rounds records)
+        sizes (mapv #(rounds/size (spec-commits created (:reviewed %))) found)
+        sized (vec (for [{:keys [n baseline reviewed] :as round} found
+                         :let [size (sizes (dec n)) base (sizes (dec baseline))]]
+                     (assoc round :size size :base base :growth (rounds/growth size base)
+                            :short (short-sha reviewed))))
+        newest (peek sized)]
+    {:rounds sized
+     :limits (if newest (rounds/limits (rounds/automatic-count records) (:size newest) (:base newest)) [])}))
 
 (defn- harvested
   "The task as sf harvest prints it, from its records on the first-parent

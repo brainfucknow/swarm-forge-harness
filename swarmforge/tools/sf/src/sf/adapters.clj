@@ -22,23 +22,36 @@
       (str "model: " model "\n"))))
 
 (def ^:private gate-tools
-  "The tools of a gate's agent, by harness: reading, searching and the shell
-  for sf show and git, without the editing tools."
+  "The tools of a gate's and the judge's agent, by harness: reading, searching
+  and the shell for sf show, sf rounds and git, without the editing tools."
   {:claude "Read, Grep, Glob, Bash"
    :copilot "[\"read\", \"search\", \"shell\"]"})
 
-(defn- agent-files [role tier gate?]
-  (let [body (str/replace (shell/template (if gate? "gate-adapter.md" "adapter.md")) "{{role}}" role)
-        description (if gate?
-                      (str "SwarmForge " role " gate. " (role-summary role) " Use at a task's specification gate, after the specifier's sf review and before the operator approves.")
-                      (str "SwarmForge " role " role. " (role-summary role) " Use for a task whose stage is " role "."))]
+(def ^:private kinds
+  "The kinds of subagent, each with its adapter template and when to use it."
+  {:stage {:template "adapter.md" :noun "role" :use "Use for a task whose stage is {{role}}."}
+   :gate {:template "gate-adapter.md" :noun "gate"
+          :use "Use at a task's specification gate, after the specifier's sf review and before the operator approves."}
+   :judge {:template "judge-adapter.md" :noun "judge"
+           :use "Use at a task's specification gate, after the gates of each round, for the round's verdict."}})
+
+(defn- kind-of [role]
+  (cond (config/gate? role) :gate
+        (config/judge? role) :judge
+        :else :stage))
+
+(defn- agent-files [role tier kind]
+  (let [{:keys [template noun use]} (kinds kind)
+        read-only? (not= :stage kind)
+        body (str/replace (shell/template template) "{{role}}" role)
+        description (str "SwarmForge " role " " noun ". " (role-summary role) " " (str/replace use "{{role}}" role))]
     {(str ".claude/agents/" role ".md")
      (str "---\nname: " role "\ndescription: " description "\nmodel: " (config/tier-field tier 2)
-          (when gate? (str "\ntools: " (:claude gate-tools))) "\n---\n\n" body)
+          (when read-only? (str "\ntools: " (:claude gate-tools))) "\n---\n\n" body)
 
      (str ".github/agents/" role ".agent.md")
      (str "---\nname: " role "\ndescription: " description "\nmodel: " (config/tier-field tier 4)
-          "\ntools: " (if gate? (:copilot gate-tools) "[\"*\"]") "\ninclude-custom-instructions: true\n---\n\n" body)
+          "\ntools: " (if read-only? (:copilot gate-tools) "[\"*\"]") "\ninclude-custom-instructions: true\n---\n\n" body)
 
      (str ".codex/agents/" role ".toml")
      (str "name = \"" role "\"\ndescription = \"" description "\"\nmodel_reasoning_effort = \""
@@ -79,13 +92,13 @@
                  #"(?m)^(?:model|tools): [^\r\n]*\n") ""))
 
 (defn- legacy-ownership
-  "The adapters on disk that sf adapters wrote for a role prompt, as a stage or
-  as a gate, whatever roles.conf now says about the role."
+  "The adapters on disk that sf adapters wrote for a role prompt, as a stage,
+  a gate or the judge, whatever roles.conf now says about the role."
   [root owned]
   (into {} (for [prompt (fs/glob (fs/path (config/conf-dir) "roles") "*.md")
                  :let [role (str/replace (fs/file-name prompt) #"\.md$" "")]
-                 gate? [false true]
-                 [path text] (agent-files role (ffirst (config/rows "tiers.conf")) gate?)
+                 kind (keys kinds)
+                 [path text] (agent-files role (ffirst (config/rows "tiers.conf")) kind)
                  :let [file (fs/path root path)]
                  :when (and (not (contains? owned path)) (not (fs/sym-link? file))
                             (fs/regular-file? file))
@@ -127,7 +140,7 @@
   (shell/quietly config/check)
   (let [root (shell/checkout-root)
         roles (filter #(= "subagent" (nth % 2)) (config/rows "roles.conf"))
-        desired (into {} (mapcat (fn [[role tier]] (agent-files role tier (config/gate? role))) roles))
+        desired (into {} (mapcat (fn [[role tier]] (agent-files role tier (kind-of role))) roles))
         state (fs/path root ".swarmforge" "adapters.edn")
         main-state (fs/path (shell/repo-root) ".swarmforge" "adapters.edn")
         local (read-ownership state)
