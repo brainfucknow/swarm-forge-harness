@@ -206,9 +206,8 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
   to measure: none at all, or only test projects among those restored."
   [root]
   (let [projects (walked-projects root)
-        _ (when (empty? projects) (throw (nothing-to-measure root)))
         evaluated (evaluations projects)]
-    (when (and (seq evaluated) (every? coverage/test-project? evaluated))
+    (when (or (empty? projects) (and (seq evaluated) (every? coverage/test-project? evaluated)))
       (throw (nothing-to-measure root)))
     (keep coverage/test-assembly evaluated)))
 
