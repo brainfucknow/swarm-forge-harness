@@ -19,8 +19,7 @@ Before running this command again:
 - Fix every finding, commit, rerun the checks, then run this command again. It records the handoff when HEAD is still " head "; a new commit starts a new audit."))
 
 (defn- task-path
-  "The task's pending audit directory, one file per audited role. A regular
-  file here is from an earlier sf that kept one state per task."
+  "The task's pending audit directory, one file per audited role."
   [id]
   (fs/path (shell/repo-root) ".swarmforge" "audit" id))
 
