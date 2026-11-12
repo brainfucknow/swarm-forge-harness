@@ -19,6 +19,7 @@ this repository.
 | `languages/clojure.md` | How to run clj-mutate, crap4clj and dry4clj on Babashka code. |
 | `bin/sf-js`, `languages/javascript.md` | JavaScript and TypeScript tool wrapper: the same commands for Vitest or Jest, oxlint or ESLint complexity with Istanbul coverage, jscpd, and StrykerJS. |
 | `bin/sf-rb`, `languages/ruby.md` | Ruby tool wrapper: SimpleCov coverage, CRAP from RuboCop or flog, DRY from jscpd or flay, and optional mutant. |
+| `bin/sf-java`, `languages/java.md` | Maven Java 17+ / JUnit 5 tests, JaCoCo coverage, pinned Java CRAP, DRY and differential mutation. |
 | `tools/core/` | Report readers shared by the language tool wrappers: changed lines, CRAP, jscpd, Stryker. |
 | `handoff-protocol.md` | The task branch, record commits, and lifecycle. |
 | `verify.conf` | Optional, written by the project: one shell command per line that `sf finish` runs on the merge before it merges, for example `make test`. |
@@ -26,7 +27,8 @@ this repository.
 The [handoff protocol](handoff-protocol.md) covers task state, approval, merge
 recovery, and sharing the mutation cache on `swarmforge/metrics`.
 
-Prerequisites: `git`, `bash`, and [Babashka](https://babashka.org) (`bb`).
+Prerequisites: `git`, `bash`, and [Babashka](https://babashka.org) (`bb`). `sf`
+needs `bb` 1.12.200 or newer and refuses an older one.
 Run `swarmforge/bin/sf init` once per clone.
 
 Start a task from the harness with `/swarm <feature request>`, or by hand:
@@ -64,6 +66,25 @@ Catalogue settings:
 - `session` makes the orchestrator play a role in chat; `subagent` delegates it.
 - `audit` makes the first handoff or review at each commit request self-review
   without recording anything. Complete that review before retrying.
+- `gate` makes a read-only subagent that audits each specification after
+  `sf review` and before approval; it is not a stage and cannot be on a route.
+  The orchestrator shows its report at the gate. `sf run` dispatches the gates
+  when a specification it produced waits for approval. `sf dispatch` starts a
+  gate without edit permissions: claude in its default permission mode with
+  Edit, Write and NotebookEdit disallowed, codex in its read-only sandbox,
+  copilot with the write tool denied. The Claude and Copilot gate adapters
+  list only reading, search and shell tools. The shell can still write, so
+  `sf run` also stops when a gate records, commits or changes the task
+  worktree. The shipped [falsifier](roles/falsifier.md) is a gate; delete its
+  line to turn it off.
+- `judge` is the one read-only subagent that rules on each round of gate
+  findings: converged, continue, needs-operator or stuck. It is neither a
+  stage nor a gate and cannot be on a route. The orchestrator records its
+  verdict with `sf verdict`. Continue sends the specification back
+  automatically, within the caps in
+  [specification rounds](handoff-protocol.md#specification-rounds). The
+  operator still approves. The shipped [judge](roles/judge.md) turns the loop on. Delete its
+  line to turn it off.
 - `optional` excludes a role from fallback routes. Include it explicitly in a
   named route, `--route`, or `SWARMFORGE_ROUTE` to enable it; it can also use `audit`.
 

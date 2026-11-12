@@ -7,8 +7,10 @@ through Git task branches; the operator handles questions and approvals in chat.
 ## Prerequisites
 
 - `git`, and `bash` for `install.sh`, the commit-msg hook, and the tool wrappers
-- [Babashka](https://babashka.org) (`bb`) for `sf`, the C#, F#, VB.NET and JavaScript
-  tool wrappers, and the Clojure constitution tools
+- [Babashka](https://babashka.org) (`bb`) for `sf`, which needs 1.12.200 or newer
+  and refuses an older `bb`, and for the C#, F#, VB.NET and JavaScript tool
+  wrappers and the Clojure constitution tools. `install.sh` checks `bb` before
+  it changes the project.
 - One of Kilo, Claude Code, Codex CLI, or Copilot CLI
 
 ## Install into a project
@@ -108,7 +110,7 @@ the optional reviewers. Model mappings live in
   [C#](swarmforge/languages/csharp.md), [F#](swarmforge/languages/fsharp.md),
   [VB.NET](swarmforge/languages/vbnet.md),
   [JavaScript/TypeScript](swarmforge/languages/javascript.md),
-  [Ruby](swarmforge/languages/ruby.md).
+  [Ruby](swarmforge/languages/ruby.md), [Java](swarmforge/languages/java.md).
 
 ## Tests
 
@@ -118,14 +120,20 @@ Run these from the source checkout; fresh consumer installs omit harness tests a
 bash test/sf_test.sh
 bash test/sf_tool_test.sh
 bb --config swarmforge/tools/sf/bb.edn spec
+bb --config swarmforge/tools/sf/bb.edn hardening
 bb --config swarmforge/tools/sf/bb.edn property
 swarmforge/bin/sf tool ensure gherkin-parser
 bash test/acceptance.sh
 bb --config swarmforge/tools/csharp/bb.edn test
+bb --config swarmforge/tools/csharp/bb.edn property
 bb --config swarmforge/tools/javascript/bb.edn test
 bb --config swarmforge/tools/javascript/bb.edn property
 bb --config swarmforge/tools/javascript/bb.edn acceptance
 bb --config swarmforge/tools/ruby/bb.edn test
+bb --config swarmforge/tools/java/bb.edn spec
+bb --config swarmforge/tools/java/bb.edn hardening
+bb --config swarmforge/tools/java/bb.edn acceptance
+bb --config swarmforge/tools/java/bb.edn property
 ```
 
 These suites exercise the CLI with scratch Git repositories and test the

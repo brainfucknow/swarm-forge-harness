@@ -24,11 +24,24 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 - If the harness cannot run subagents, run `sf dispatch <role> <id>` instead; it starts a headless backend session with the same prompt. `sf run <id>` repeats that until the task is done or blocked.
 
 ## Specification Gate
-- When the specifier returns after `sf review`, show the committed criteria and QA, from the specification commit body or durable contract files, plus the task's route and any recommended change. Then stop and wait. Do not approve on their behalf.
+- When the specifier returns after `sf review`, run the gates first: for each role `sf gates` prints, delegate to the agent named after it with the prompt `Task <id>. Run: swarmforge/bin/sf show <id>` and wait for its report. Without subagents, run `sf dispatch <gate> <id>`. A gate records nothing; if it committed or recorded anything, tell the operator. Skip the gates for a task or the session when the operator says so.
+- The judge loop runs when `swarmforge/roles.conf` has a judge (a row flagged `judge`), the harness runs subagents, and the operator has not said to skip the gates. Otherwise skip the judge: the gate has no automatic send-back and no verdict. After the gates of each round:
+  - Delegate to the judge with the prompt `Task <id>. Run: swarmforge/bin/sf rounds <id>` followed by this round's gate reports verbatim. Wait for its `VERDICT:` and `REASON:`.
+  - Record it: `sf verdict <id> <verdict> "<the judge's reason, then every finding of this round's gate reports verbatim>"`. For continue, end the text with `Sent back: the CRITICAL and HIGH findings.`
+  - On continue, tell the operator in one line and resume the specifier. When it returns after `sf review`, run the gates and the judge again.
+  - When sf refuses continue, record `stuck` instead. Put sf's message before that same text.
+  - On converged, needs-operator and stuck, stop for the operator. Show the verdict with its reason and the output of `sf rounds <id>` (each round's size and what each earlier round sent back). Recommend approval only on converged. On needs-operator, put the decision to the operator.
+  - After the operator's own `sf reject`, the next round runs the gates and the judge again. The loop continues while sf allows it.
+  - The judge records nothing. If it recorded anything, tell the operator.
+- Show the committed criteria and QA, from the specification commit body or durable contract files, each gate's report verbatim, the task's route and any recommended change. Recommend as follows, and list every remaining finding:
+  - The judge gave this round's verdict: recommend approval only on converged.
+  - Otherwise at least one gate ran this round: recommend approval if this round's reports have no CRITICAL or HIGH finding.
+  - No gate ran this round: make no recommendation.
+  Then stop and wait. Do not approve on their behalf.
 - Link that specification: push the task branch (`git push <remote> swarm/<id>`) and link the specification commit or durable files. Without a remote, give the commit SHA and `git show` command or worktree paths. Follow its Lore directive; do not create files merely to provide links.
 - If the operator changes the route: `sf route <id> <route>`. The new route must contain the current stage.
-- On "approve": `sf approve <id>`, which records the approval and hands the task to the next role on its route; dispatch that role.
-- On change requests: `sf reject <id> "<reason>"` and resume the specifier.
+- On "approve": `sf approve <id>`, which records the approval and hands the task to the next role on its route; dispatch that role. Add one `--rejected "<finding> | <reason>"` for each finding of this round's gate reports that the operator approves over (did not send back), at any severity. `<finding>` is the finding's first line, `<DEFECT|PREMISE>, <SEVERITY>: <claim>`. `<reason>` is the operator's words, or `accepted by the operator at the gate` when they gave none; join their lines with spaces and write ` / ` for any ` | ` in them.
+- On change requests: `sf reject <id> "<reason>"` and resume the specifier. The reason carries the operator's words and every finding of this round's gate reports, at every severity, both verbatim, and says which findings are sent back (all, when the operator names none). When the operator adopts an option you offered, quote it as `Operator chose: <option text>`; it is their decision. A reason never carries a design or fix of your own.
 
 ## Finishing
 - When `sf stage <id>` prints `done`, run `sf finish <id>` to merge the task branch into the base branch and remove it, report the merge, and ask the operator for the next feature.

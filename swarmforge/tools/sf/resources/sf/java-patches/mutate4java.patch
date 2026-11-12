@@ -1,0 +1,98 @@
+diff --git a/pom.xml b/pom.xml
+index fe4fd16..bdfa7d5 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -3,12 +3,8 @@
+          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+   <modelVersion>4.0.0</modelVersion>
+ 
+-  <parent>
+-    <groupId>com.unclebob</groupId>
+-    <artifactId>wiki-workspace</artifactId>
+-    <version>0.1.0-SNAPSHOT</version>
+-    <relativePath>../../pom.xml</relativePath>
+-  </parent>
++  <groupId>com.unclebob</groupId>
++  <version>0.1.0-SNAPSHOT</version>
+ 
+   <artifactId>mutate4java</artifactId>
+ 
+diff --git a/src/mutate4java/engine/BaselineRunner.java b/src/mutate4java/engine/BaselineRunner.java
+index e9839cc..e0e7ae2 100644
+--- a/src/mutate4java/engine/BaselineRunner.java
++++ b/src/mutate4java/engine/BaselineRunner.java
+@@ -49,7 +49,12 @@ final class BaselineRunner {
+                 coverageRun = coverageRunner.generateCoverage(moduleRoot, false);
+             }
+         } else {
+-            coverageRun = new CoverageRun(executor.runTests(moduleRoot, 0L), CoverageReport.allCovered(), false, false);
++            TestRun baseline = executor.runTests(moduleRoot, 0L);
++            CoverageRun reused = coverageRunner.generateCoverage(moduleRoot, true);
++            if (!reused.reportAvailable()) {
++                throw new IllegalStateException("Dedicated runner requires an existing JaCoCo report");
++            }
++            coverageRun = new CoverageRun(baseline, reused.report(), true, true);
+         }
+         progressReporter.baselineFinished(coverageRun.baseline());
+         return coverageRun;
+diff --git a/src/mutate4java/exec/ModuleTreeCopier.java b/src/mutate4java/exec/ModuleTreeCopier.java
+index f9d3a3b..3d12f73 100644
+--- a/src/mutate4java/exec/ModuleTreeCopier.java
++++ b/src/mutate4java/exec/ModuleTreeCopier.java
+@@ -21,7 +21,8 @@ final class ModuleTreeCopier {
+         Files.walkFileTree(moduleRoot, new SimpleFileVisitor<>() {
+             @Override
+             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+-                if (dir.normalize().startsWith(excludedRoot)) {
++                if (dir.normalize().startsWith(excludedRoot)
++                        || java.util.Set.of(".git", ".swarmforge", ".worktrees", ".metrics").contains(dir.getFileName().toString())) {
+                     return FileVisitResult.SKIP_SUBTREE;
+                 }
+                 Files.createDirectories(workerRoot.resolve(moduleRoot.relativize(dir)));
+diff --git a/src/mutate4java/exec/ProcessTestCommandFactory.java b/src/mutate4java/exec/ProcessTestCommandFactory.java
+index 23aa653..320c93b 100644
+--- a/src/mutate4java/exec/ProcessTestCommandFactory.java
++++ b/src/mutate4java/exec/ProcessTestCommandFactory.java
+@@ -24,7 +24,7 @@ final class ProcessTestCommandFactory {
+     }
+ 
+     static Process startShellProcess(Path projectRoot, String commandText) throws IOException {
+-        return new ProcessBuilder("/bin/sh", "-lc", commandText)
++        return new ProcessBuilder("/bin/sh", "-c", commandText)
+                 .directory(projectRoot.toFile())
+                 .redirectErrorStream(true)
+                 .start();
+diff --git a/src/mutate4java/manifest/ManifestSupport.java b/src/mutate4java/manifest/ManifestSupport.java
+index 64e4197..f4c5e98 100644
+--- a/src/mutate4java/manifest/ManifestSupport.java
++++ b/src/mutate4java/manifest/ManifestSupport.java
+@@ -18,7 +18,12 @@ public final class ManifestSupport {
+     private final ManifestCodec codec = new ManifestCodec();
+     private final ManifestHashing hashing = new ManifestHashing();
+     public Optional<DifferentialManifest> read(Path sourceFile) throws Exception {
+-        String raw = Files.readString(sourceFile);
++        String external = System.getenv("SFJAVA_MANIFEST");
++        Path manifestFile = external == null ? sourceFile : Path.of(external);
++        if (!Files.exists(manifestFile)) {
++            return Optional.empty();
++        }
++        String raw = Files.readString(manifestFile);
+         int start = boundary.startIndex(raw);
+         if (start < 0) {
+             return Optional.empty();
+@@ -40,7 +45,14 @@ public final class ManifestSupport {
+     public void write(Path sourceFile, String sourceWithoutManifest, DifferentialManifest manifest) throws Exception {
+         String updated = sourceWithoutManifest.stripTrailing() + "\n\n"
+                 + codec.serialize(manifest, ManifestBoundary.START, ManifestBoundary.END);
+-        Files.writeString(sourceFile, updated);
++        String external = System.getenv("SFJAVA_MANIFEST");
++        if (external == null) {
++            Files.writeString(sourceFile, updated);
++        } else {
++            Path manifestFile = Path.of(external);
++            Files.createDirectories(manifestFile.getParent());
++            Files.writeString(manifestFile, codec.serialize(manifest, ManifestBoundary.START, ManifestBoundary.END));
++        }
+     }
+     public String hashScopes(List<MutationScope> scopes) {
+         return hashing.hashScopes(scopes);

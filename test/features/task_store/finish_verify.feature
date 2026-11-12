@@ -34,9 +34,12 @@ Feature: sf finish verify
   stops on the conflicts (see sf finish resume).
 
   On a rerun after the operator committed a conflicting merge on the target,
-  sf finish verifies the main checkout at that HEAD before it changes HEAD's
-  message or removes anything. A failure leaves HEAD, the task branch
-  and the worktree as they were.
+  and whenever HEAD already contains the task branch, sf finish verifies that
+  committed HEAD before it records or removes anything. It verifies it like
+  the candidate: in the task worktree detached at HEAD, which it then returns
+  to the tip of the task branch. Uncommitted changes in the main checkout
+  count for nothing and stay as they are. A failure leaves HEAD, the task
+  branch and the worktree as they were.
 
   After the merge and verification, sf finish removes the worktree without
   forcing it, then deletes the task branch, and prints the VERIFY lines
@@ -132,3 +135,20 @@ Feature: sf finish verify
     And the HEAD of the main checkout is M1
     And the branch of task "A" did not move
     And the worktree of task "A" exists
+
+  # sf finish verify 7
+  Scenario: sf finish verify 7: an uncommitted fix in the main checkout does not pass the committed merge
+    Given the main checkout committed the file "swarmforge/verify.conf" with "grep -qv resolved src/a.clj"
+    And the worktree of task "A" and the branch "main" changed the files "src/a.clj" differently
+    And I ran "sf handoff $A"
+    And I ran "sf finish $A"
+    And the operator resolved the conflicts and committed the merge with the message "Resolve conflict"
+    And the HEAD of the main checkout is named M1
+    And the file "src/a.clj" in the main checkout is written with "fixed"
+    When I run "sf finish $A"
+    Then the exit status is 1
+    And the error output has the line "sf: verification failed on the merge of swarm/$A into main: grep -qv resolved src/a.clj exited 1"
+    And the HEAD of the main checkout is M1
+    And the branch of task "A" did not move
+    And the worktree of task "A" exists
+    And the worktree of task "A" has no uncommitted change

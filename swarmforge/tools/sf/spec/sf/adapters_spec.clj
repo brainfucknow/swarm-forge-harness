@@ -2,6 +2,7 @@
   (:require [babashka.fs :as fs]
             [speclj.core :refer :all]
             [sf.adapters :as adapters]
+            [sf.shell :as shell]
             [clojure.string :as str]
             [sf.repo-support :refer [*dir* with-repo write-conf! captured git]]))
 
@@ -11,6 +12,14 @@
   (let [file (fs/path *dir* path)]
     (fs/create-dirs (fs/parent file))
     (spit (str file) text)))
+
+(def gate-paths [".claude/agents/falsifier.md" ".github/agents/falsifier.agent.md" ".codex/agents/falsifier.toml" ".kilo/agent/falsifier.md"])
+
+(defn write-gate!
+  "A catalogue with the falsifier gate and its role prompt."
+  []
+  (write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\ncoder strong subagent\ncleaner fast subagent\n")
+  (write-agent "swarmforge/roles/falsifier.md" "# falsifier\n\nAudits a specification.\n"))
 
 (defn snapshot []
   (into {} (for [dir [".claude/agents" ".github/agents" ".codex/agents" ".kilo/agent"]
@@ -53,6 +62,66 @@
     (let [before (snapshot)]
       (adapters/adapters [])
       (should= before (snapshot))))
+
+  (it "generates a gate's adapters from the gate template on its tier and recognizes them without ownership state"
+    (write-gate!)
+    (adapters/adapters [])
+    (let [body (fn [template role] (str/replace (shell/template template) "{{role}}" role))]
+      (doseq [path gate-paths
+              :let [text (slurp (str (fs/path *dir* path)))]]
+        (should-contain (body "gate-adapter.md" "falsifier") text)
+        (should-contain "Audits a specification." text))
+      (should-contain (body "adapter.md" "coder") (slurp (str (fs/path *dir* (first paths))))))
+    (should-contain "model: opus" (slurp (str (fs/path *dir* (first gate-paths)))))
+    (let [before (snapshot)]
+      (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
+      (should= 0 (:status (captured #(adapters/adapters []))))
+      (should= before (snapshot))))
+
+  (it "gives the Claude and Copilot gate adapters read-only tools, and every stage all tools"
+    (write-gate!)
+    (adapters/adapters [])
+    (let [read #(slurp (str (fs/path *dir* %)))]
+      (should-contain "\ntools: Read, Grep, Glob, Bash\n" (read ".claude/agents/falsifier.md"))
+      (should-contain "\ntools: [\"read\", \"search\", \"shell\"]\n" (read ".github/agents/falsifier.agent.md"))
+      (should-not-contain "tools:" (read ".claude/agents/coder.md"))
+      (should-contain "\ntools: [\"*\"]\n" (read ".github/agents/coder.agent.md"))))
+
+  (it "generates the judge's adapters from the judge template with a gate's read-only tools"
+    (write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\njudge strong subagent judge\ncoder strong subagent\ncleaner fast subagent\n")
+    (write-agent "swarmforge/roles/falsifier.md" "# falsifier\n\nAudits a specification.\n")
+    (write-agent "swarmforge/roles/judge.md" "# judge\n\nRules on a round.\n")
+    (should= 0 (:status (captured #(adapters/adapters []))))
+    (let [read #(slurp (str (fs/path *dir* %)))
+          body (str/replace (shell/template "judge-adapter.md") "{{role}}" "judge")]
+      (doseq [path [".claude/agents/judge.md" ".github/agents/judge.agent.md" ".codex/agents/judge.toml" ".kilo/agent/judge.md"]]
+        (should-contain body (read path))
+        (should-contain "Rules on a round." (read path)))
+      (should-contain "\ntools: Read, Grep, Glob, Bash\n" (read ".claude/agents/judge.md"))
+      (should-contain "\ntools: [\"read\", \"search\", \"shell\"]\n" (read ".github/agents/judge.agent.md"))
+      (should-contain "model: opus" (read ".claude/agents/judge.md"))))
+
+  (it "replaces gate adapters that an older sf wrote with all tools, without ownership state"
+    (write-gate!)
+    (adapters/adapters [])
+    (let [before (snapshot)
+          claude (fs/path *dir* ".claude/agents/falsifier.md")
+          copilot (fs/path *dir* ".github/agents/falsifier.agent.md")]
+      (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
+      (spit (str claude) (str/replace (slurp (str claude)) "tools: Read, Grep, Glob, Bash\n" ""))
+      (spit (str copilot) (str/replace (slurp (str copilot)) "tools: [\"read\", \"search\", \"shell\"]" "tools: [\"*\"]"))
+      (should= 0 (:status (captured #(adapters/adapters []))))
+      (should= before (snapshot))))
+
+  (it "removes the adapters of a gate whose row is deleted, without ownership state"
+    (write-gate!)
+    (adapters/adapters [])
+    (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
+    (write-conf! *dir* "roles.conf" "specifier frontier subagent\ncoder strong subagent\ncleaner fast subagent\n")
+    (should= 0 (:status (captured #(adapters/adapters []))))
+    (doseq [path gate-paths]
+      (should-not (fs/exists? (fs/path *dir* path))))
+    (should (fs/exists? (fs/path *dir* (first paths)))))
 
   (it "omits the Kilo model when the tier inherits the session model"
     (write-conf! *dir* "tiers.conf" "frontier inherit high gpt inherit\nstrong opus medium gpt-5 inherit\nfast sonnet low gpt-mini inherit\n")

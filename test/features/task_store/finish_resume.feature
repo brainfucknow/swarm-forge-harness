@@ -13,14 +13,17 @@ Feature: sf finish resume
   Once the operator has committed the merge, sf finish <id> completes the
   task: HEAD contains the tip of the task branch. It first verifies HEAD as
   sf finish verify describes, and stops on a failure. If HEAD's history has
-  the task's finished record, sf finish leaves HEAD as it is. If it has none
-  and HEAD is a merge whose second parent is the tip of the task branch, sf
-  finish rewrites HEAD's message to the finished record, with the same
-  parents and tree. If it has none and HEAD contains the tip some other way,
-  sf finish leaves HEAD as it is. Each way it then removes the worktree and
-  the task branch and prints the VERIFY lines, then "FINISHED: <id> merged
-  into <target>". A task whose finished record is in HEAD and whose branch is
-  gone is refused with "sf: task <id> is finished".
+  the task's finished record, sf finish leaves HEAD as it is. If it has none,
+  sf finish commits the finished record on top of HEAD: a merge whose first
+  parent is HEAD, whose second parent is the tip of the task branch, and
+  whose tree is HEAD's. It never rewrites a commit that HEAD already has, so
+  a merge the operator committed, or one a host made and others pulled,
+  stays as it is. The same holds when HEAD contains the tip some other way,
+  for example when commits landed after a host's merge. Each way it then
+  removes the worktree and the task branch and prints the VERIFY lines, then
+  "FINISHED: <id> merged into <target>", and sf show reports the task as
+  finished. A task whose finished record is in HEAD and whose branch is gone
+  is refused with "sf: task <id> is finished".
 
   A task that was squash-merged while its branch remains is not finished;
   sf finish merges its branch as usual, which records it.
@@ -65,7 +68,7 @@ Feature: sf finish resume
     And the worktree of task "A" exists
 
   # sf finish resume 3
-  Scenario Outline: sf finish resume 3: a merge committed with another message gets the finished record
+  Scenario Outline: sf finish resume 3: a merge committed with another message gets the finished record on top
     Given the worktree of task "A" and the branch "<target>" changed the files "src/a.clj" differently
     And I ran "sf handoff $A"
     And the tip of the branch of task "A" is named T1
@@ -75,7 +78,7 @@ Feature: sf finish resume
     When I run "sf finish $A"
     Then the exit status is 0
     And the output is "VERIFY: none configured\nFINISHED: $A merged into <target>"
-    And the HEAD of the main checkout has the parents and the tree of M1
+    And the HEAD of the main checkout has the first parent M1 and the tree of M1
     And the HEAD of the main checkout is a merge whose second parent is T1
     And the HEAD of the main checkout has the message "sf finished: $A\n\nSwarmForge-Task: $A\nSwarmForge-Record: finished\nSwarmForge-From: operator\nSwarmForge-Stage: done\nSwarmForge-Route: coder\nSwarmForge-Needs: none\nSwarmForge-Merged-Into: <target>"
     And the branch "swarm/$A" does not exist
@@ -118,3 +121,25 @@ Feature: sf finish resume
     And the HEAD of the main checkout has the message "sf finished: $A\n\nSwarmForge-Task: $A\nSwarmForge-Record: finished\nSwarmForge-From: operator\nSwarmForge-Stage: done\nSwarmForge-Route: coder\nSwarmForge-Needs: none\nSwarmForge-Merged-Into: main"
     And the branch "swarm/$A" does not exist
     And the worktree of task "A" does not exist
+
+  # sf finish resume 7
+  Scenario Outline: sf finish resume 7: a host's merge stays as it is and gets the finished record on top
+    Given role "coder" committed the file "src/a.clj" with "Code" in the worktree of task "A" as C1
+    And I ran "sf handoff $A"
+    And the tip of the branch of task "A" is named T1
+    And I ran "git merge -q --no-ff --no-edit swarm/$A"
+    And I ran "<after>"
+    And the HEAD of the main checkout is named M1
+    When I run "sf finish $A"
+    Then the exit status is 0
+    And the output is "VERIFY: none configured\nFINISHED: $A merged into main"
+    And the HEAD of the main checkout has the first parent M1 and the tree of M1
+    And the HEAD of the main checkout is a merge whose second parent is T1
+    And the HEAD of the main checkout has the message "sf finished: $A\n\nSwarmForge-Task: $A\nSwarmForge-Record: finished\nSwarmForge-From: operator\nSwarmForge-Stage: done\nSwarmForge-Route: coder\nSwarmForge-Needs: none\nSwarmForge-Merged-Into: main"
+    And the branch "swarm/$A" does not exist
+    And the worktree of task "A" does not exist
+
+    Examples:
+      | after                                |
+      | true                                 |
+      | git commit -q --allow-empty -m Later |

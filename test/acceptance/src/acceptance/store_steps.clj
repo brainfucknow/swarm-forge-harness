@@ -21,15 +21,17 @@
   (str "refs/heads/swarm/" (id-of world name)))
 
 (defn fill
-  "text with $A, $A:hex, $A:created, NEW, ROOT and named commits filled in."
+  "text with $A, $A:hex, $A:created, $A:created-sha, NEW, ROOT and named
+  commits filled in."
   [world text]
   (-> text
-      (str/replace #"\$([A-Z])(:hex|:created)?"
+      (str/replace #"\$([A-Z])(:hex|:created-sha|:created)?"
                    (fn [[_ name part]]
                      (let [id (id-of world name)]
                        (case part
                          ":hex" (last (str/split id #"-"))
                          ":created" (get-in world [:created name])
+                         ":created-sha" (get-in world [:created-sha name])
                          id))))
       (str/replace #"\bNEW\b" (fn [_] (id-of world nil)))
       (str/replace #"\b[CLTM]\d+\b" (fn [name] (or (get-in world [:names name])
@@ -74,17 +76,23 @@
 (defn- create-task [world name title request route]
   (let [id (must-in world (:repo world) "sf" "new" title "-m" (unescape request) "--route" route)
         world (assoc-in world [:ids name] id)]
-    (assoc-in world [:created name] (git world "rev-parse" "--short" (branch-ref world name)))))
+    (-> world
+        (assoc-in [:created name] (git world "rev-parse" "--short" (branch-ref world name)))
+        (assoc-in [:created-sha name] (git world "rev-parse" (branch-ref world name))))))
 
 (defn- start-task [world name]
   (must-in world (:repo world) "sf" "start" (id-of world name))
   world)
 
-(defn- handoff-to-done [world name]
-  (let [id (id-of world name)
-        stage (must-in world (:repo world) "sf" "stage" id)]
-    (when (not= "done" stage)
-      (must-in world (:repo world) "sf" "handoff" id "--to" "done"))))
+(defn- handoff-to-done
+  "Hands the task off role after role along its route until it is at done."
+  [world name]
+  (let [id (id-of world name)]
+    (loop [handoffs 0]
+      (when (not= "done" (must-in world (:repo world) "sf" "stage" id))
+        (check (< handoffs 20) (str "task " name " did not reach done"))
+        (must-in world (:repo world) "sf" "handoff" id)
+        (recur (inc handoffs))))))
 
 (defn- commit [world name message env]
   (run-in world (worktree world name) ["git" "commit" "-q" "--allow-empty" "-m" (unescape message)] env))
@@ -195,9 +203,9 @@
         (must-in world dir "git" "add" staged)
         world))]
 
-   [#"the file \"([^\"]+)\" in the worktree of task \"(\w)\" is written with \"([^\"]*)\""
+   [#"the file \"([^\"]+)\" in the (?:worktree of task \"(\w)\"|main checkout) is written with \"([^\"]*)\""
     (fn [world path name text]
-      (write-file (worktree world name) path (str (unescape text) "\n"))
+      (write-file (if name (worktree world name) (:repo world)) path (str (unescape text) "\n"))
       world)]
 
    [#"the main checkout committed the file \"([^\"]+)\" with \"([^\"]*)\""
@@ -410,11 +418,11 @@
       (check (= (git world "rev-parse" (fill world head-name)) (git world "rev-parse" "HEAD")) "HEAD moved")
       world)]
 
-   [#"the HEAD of the main checkout has the parents and the tree of (M\d+)"
-    (fn [world head-name]
-      (let [shape #(git world "log" "-1" "--format=%P %T" %)]
-        (check (= (shape (fill world head-name)) (shape "HEAD")) (str "HEAD is " (shape "HEAD")))
-        world))]
+   [#"the HEAD of the main checkout has the first parent (M\d+) and the tree of (M\d+)"
+    (fn [world parent-name tree-name]
+      (check (= (git world "rev-parse" (fill world parent-name)) (git world "rev-parse" "HEAD^1")) "another first parent")
+      (check (= (git world "rev-parse" (str (fill world tree-name) "^{tree}")) (git world "rev-parse" "HEAD^{tree}")) "another tree")
+      world)]
 
    [#"the main checkout is on the branch \"([^\"]+)\" merging (T\d+) with (?:the conflicted files \"(.*)\"|no conflicted file)"
     (fn [world branch tip-name files]

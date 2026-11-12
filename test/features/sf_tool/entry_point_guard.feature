@@ -42,9 +42,9 @@ Feature: sf tool entry point guard
     And there is no wrapper for "<tool>"
 
     Examples:
-      | tool        |
-      | crap4go     |
-      | mutate4java |
+      | tool      |
+      | crap4go   |
+      | mutate4go |
 
   # sf tool entry point guard 4
   Scenario: sf tool entry point guard 4: a bb.edn that cannot be read fails the install and keeps the earlier wrapper

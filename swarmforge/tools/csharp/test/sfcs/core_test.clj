@@ -9,6 +9,7 @@
             [sfcore.shell :as shell]
             [sfcs.cli :as cli]
             [sfcs.cobertura :as cob]
+            [sfcs.coverage :as coverage]
             [sfcore.jscpd :as jscpd]
             [sfcore.stryker :as stryker]))
 
@@ -106,6 +107,16 @@
       (is (= [] (cob/find-cobertura-files (str (fs/path dir "missing")))))
       (finally (fs/delete-tree dir)))))
 
+(deftest cobertura-files-are-found-under-a-directory-with-glob-characters
+  (let [dir (fs/create-temp-dir {:prefix "sfcs-cov"})
+        results (fs/path dir "lab[x]{2}" "tmp" "coverage")
+        report (fs/path results "run-1" "coverage.cobertura.xml")]
+    (try
+      (fs/create-dirs (fs/parent report))
+      (spit (str report) "x")
+      (is (= [(str report)] (cob/find-cobertura-files (str results))))
+      (finally (fs/delete-tree dir)))))
+
 (deftest method-rows-name-the-signature-line-when-known
   (let [method {:class-name "A.B" :name "M" :first-line 7 :crap 1.0 :complexity 1.0 :coverage 1.0 :file "a.cs"}]
     (is (= "ok   crap    1.0  cc   1  cov 100%  a.cs:7 B.M" (cob/format-method crap/crap-limit method)))
@@ -142,13 +153,25 @@
 (defn- git [& args]
   (apply p/shell {:dir *repo* :out :string :err :string} "git" args))
 
+(defn- fake-launch
+  "Prints the command line, then runs `command` from the fake tools in *bin* with `env` for the fakes."
+  [env command args]
+  (println (str "$ " (str/join " " (cons command args))))
+  (apply p/shell {:dir *repo* :out :string :err :string :continue true :extra-env env}
+         (str (fs/path *bin* command)) args))
+
 (defn- fake-run
-  "shell/run against the fake tools in *bin*, with `env` for the fakes."
+  "shell/run against the fake tools in *bin*."
+  [env]
+  (fn [command args] (:exit (fake-launch env command args))))
+
+(defn- fake-capture
+  "shell/capture against the fake tools in *bin*; stderr goes to *err*."
   [env]
   (fn [command args]
-    (println (str "$ " (str/join " " (cons command args))))
-    (:exit (apply p/shell {:dir *repo* :out :string :err :string :continue true :extra-env env}
-                  (str (fs/path *bin* command)) args))))
+    (let [result (fake-launch env command args)]
+      (binding [*out* *err*] (print (:err result)))
+      (select-keys result [:exit :out]))))
 
 (defn- sfcs
   "Runs sf-cs in-process in the scratch repository. `env` feeds the fakes;
@@ -157,8 +180,10 @@
   (let [out (java.io.StringWriter.)
         err (java.io.StringWriter.)
         missing (set (str/split (get env "MISSING" "") #","))
+        _ (when-let [log (get env "FAKE_DOTNET_LOG")] (spit log ""))
         status (binding [shell/*dir* *repo* *out* out *err* err]
                  (with-redefs [shell/run (fake-run env)
+                               shell/capture (fake-capture env)
                                shell/available? (complement missing)]
                    (try (if-let [language (get env "LANGUAGE")]
                           (cli/main (keyword language) (vec args))
@@ -176,24 +201,56 @@
                       "bash" (str (fs/path here ".." ".." "bin" (get wrappers (get env "LANGUAGE") "sf-cs"))) args)]
     {:status (:exit result) :lines (vec (str/split-lines (str/trimr (:out result)))) :err (:err result)}))
 
+(def stryker-manifest
+  "{\"version\":1,\"isRoot\":true,\"tools\":{\"dotnet-stryker\":{\"version\":\"4.16.0\",\"commands\":[\"dotnet-stryker\"]}}}\n")
+
+(def fake-dotnet
+  "The fake dotnet. `dotnet-coverage collect` copies FAKE_COVERAGE to its -o file
+  (into a directory sf must have created) and exits with the wrapped command's
+  status; `restore <project>` fails for the projects in FAKE_RESTORE_FAILS and a
+  bare `restore` exits FAKE_BARE_RESTORE_EXIT; `msbuild` reads FAKE_TEST_PROJECTS,
+  FAKE_MTP_PROJECTS and FAKE_ASSEMBLY_NAMES (project=name; else the file name)."
+  (str "#!/usr/bin/env bash\n"
+       "if [ -n \"$FAKE_DOTNET_LOG\" ]; then (IFS=$'\\t'; printf '%s\\n' \"$*\") >> \"$FAKE_DOTNET_LOG\"; fi\n"
+       "if [ \"$1 $2\" = \"$FAKE_FAIL_STEP\" ]; then exit 7; fi\n"
+       "if [ \"$1 $2\" = 'tool list' ]; then\n"
+       "  if [ -n \"${FAKE_LIST_JSON+set}\" ]; then printf '%s' \"$FAKE_LIST_JSON\"\n"
+       "  else printf '{\"version\":1,\"data\":[{\"packageId\":\"%s\",\"version\":\"1.0.0\",\"commands\":[\"%s\"],\"manifest\":\"%s/dotnet-tools.json\"}]}' \"$4\" \"$4\" \"$(pwd -P)\"; fi\n"
+       "  exit ${FAKE_LIST_EXIT:-0}\n"
+       "fi\n"
+       "if [ \"$1 $2\" = 'stryker --help' ]; then exit ${FAKE_STRYKER_EXIT:-0}; fi\n"
+       "if [ \"$1 $2\" = 'dotnet-coverage --version' ]; then exit ${FAKE_COVERAGE_TOOL_EXIT:-0}; fi\n"
+       "if [ \"$1\" = restore ] && [ -z \"$2\" ]; then exit ${FAKE_BARE_RESTORE_EXIT:-0}; fi\n"
+       "if [ \"$1\" = restore ]; then case \",$FAKE_RESTORE_FAILS,\" in *\",$2,\"*) exit 1;; esac; exit 0; fi\n"
+       "for pair in ${FAKE_PROJECT_EXITS//,/ }; do if [ \"$2\" = \"${pair%%=*}\" ]; then exit \"${pair#*=}\"; fi; done\n"
+       "if [ \"$1\" = msbuild ]; then\n"
+       "  test=; mtp=; name=$(basename \"$2\"); name=${name%.*}\n"
+       "  case \",$FAKE_TEST_PROJECTS,\" in *\",$2,\"*) test=true;; esac\n"
+       "  case \",$FAKE_MTP_PROJECTS,\" in *\",$2,\"*) mtp=true;; esac\n"
+       "  for pair in ${FAKE_ASSEMBLY_NAMES//,/ }; do if [ \"$2\" = \"${pair%%=*}\" ]; then name=${pair#*=}; fi; done\n"
+       "  printf '{\\n  \"Properties\": {\\n    \"IsTestProject\": \"%s\",\\n    \"IsTestingPlatformApplication\": \"%s\",\\n    \"AssemblyName\": \"%s\"\\n  }\\n}\\n' \"$test\" \"$mtp\" \"$name\"\n"
+       "  exit 0\n"
+       "fi\n"
+       "if [ \"$1 $2\" = 'dotnet-coverage collect' ]; then\n"
+       "  out=; shift 2\n"
+       "  while [ $# -gt 0 ] && [ \"$1\" != -- ]; do if [ \"$1\" = -o ]; then out=$2; fi; shift; done\n"
+       "  shift 2\n"
+       "  if [ -n \"$FAKE_COVERAGE\" ]; then cp \"$FAKE_COVERAGE\" \"$out\" || exit 99; fi\n"
+       "  FAKE_DOTNET_LOG= \"$0\" \"$@\"; exit $?\n"
+       "fi\n"
+       "if [ \"$1\" = stryker ] && [ -n \"$FAKE_REPORT\" ]; then mkdir -p tmp/stryker/reports && cp \"$FAKE_REPORT\" tmp/stryker/reports/mutation-report.json; fi\n"
+       "exit ${FAKE_EXIT:-0}\n"))
+
 (defn- seed-repo [f]
   (let [repo (str (fs/create-temp-dir {:prefix "sfcs"}))
         bin (str (fs/path repo "fakebin"))]
     (fs/create-dirs bin)
-    (spit (str (fs/path bin "dotnet"))
-          (str "#!/usr/bin/env bash\n"
-               "[ -n \"$FAKE_DOTNET_LOG\" ] && printf '%s\\n' \"$@\" > \"$FAKE_DOTNET_LOG\"\n"
-               "if [ \"$1 $2\" = \"$FAKE_FAIL_STEP\" ]; then exit 7; fi\n"
-               "if [ \"$1\" = test ] && [ -n \"$FAKE_COVERAGE\" ]; then mkdir -p tmp/coverage/run && cp \"$FAKE_COVERAGE\" tmp/coverage/run/coverage.cobertura.xml; fi\n"
-               "for pair in ${FAKE_PROJECT_EXITS//,/ }; do if [ \"$2\" = \"${pair%%=*}\" ]; then exit \"${pair#*=}\"; fi; done\n"
-               "if [ \"$1\" = stryker ] && [ -n \"$FAKE_REPORT\" ]; then mkdir -p tmp/stryker/reports && cp \"$FAKE_REPORT\" tmp/stryker/reports/mutation-report.json; fi\n"
-               "if [ \"$1\" = new ]; then mkdir -p .config && echo '{\"tools\":{}}' > .config/dotnet-tools.json; fi\n"
-               "exit ${FAKE_EXIT:-0}\n"))
+    (spit (str (fs/path bin "dotnet")) fake-dotnet)
     (doseq [tool ["node" "npx"]]
       (spit (str (fs/path bin tool))
             (str "#!/usr/bin/env bash\n"
                  "if [ -n \"$FAKE_JSCPD_REPORT\" ]; then mkdir -p tmp/jscpd && cp \"$FAKE_JSCPD_REPORT\" tmp/jscpd/jscpd-report.json; fi\n"
-                 "exit ${FAKE_EXIT:-0}\n"))
+                 "exit ${FAKE_NPX_EXIT:-${FAKE_EXIT:-0}}\n"))
       (fs/set-posix-file-permissions (fs/path bin tool) "rwxr-xr-x"))
     (fs/set-posix-file-permissions (fs/path bin "dotnet") "rwxr-xr-x")
     (binding [*repo* repo *bin* bin]
@@ -203,6 +260,8 @@
       (fs/create-dirs (fs/path repo "Bank"))
       (spit (str (fs/path repo "Bank" "Ledger.cs")) (fixture "Ledger.cs.txt"))
       (spit (str (fs/path repo "Bank" "Legacy.cs")) "namespace Bank { }\n")
+      (spit (str (fs/path repo "Bank" "Bank.csproj")) "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>\n")
+      (spit (str (fs/path repo "dotnet-tools.json")) stryker-manifest)
       (git "add" ".")
       (git "commit" "--quiet" "-m" "base")
       (git "switch" "--quiet" "-c" "swarm/abc1234")
@@ -247,20 +306,38 @@
     (is (= "NoCoverage Bank/Ledger.cs:14  Boolean mutation  true" (nth lines 1)))
     (is (str/starts-with? (nth lines 2) "mutation score 50.0% ("))))
 
+(defn- dotnet-calls
+  "The fake dotnet's logged calls, one argument vector per call."
+  [log]
+  (mapv #(str/split % #"\t") (str/split-lines (slurp log))))
+
 (deftest dotnet-command-lines
   (let [log (str (fs/path *repo* "dotnet.log"))
         calls (fn [env & args]
                 (let [result (apply sfcs (assoc env "FAKE_DOTNET_LOG" log) args)]
-                  (assoc result :args (str/split-lines (str/trimr (slurp log))))))]
+                  (assoc result :calls (dotnet-calls log) :args (last (dotnet-calls log)))))]
     (is (= ["test" "--filter" "Category!=Property" "--no-build"] (:args (calls {} "test" "--no-build"))))
     (is (= ["test" "--filter" "Category=Property"] (:args (calls {} "property"))))
-    (is (= ["stryker" "--reporter" "json" "--reporter" "progress" "--output" "tmp/stryker" "--since:main" "--project" "Bank.csproj"]
-           (:args (calls {} "mutate" "--base" "main" "--" "--project" "Bank.csproj"))))
-    (let [coverage (calls {"FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))} "coverage")]
+    (is (= [["tool" "list" "--local" "dotnet-stryker" "--format" "json"]
+            ["stryker" "--help"]
+            ["stryker" "--reporter" "json" "--reporter" "progress" "--output" "tmp/stryker" "--since:main" "--project" "Bank.csproj"]]
+           (:calls (calls {} "mutate" "--base" "main" "--" "--project" "Bank.csproj"))))
+    (is (= [["tool" "restore"]] (:calls (calls {} "tools"))) "tools never installs, updates or creates a manifest")
+    (let [coverage (calls {"FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))
+                           "FAKE_BARE_RESTORE_EXIT" "1"}
+                          "coverage" "App.sln" "--no-build")]
       (is (= 0 (:status coverage)) (:err coverage))
-      (is (= ["test" "--filter" "Category!=Property" "--collect" "XPlat Code Coverage" "--results-directory" "tmp/coverage"]
-             (take 7 (:args coverage))))
-      (is (fs/exists? (fs/path *repo* "tmp" "coverage" "run" "coverage.cobertura.xml"))))))
+      (is (= [["tool" "list" "--local" "dotnet-coverage" "--format" "json"]
+              ["dotnet-coverage" "--version"]
+              ["restore" "Bank/Bank.csproj"]
+              ["msbuild" "Bank/Bank.csproj" "-getProperty:IsTestProject" "-getProperty:IsTestingPlatformApplication"
+               "-getProperty:AssemblyName"]
+              ["dotnet-coverage" "collect" "-s" "tmp/dotnet-coverage.xml" "-f" "cobertura"
+               "-o" "tmp/coverage/run-1/coverage.cobertura.xml"
+               "--" "dotnet" "test" "--filter" "Category!=Property" "App.sln" "--no-build"]]
+             (:calls coverage)))
+      (is (= "1 coverage file(s) under tmp/coverage" (last (:lines coverage))))
+      (is (fs/exists? (fs/path *repo* "tmp" "coverage" "run-1" "coverage.cobertura.xml"))))))
 
 (deftest usage-errors
   (is (= 2 (:status (sfcs {} "nope"))))
@@ -281,30 +358,43 @@
     (is (= 2 status))
     (is (= "sf-cs: missing on PATH: node, npx\n" err))))
 
-(deftest tools-installs-what-is-missing
-  (let [run-tools (fn []
-                    (fs/delete-tree (fs/path *repo* ".config"))
-                    (sfcs {} "tools"))]
-    (testing "no manifest: create it, install Stryker, restore, check jscpd"
-      (let [{:keys [status lines err]} (run-tools)]
-        (is (= 0 status) err)
-        (is (= ["$ dotnet new tool-manifest" "$ dotnet tool install dotnet-stryker"
-                "$ dotnet tool restore" "$ npx --yes jscpd@4 --version"]
-               lines))))
-    (testing "a manifest that lists Stryker is only restored"
-      (fs/create-dirs (fs/path *repo* ".config"))
-      (spit (str (fs/path *repo* ".config" "dotnet-tools.json")) "{\"tools\":{\"dotnet-stryker\":{}}}")
-      (let [{:keys [status lines]} (sfcs {} "tools")]
-        (is (= 0 status))
-        (is (= ["$ dotnet tool restore" "$ npx --yes jscpd@4 --version"] lines))))
-    (testing "a manifest without Stryker installs it"
-      (spit (str (fs/path *repo* ".config" "dotnet-tools.json")) "{\"tools\":{}}")
-      (is (= ["$ dotnet tool install dotnet-stryker" "$ dotnet tool restore" "$ npx --yes jscpd@4 --version"]
-             (:lines (sfcs {} "tools")))))
-    (fs/delete-tree (fs/path *repo* ".config"))))
+(deftest tools-restores-the-pinned-tools
+  (testing "restore, then the jscpd check, whose exit is the status"
+    (let [{:keys [status lines err]} (sfcs {"FAKE_NPX_EXIT" "3"} "tools")]
+      (is (= 3 status) err)
+      (is (= ["$ dotnet tool restore" "$ npx --yes jscpd@4 --version"] lines))))
+  (testing "no tool manifest is written"
+    (is (= 0 (:status (sfcs {} "tools"))))
+    (is (not (fs/exists? (fs/path *repo* ".config"))))
+    (is (= stryker-manifest (slurp (str (fs/path *repo* "dotnet-tools.json"))))))
+  (testing "a failed restore stops before npx"
+    (let [{:keys [status lines err]} (sfcs {"FAKE_FAIL_STEP" "tool restore"} "tools")]
+      (is (= 2 status))
+      (is (= ["$ dotnet tool restore"] lines))
+      (is (= "sf-cs: dotnet tool restore exited 7\n" err)))))
 
-(deftest coverage-passes-on-a-failing-test-run
-  (is (= 3 (:status (sfcs {"FAKE_EXIT" "3"} "coverage")))))
+(deftest coverage-run-statuses
+  (let [report (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))]
+    (testing "0 and 8 (MTP ran zero tests somewhere) pass"
+      (doseq [exit ["0" "8"]]
+        (is (= 0 (:status (sfcs {"FAKE_COVERAGE" report "FAKE_EXIT" exit} "coverage"))) exit)))
+    (testing "any other status, MTP's 2 for a failing test included, is 1"
+      (doseq [exit ["1" "2" "3"]]
+        (is (= 1 (:status (sfcs {"FAKE_COVERAGE" report "FAKE_EXIT" exit} "coverage"))) exit)))
+    (testing "a failed project restore warns, and the run goes on and exits by the test status"
+      (doseq [[exit status] [["0" 0] ["3" 1]]]
+        (let [{:keys [lines err] :as result} (sfcs {"FAKE_COVERAGE" report "FAKE_RESTORE_FAILS" "Bank/Bank.csproj"
+                                                    "FAKE_EXIT" exit}
+                                                   "coverage")]
+          (is (= status (:status result)) err)
+          (is (str/includes? err "warning: dotnet restore Bank/Bank.csproj failed"))
+          (is (not-any? #(str/starts-with? % "$ dotnet msbuild") lines))
+          (is (some #(str/includes? % "collect") lines)))))
+    (testing "passing runs that wrote no Cobertura file are an input error"
+      (let [{:keys [status err]} (sfcs {} "coverage")]
+        (is (= 2 status))
+        (is (str/includes? err "no coverage.cobertura.xml under tmp/coverage"))
+        (is (not (str/includes? err "coverlet")))))))
 
 (deftest help-without-a-command
   (is (str/starts-with? (first (:lines (sfcs {}))) "usage: sf-cs"))
@@ -342,14 +432,122 @@
           (is (= 1 status) err)))
       (finally (fs/delete-tree plain)))))
 
-(deftest mutate-exits-with-stryker-when-it-leaves-no-report
+(defn- last-line [text]
+  (last (str/split-lines text)))
+
+(deftest mutate-without-a-report-after-a-failed-stryker-is-a-usage-error
   (fs/delete-tree (fs/path *repo* "tmp" "stryker"))
-  (is (= 4 (:status (sfcs {"FAKE_EXIT" "4"} "mutate" "--all"))))
+  (let [{:keys [status err]} (sfcs {"FAKE_EXIT" "4"} "mutate" "--all")]
+    (is (= 2 status))
+    (is (= "sf-cs: dotnet stryker exited 4 and wrote no report" (last-line err))))
   (testing "with a report the survivors decide"
     (let [{:keys [status lines]} (sfcs {"FAKE_REPORT" (str (fs/path fixtures "mutation-report.json"))} "mutate" "--all")]
       (is (= 1 status))
-      (is (str/starts-with? (first lines) "$ dotnet stryker"))
+      (is (= ["$ dotnet tool list --local dotnet-stryker --format json"
+              "$ dotnet stryker --help"
+              "$ dotnet stryker --reporter json --reporter progress --output tmp/stryker"]
+             (take 3 lines)))
       (is (some #(str/starts-with? % "Survived") lines)))))
+
+(defn- real-root []
+  (str (fs/real-path *repo*)))
+
+(defn- list-answer
+  "Fake `dotnet tool list` stdout naming `manifest` as the dotnet-stryker pin."
+  [manifest]
+  (json/generate-string {"version" 1 "data" [{"packageId" "dotnet-stryker" "version" "4.16.0"
+                                             "commands" ["dotnet-stryker"] "manifest" (str manifest)}]}))
+
+(defn- pin-instructions [root]
+  (str "in " root ": dotnet new tool-manifest (when the root has none), then dotnet tool install dotnet-stryker"
+       " --version <version>, then commit the manifest"))
+
+(defn- refused-mutate
+  "Runs mutate with `env`; asserts exit 2, `echoes` echo lines, an untouched tmp/stryker; returns stderr's last line."
+  [env echoes]
+  (let [sentinel (fs/path *repo* "tmp" "stryker" "keep")]
+    (fs/create-dirs (fs/parent sentinel))
+    (spit (str sentinel) "x")
+    (let [{:keys [status lines err]} (sfcs env "mutate" "--all")]
+      (is (= 2 status) err)
+      (is (= echoes (count lines)) (str lines))
+      (is (fs/exists? sentinel))
+      (last-line err))))
+
+(deftest mutate-needs-a-stryker-pin
+  (doseq [[env exit] [[{"FAKE_LIST_EXIT" "1" "FAKE_LIST_JSON" "{\"version\":1,\"data\":[]}"} 1]
+                      [{"FAKE_LIST_EXIT" "1" "FAKE_LIST_JSON" ""} 1]
+                      [{"FAKE_LIST_JSON" "{\"version\":1,\"data\":[{\"packageId\":\"other\",\"manifest\":\"/x\"}]}"} 0]
+                      [{"FAKE_LIST_JSON" "not json"} 0]
+                      [{"FAKE_LIST_JSON" "[1]"} 0]]]
+    (is (= (str "sf-cs: dotnet tool list --local dotnet-stryker found no dotnet-stryker (exit " exit "); "
+                "ask the operator to pin one in a committed tool manifest at the repository root ("
+                (pin-instructions (real-root)) ")")
+           (refused-mutate env 1))
+        (str env))))
+
+(deftest mutate-refuses-a-pin-outside-the-repository
+  (let [outside (fs/create-temp-dir {:prefix "sfcs-above"})
+        manifest (fs/path outside "dotnet-tools.json")]
+    (try
+      (spit (str manifest) stryker-manifest)
+      (is (= (str "sf-cs: dotnet-stryker is pinned in " (fs/real-path manifest) ", outside this repository; "
+                  "ask the operator to pin it in a committed tool manifest at the repository root ("
+                  (pin-instructions (real-root)) ")")
+             (refused-mutate {"FAKE_LIST_JSON" (list-answer manifest)} 1)))
+      (finally (fs/delete-tree outside)))))
+
+(deftest mutate-refuses-a-pin-below-the-repository-root
+  (doseq [relative ["Bank/dotnet-tools.json" "Bank/.config/dotnet-tools.json" ".config/sub/dotnet-tools.json"]]
+    (let [manifest (fs/path *repo* relative)]
+      (fs/create-dirs (fs/parent manifest))
+      (spit (str manifest) stryker-manifest)
+      (git "add" relative)
+      (git "commit" "--quiet" "-m" "pin below the root")
+      (is (= (str "sf-cs: dotnet-stryker is pinned in " (fs/real-path manifest) ", not at the repository root, "
+                  "so sf-cs tools does not restore it; ask the operator to pin it in a committed tool manifest "
+                  "at the repository root (" (pin-instructions (real-root)) ") and remove this pin")
+             (refused-mutate {"FAKE_LIST_JSON" (list-answer manifest)} 1))
+          relative)
+      (git "rm" "--quiet" relative)
+      (git "commit" "--quiet" "-m" "unpin below the root"))))
+
+(deftest mutate-needs-the-pin-committed
+  (let [relative ".config/dotnet-tools.json"
+        manifest (fs/path *repo* relative)
+        env {"FAKE_LIST_JSON" (list-answer manifest) "FAKE_REPORT" (str (fs/path fixtures "mutation-report.json"))}
+        refusal (fn [] (str "sf-cs: dotnet-stryker is pinned in " (fs/real-path manifest)
+                            ", which is not committed; ask the operator to commit or remove it"))]
+    (fs/create-dirs (fs/parent manifest))
+    (spit (str manifest) stryker-manifest)
+    (testing "untracked"
+      (is (= (refusal) (refused-mutate env 1))))
+    (testing "committed under .config/ it is the pin"
+      (git "add" relative)
+      (git "commit" "--quiet" "-m" "pin under .config")
+      (let [{:keys [status err]} (sfcs env "mutate" "--all")]
+        (is (= 1 status) err)))
+    (testing "committed, then changed"
+      (spit (str manifest) (str/replace stryker-manifest "4.16.0" "4.17.0"))
+      (is (= (refusal) (refused-mutate env 1))))
+    (git "rm" "--quiet" "--force" relative)
+    (git "commit" "--quiet" "-m" "unpin .config")))
+
+(deftest mutate-needs-a-runnable-stryker
+  (is (= "sf-cs: dotnet stryker --help exited 1; run sf-cs tools to restore the pinned Stryker"
+         (refused-mutate {"FAKE_STRYKER_EXIT" "1"} 2))))
+
+(deftest mutate-without-dotnet-keeps-the-launch-failure
+  (let [bin (fs/create-temp-dir {:prefix "sfcs-nodotnet"})]
+    (try
+      (doseq [tool ["bb" "git" "dirname" "bash"]]
+        (fs/create-sym-link (fs/path bin tool) (fs/which tool)))
+      (let [result (p/shell {:dir *repo* :out :string :err :string :continue true
+                             :extra-env {"PATH" (str bin)}}
+                            (str (fs/which "bash")) (str (fs/path here ".." ".." "bin" "sf-cs")) "mutate" "--all")]
+        (is (= 2 (:exit result)) (:err result))
+        (is (str/starts-with? (last-line (:err result)) "sf-cs: dotnet: ") (:err result)))
+      (finally (fs/delete-tree bin)))))
 
 (deftest crap-reads-sources-named-by-absolute-path
   (let [dir (fs/path *repo* "abs-coverage")
@@ -387,20 +585,6 @@
     (is (= 0 status))
     (is (str/starts-with? (first lines) "usage: sf-cs"))))
 
-(deftest tools-stop-at-the-first-failed-step
-  (doseq [[step manifest calls] [["new tool-manifest" nil 1]
-                               ["tool install" "{\"tools\":{}}" 1]
-                               ["tool restore" "{\"tools\":{\"dotnet-stryker\":{}}}" 1]]]
-    (fs/delete-tree (fs/path *repo* ".config"))
-    (when manifest
-      (fs/create-dirs (fs/path *repo* ".config"))
-      (spit (str (fs/path *repo* ".config" "dotnet-tools.json")) manifest))
-    (let [{:keys [status lines err]} (sfcs {"FAKE_FAIL_STEP" step} "tools")]
-      (is (= 2 status) step)
-      (is (= calls (count lines)) step)
-      (is (str/includes? err "exited 7") err)))
-  (fs/delete-tree (fs/path *repo* ".config")))
-
 (deftest fresh-report-required-after-running-a-tool
   (doseq [[command report] [["dry" "tmp/jscpd/jscpd-report.json"]
                             ["mutate" "tmp/stryker/reports/mutation-report.json"]]
@@ -409,9 +593,9 @@
       (fs/create-dirs (fs/parent path))
       (spit (str path) (if (= command "dry") "{\"duplicates\":[]}" "{\"files\":{}}"))
       (let [{:keys [status lines err]} (sfcs {"FAKE_EXIT" exit} command "--all")]
-        (is (= (if (= "0" exit) 2 5) status) (str command " exit " exit))
+        (is (= (if (and (= "dry" command) (= "5" exit)) 5 2) status) (str command " exit " exit))
         (is (not (fs/exists? path)))
-        (is (= 1 (count lines)))
+        (is (= (if (= "dry" command) 1 3) (count lines)))
         (when (= "0" exit) (is (str/includes? err "not found")))))))
 
 (def compiled-languages
@@ -435,20 +619,22 @@
   (let [{:keys [status lines]} (sfcs {} "help")
         help (str/join "\n" lines)]
     (is (= 0 status))
-    (is (str/includes? help "install dotnet-stryker locally"))
-    (is (str/includes? help "Stryker on changed files")))
+    (is (str/includes? help "tools                       restore local dotnet tools and check node, npx, dotnet\n"))
+    (is (not (str/includes? help "install dotnet-stryker")))
+    (is (str/includes? help "Stryker on changed files"))
+    (is (str/includes? help "needs dotnet-stryker pinned in a committed tool manifest")))
   (doseq [{:keys [label] :as profile} compiled-languages]
     (let [{:keys [status lines]} (in-language profile {} "help")
           help (str/join "\n" lines)]
       (is (= 0 status))
-      (is (str/includes? help "check dotnet, node, npx and prepare jscpd"))
+      (is (str/includes? help "restore local dotnet tools and check node, npx, dotnet"))
       (is (str/includes? help (str "unsupported for " label "; exit 2"))))))
 
 (deftest compiled-language-tool-boundary
   (doseq [{:keys [label] :as profile} compiled-languages]
     (let [{:keys [status lines err]} (in-language profile {} "tools")]
       (is (= 0 status) err)
-      (is (= ["$ npx --yes jscpd@4 --version"] lines)))
+      (is (= ["$ dotnet tool restore" "$ npx --yes jscpd@4 --version"] lines)))
     (is (= 2 (:status (in-language profile {"MISSING" "dotnet"} "tools"))))
     (let [{:keys [status lines err]} (in-language profile {} "mutate" "--all" "--report-only")]
       (is (= 2 status))
@@ -460,7 +646,7 @@
     (doseq [profile compiled-languages
             [command category] [["test" "Category!=Property"] ["property" "Category=Property"]]]
       (is (= 7 (:status (in-language profile {"FAKE_DOTNET_LOG" log "FAKE_EXIT" "7"} command "--no-build"))))
-      (is (= ["test" "--filter" category "--no-build"] (str/split-lines (slurp log)))))))
+      (is (= [["test" "--filter" category "--no-build"]] (dotnet-calls log))))))
 
 (deftest compiled-methods-use-report-spans
   (doseq [{:keys [language source] :as profile} compiled-languages]
@@ -527,7 +713,7 @@
     (let [path (fs/path *repo* "tmp" "coverage" "stale" "coverage.cobertura.xml")]
       (fs/create-dirs (fs/parent path))
       (spit (str path) (cobertura-xml [] (source-file profile "Account")))
-      (is (= 7 (:status (in-language profile {"FAKE_EXIT" "7"} "coverage"))))
+      (is (= 1 (:status (in-language profile {"FAKE_EXIT" "7"} "coverage"))))
       (is (not (fs/exists? path)))
       (is (= 2 (:status (in-language profile {} "coverage"))))
       (is (= 0 (:status (in-language profile {"FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))}
@@ -558,14 +744,21 @@
   (expecto-fsproj (str "<SwarmForgePropertyTestList>" list-name "</SwarmForgePropertyTestList>")))
 
 (defn- in-tree
-  "Calls `f` with *repo* bound to a fresh directory holding `files` (path -> text)."
+  "Calls `f` with *repo* bound to a fresh git repository holding `files` (path -> text)
+  and a committed root tool manifest."
   [files f]
-  (let [dir (str (fs/create-temp-dir {:prefix "sffs-tree"}))]
+  (let [dir (str (fs/real-path (fs/create-temp-dir {:prefix "sffs-tree"})))]
     (try
-      (doseq [[path text] files]
+      (doseq [[path text] (assoc files "dotnet-tools.json" stryker-manifest)]
         (fs/create-dirs (fs/parent (fs/path dir path)))
         (spit (str (fs/path dir path)) text))
-      (binding [*repo* dir] (f))
+      (binding [*repo* dir]
+        (git "init" "--quiet" "--initial-branch=main")
+        (git "config" "user.email" "test@example.com")
+        (git "config" "user.name" "Test")
+        (git "add" ".")
+        (git "commit" "--quiet" "-m" "tree")
+        (f))
       (finally (fs/delete-tree dir)))))
 
 (defn- dotnet-lines [lines]
@@ -664,6 +857,12 @@
        (is (= [(str "$ dotnet test --filter " filter " --no-build")]
               (:lines (sfcs {"LANGUAGE" "fsharp"} command "--no-build")))))))
 
+(deftest symlinked-directories-are-not-walked-for-projects
+  (in-tree {"tests/Laws/Laws.fsproj" (declared "Laws")}
+    #(do (fs/create-sym-link (fs/path *repo* "linked") (fs/path *repo* "tests"))
+         (is (= ["$ dotnet test tests/Laws/Laws.fsproj --filter FullyQualifiedName~Laws."]
+                (:lines (sfcs {"LANGUAGE" "fsharp"} "property")))))))
+
 (deftest only-sf-fs-looks-for-expecto
   (in-tree mixed-tree
     #(doseq [language [nil "vbnet"]
@@ -678,7 +877,11 @@
       #(doseq [command ["test" "property" "coverage"]]
          (let [{:keys [status lines err]} (sfcs-process {"LANGUAGE" "fsharp"} command)]
            (is (= 2 status) (str declaration " " command))
-           (is (empty? (dotnet-lines lines)))
+           (is (= (if (= "coverage" command)
+                    ["$ dotnet tool list --local dotnet-coverage --format json" "$ dotnet dotnet-coverage --version"]
+                    [])
+                  (dotnet-lines lines)))
+           (is (not (fs/exists? (fs/path *repo* "tmp" "coverage"))))
            (is (str/starts-with? err "sf-fs: "))
            (is (str/includes? err "tests/A/A.fsproj"))
            (is (not (str/includes? err "tests/B/B.fsproj")))
@@ -693,7 +896,8 @@
 
 (deftest expecto-coverage-collects-per-project
   (let [report (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))
-        collector "--collect XPlat Code Coverage --results-directory tmp/coverage --no-build -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura"
+        collector (fn [i] (str "$ dotnet dotnet-coverage collect -s tmp/dotnet-coverage.xml -f cobertura -o tmp/coverage/run-"
+                               i "/coverage.cobertura.xml -- dotnet test "))
         stale #(let [path (fs/path *repo* "tmp" "coverage" "stale" "coverage.cobertura.xml")]
                  (fs/create-dirs (fs/parent path))
                  (spit (str path) "x")
@@ -704,15 +908,15 @@
            (let [old (stale)
                  {:keys [status lines err]} (sfcs {"LANGUAGE" "fsharp" "FAKE_COVERAGE" report} "coverage" "--no-build")]
              (is (= 0 status) err)
-             (is (= [(str "$ dotnet test a/A.fsproj --filter FullyQualifiedName!~P. " collector)
-                     (str "$ dotnet test b/B.fsproj --filter Category!=Property " collector)]
-                    (dotnet-lines lines)))
+             (is (= [(str (collector 1) "a/A.fsproj --filter FullyQualifiedName!~P. --no-build")
+                     (str (collector 2) "b/B.fsproj --filter Category!=Property --no-build")]
+                    (filterv (fn [line] (str/includes? line "collect")) (dotnet-lines lines))))
              (is (not (fs/exists? old)))
-             (is (fs/exists? (fs/path *repo* "tmp" "coverage" "run" "coverage.cobertura.xml")))))
+             (is (= "2 coverage file(s) under tmp/coverage" (last lines)))))
          (testing "a failing project is the status after every project ran"
            (let [{:keys [status lines]} (sfcs {"LANGUAGE" "fsharp" "FAKE_COVERAGE" report "FAKE_PROJECT_EXITS" "a/A.fsproj=4"} "coverage")]
-             (is (= 4 status))
-             (is (= 2 (count (dotnet-lines lines))))))
+             (is (= 1 status))
+             (is (= 2 (count (filter (fn [line] (str/includes? line "collect")) (dotnet-lines lines)))))))
          (testing "runs that leave no report are an error"
            (stale)
            (is (= 2 (:status (sfcs {"LANGUAGE" "fsharp"} "coverage")))))))))
@@ -724,3 +928,185 @@
       (is (not (str/includes? help "Expecto")))
       (is (str/includes? help "unit and acceptance tests (Category!=Property)\n"))
       (is (str/includes? help "property tests only (Category=Property)\n")))))
+
+;; Coverage through the project's pinned dotnet-coverage.
+
+(defn- refused-coverage
+  "Runs coverage with `env`; asserts exit 2 and an untouched tmp/coverage; returns stderr's last line."
+  [env]
+  (let [sentinel (fs/path *repo* "tmp" "coverage" "old" "coverage.cobertura.xml")]
+    (fs/create-dirs (fs/parent sentinel))
+    (spit (str sentinel) "old")
+    (let [{:keys [status lines err]} (sfcs env "coverage")]
+      (is (= 2 status) err)
+      (is (empty? (filter #(str/includes? % "collect") lines)))
+      (is (= "old" (slurp (str sentinel))))
+      (fs/delete-tree (fs/parent sentinel))
+      (last (str/split-lines err)))))
+
+(defn- coverage-listing
+  "Fake `dotnet tool list` stdout naming `manifest` as the `package` pin."
+  [package manifest]
+  (json/generate-string {"version" 1 "data" [{"packageId" package "manifest" manifest}]}))
+
+(deftest coverage-needs-a-dotnet-coverage-pin
+  (let [root (str (fs/real-path *repo*))
+        instructions (str "a committed tool manifest at the repository root (in " root
+                          ": dotnet new tool-manifest (when the root has none), then dotnet tool install dotnet-coverage"
+                          " --version <version>, then commit the manifest)")]
+    (testing "no pin"
+      (is (= (str "sf-cs: dotnet tool list --local dotnet-coverage found no dotnet-coverage (exit 1); "
+                  "ask the operator to pin one in " instructions)
+             (refused-coverage {"FAKE_LIST_JSON" "{\"version\":1,\"data\":[]}" "FAKE_LIST_EXIT" "1"}))))
+    (testing "a pin below the root"
+      (let [manifest (fs/path *repo* "elsewhere" "dotnet-tools.json")]
+        (fs/create-dirs (fs/parent manifest))
+        (spit (str manifest) stryker-manifest)
+        (is (= (str "sf-cs: dotnet-coverage is pinned in " manifest ", not at the repository root, "
+                    "so sf-cs tools does not restore it; ask the operator to pin it in " instructions " and remove this pin")
+               (refused-coverage {"FAKE_LIST_JSON" (coverage-listing "dotnet-coverage" (str manifest))})))
+        (fs/delete-tree (fs/parent manifest))))
+    (testing "a dotnet-stryker pin is no dotnet-coverage pin"
+      (is (str/includes? (refused-coverage {"FAKE_LIST_JSON" (coverage-listing "dotnet-stryker" (str root "/dotnet-tools.json"))})
+                         "found no dotnet-coverage")))))
+
+(deftest coverage-needs-a-restored-dotnet-coverage
+  (is (= "sf-cs: dotnet dotnet-coverage --version exited 1; run sf-cs tools to restore the pinned dotnet-coverage"
+         (refused-coverage {"FAKE_COVERAGE_TOOL_EXIT" "1"})))
+  (doseq [[language wrapper] wrappers]
+    (is (= (str "sf-cs: dotnet dotnet-coverage --version exited 1; run " wrapper " tools to restore the pinned dotnet-coverage")
+           (refused-coverage {"LANGUAGE" language "FAKE_COVERAGE_TOOL_EXIT" "1"})))))
+
+(def odd-dir "odd/a.b+(c) [d]{e}^$|?*#&x")
+
+(def settings-tree
+  {"Root.Tests.csproj" "<Project/>"
+   "src/Lib/Lib.csproj" "<Project/>"
+   "src/Lib/Account.cs" "class Account {}"
+   "Mixed/Mixed.csproj" "<Project/>"
+   "Mixed/Mixed.Tests.csproj" "<Project/>"
+   "tests/Mtp/Mtp.fsproj" "<Project/>"
+   "tests/Broken/Broken.csproj" "<Project/>"
+   "Bad/Bad.csproj" "<Project/>"
+   (str odd-dir "/Odd.vbproj") "<Project/>"
+   "bin/Old/Old.csproj" "<Project/>"
+   ".hidden/H.csproj" "<Project/>"})
+
+(def settings-projects
+  (sort ["Root.Tests.csproj" "src/Lib/Lib.csproj" "Mixed/Mixed.csproj" "Mixed/Mixed.Tests.csproj"
+         "tests/Mtp/Mtp.fsproj" "tests/Broken/Broken.csproj" "Bad/Bad.csproj" (str odd-dir "/Odd.vbproj")]))
+
+(defn- sources [xml section]
+  (->> (re-find (re-pattern (str "(?s)<Sources>.*?<" section ">(.*?)</" section ">")) xml)
+       second
+       (re-seq #"<Source>(.*?)</Source>")
+       (mapv #(str/replace (second %) "&amp;" "&"))))
+
+(defn- excluded-modules [xml]
+  (->> (re-find #"(?s)<ModulePaths>\s*<Exclude>(.*?)</Exclude>" xml)
+       second
+       (re-seq #"<ModulePath>(.*?)</ModulePath>")
+       (mapv #(str/replace (second %) "&amp;" "&"))))
+
+(defn- evaluation [project]
+  ["msbuild" project "-getProperty:IsTestProject" "-getProperty:IsTestingPlatformApplication" "-getProperty:AssemblyName"])
+
+(deftest coverage-settings-leave-out-test-assemblies
+  (in-tree settings-tree
+    #(let [log (str (fs/path *repo* "tmp-dotnet.log"))
+           env {"FAKE_DOTNET_LOG" log
+                "FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))
+                "FAKE_TEST_PROJECTS" (str "Root.Tests.csproj,Mixed/Mixed.Tests.csproj,tests/Broken/Broken.csproj,"
+                                          "Bad/Bad.csproj," odd-dir "/Odd.vbproj")
+                "FAKE_MTP_PROJECTS" "tests/Mtp/Mtp.fsproj"
+                "FAKE_ASSEMBLY_NAMES" "Mixed/Mixed.Tests.csproj=Mixed.Specs,tests/Mtp/Mtp.fsproj=My.Mtp+Tests"
+                "FAKE_RESTORE_FAILS" "Bad/Bad.csproj"
+                "FAKE_PROJECT_EXITS" "tests/Broken/Broken.csproj=1"}
+           {:keys [status err]} (sfcs env "coverage")
+           root *repo*
+           rx (str "^" (str/replace root "/" "[\\\\/]") "[\\\\/]")
+           xml (slurp (str (fs/path *repo* "tmp" "dotnet-coverage.xml")))]
+       (is (= 0 status) err)
+       (is (re-matches #"[A-Za-z0-9/_-]+" root) "the root needs no escaping")
+       (testing "each walked project is restored, then evaluated when its restore passed; no bare restore"
+         (is (= (mapcat (fn [p] (if (= p "Bad/Bad.csproj") [["restore" p]] [["restore" p] (evaluation p)]))
+                        settings-projects)
+                (->> (dotnet-calls log) (drop 2) butlast vec))))
+       (testing "a failed restore is a warning naming the project, whose test code is then scored"
+         (is (= 1 (count (re-seq #"warning" err))) err)
+         (is (str/includes? err "warning: dotnet restore Bad/Bad.csproj failed")))
+       (testing "sources: everything under the root but obj/; no directory is excluded"
+         (is (= [(str rx ".*")] (sources xml "Include")))
+         (is (= [".*[\\\\/]obj[\\\\/].*"] (sources xml "Exclude"))))
+       (testing "one module pattern per evaluated test project, by its assembly name"
+         (is (= [".*[\\\\/]Mixed\\.Specs\\.(dll|exe)$"
+                 ".*[\\\\/]Root\\.Tests\\.(dll|exe)$"
+                 ".*[\\\\/]Odd\\.(dll|exe)$"
+                 ".*[\\\\/]My\\.Mtp\\+Tests\\.(dll|exe)$"]
+                (excluded-modules xml))))
+       (is (not (str/includes? xml "Bad")) "a project whose restore failed is not excluded")
+       (testing "the module patterns match test assemblies, dll or exe, under either separator, and nothing else"
+         (let [[mixed root-tests _ mtp] (map re-pattern (excluded-modules xml))]
+           (is (re-find mixed (str root "/Mixed/bin/Debug/net10.0/Mixed.Specs.dll")))
+           (is (re-find mixed "C:\\w\\Mixed\\bin\\Mixed.Specs.exe"))
+           (is (not (re-find mixed (str root "/Mixed/bin/Debug/net10.0/Mixed.dll"))))
+           (is (not (re-find mixed (str root "/Mixed/bin/Mixed.Specs.dll.config"))))
+           (is (not (re-find mixed (str root "/bin/XMixed.Specs.dll"))))
+           (is (not (re-find root-tests (str root "/bin/RootxTests.dll"))))
+           (is (re-find mtp (str root "/tests/Mtp/bin/My.Mtp+Tests.dll")))
+           (is (not (re-find mtp (str root "/tests/Mtp/bin/My.Mtp++Tests.dll"))))))
+       (testing "the sources pattern keeps production sources beside or below a test project"
+         (let [[include obj] (map re-pattern (concat (sources xml "Include") (sources xml "Exclude")))]
+           (is (re-matches include (str root "/Mixed/Calc.cs")))
+           (is (re-matches include (str root "/src/Lib/Account.cs")))
+           (is (re-matches include (str (str/replace root "/" "\\") "\\src\\Lib\\Account.cs")))
+           (is (not (re-matches include (str root "-other/src/Lib/Account.cs"))))
+           (is (re-matches obj (str root "/src/Lib/obj/Debug/Gen.cs"))))))))
+
+(defn- stale-report []
+  (let [path (fs/path *repo* "tmp" "coverage" "old" "coverage.cobertura.xml")]
+    (fs/create-dirs (fs/parent path))
+    (spit (str path) "old")
+    path))
+
+(deftest coverage-refuses-a-tree-with-nothing-to-measure
+  (doseq [[case-name files env] [["no project" {"src/Account.cs" "class Account {}"} {}]
+                                 ["only test projects" {"T/T.csproj" "<Project/>" "U/U.csproj" "<Project/>"}
+                                  {"FAKE_TEST_PROJECTS" "T/T.csproj" "FAKE_MTP_PROJECTS" "U/U.csproj"}]
+                                 ["only test projects among those restored"
+                                  {"T/T.csproj" "<Project/>" "P/P.csproj" "<Project/>"}
+                                  {"FAKE_TEST_PROJECTS" "T/T.csproj" "FAKE_RESTORE_FAILS" "P/P.csproj"}]]]
+    (in-tree files
+      #(let [stale (stale-report)
+             {:keys [status lines err]} (sfcs (assoc env "FAKE_COVERAGE" (str (fs/path fixtures "coverage" "coverage.cobertura.xml")))
+                                              "coverage" "../App.sln")]
+         (is (= 2 status) case-name)
+         (is (str/includes? err (str "no project to measure under " *repo*)) case-name)
+         (is (str/includes? err "run sf-cs coverage from the repository or solution root") case-name)
+         (is (not-any? (fn [line] (str/includes? line "collect")) lines) case-name)
+         (when (= case-name "no project")
+           (is (not-any? (fn [line] (str/starts-with? line "$ dotnet restore")) lines)))
+         (is (not (fs/exists? stale)) (str case-name ": the stale report is gone"))
+         (is (not (fs/exists? (fs/path *repo* "tmp" "dotnet-coverage.xml"))) case-name)))))
+
+(deftest coverage-creates-each-run-directory-and-replaces-stale-runs
+  (in-tree {"a/A.fsproj" (declared "P") "b/B.fsproj" xunit-fsproj}
+    #(let [report (str (fs/path fixtures "coverage" "coverage.cobertura.xml"))
+           stale (fs/path *repo* "tmp" "coverage" "run-3" "coverage.cobertura.xml")]
+       (fs/create-dirs (fs/parent stale))
+       (spit (str stale) "x")
+       (let [{:keys [status lines err]} (sfcs {"LANGUAGE" "fsharp" "FAKE_COVERAGE" report} "coverage")]
+         (is (= 0 status) err)
+         (is (= "2 coverage file(s) under tmp/coverage" (last lines))))
+       (is (not (fs/exists? stale)))
+       (is (= #{"run-1" "run-2"} (set (map (comp str fs/file-name) (fs/list-dir (fs/path *repo* "tmp" "coverage")))))))))
+
+(deftest a-test-project-is-what-msbuild-evaluates-as-one
+  (doseq [[evaluation expected]
+          [[{:exit 0 :out "{\"Properties\":{\"IsTestProject\":\"true\",\"IsTestingPlatformApplication\":\"\"}}"} true]
+           [{:exit 0 :out "{\"Properties\":{\"IsTestProject\":\"\",\"IsTestingPlatformApplication\":\"True\"}}"} true]
+           [{:exit 0 :out "{\"Properties\":{\"IsTestProject\":\"false\",\"IsTestingPlatformApplication\":\"\"}}"} false]
+           [{:exit 1 :out "{\"Properties\":{\"IsTestProject\":\"true\"}}"} false]
+           [{:exit 0 :out "MSBUILD : error MSB1009: Project file does not exist."} false]
+           [{:exit 0 :out "[]"} false]]]
+    (is (= expected (coverage/test-project? evaluation)) (pr-str evaluation))))

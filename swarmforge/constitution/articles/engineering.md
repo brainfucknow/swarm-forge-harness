@@ -9,13 +9,14 @@
   |---|---|---|---|---|
   | Go | `github.com/unclebob/mutate4go` | `github.com/unclebob/crap4go` | `github.com/unclebob/dry4go` | `go install` |
   | Clojure | `github.com/unclebob/clj-mutate` | `github.com/unclebob/crap4clj` | `github.com/unclebob/dry4clj` | Clojure CLI/deps.edn; [Babashka guide](../../languages/clojure.md) |
-  | Java | `github.com/unclebob/mutate4java` | `github.com/unclebob/crap4java` | `github.com/unclebob/dry4java` | Maven (`mvn`) |
-  | C# | Stryker.NET | Coverlet | jscpd | [`sf-cs tools`](../../languages/csharp.md) |
-  | F# | Unsupported (exit 2) | Coverlet compiled methods | jscpd | [`sf-fs tools`](../../languages/fsharp.md) |
-  | VB.NET | Unsupported (exit 2) | Coverlet compiled methods | jscpd | [`sf-vb tools`](../../languages/vbnet.md) |
+  | Java | `github.com/unclebob/mutate4java` | `github.com/unclebob/crap4java` | `github.com/unclebob/dry4java` | [`sf-java`](../../languages/java.md) |
+  | C# | Stryker.NET | dotnet-coverage | jscpd | [`sf-cs tools`](../../languages/csharp.md) |
+  | F# | Unsupported (exit 2) | dotnet-coverage compiled methods | jscpd | [`sf-fs tools`](../../languages/fsharp.md) |
+  | VB.NET | Unsupported (exit 2) | dotnet-coverage compiled methods | jscpd | [`sf-vb tools`](../../languages/vbnet.md) |
   | JavaScript/TypeScript | StrykerJS | oxlint or ESLint + Istanbul | jscpd | [`sf-js tools`](../../languages/javascript.md) |
   | Ruby | mutant (optional: needs the project's mutant usage) | RuboCop or flog + SimpleCov | jscpd or flay | [`sf-rb`](../../languages/ruby.md) |
 
+- Stryker.NET and dotnet-coverage are pinned by the project's committed dotnet tool manifest instead of `swarmforge/tools.conf`; `sf-cs tools` (and `sf-fs`/`sf-vb tools` for dotnet-coverage) restores them, and `sf-cs mutate` and `coverage` refuse any other copy.
 - Install every listed tool with `sf tool ensure <tool>` and check it with `sf tool require <tool>`; `sf tool list` prints the catalogue. Cite the `@<ref>` that ends each `INSTALLED:` line of `sf tool ensure` for each tool you ran in your `Tested` trailers. Wrappers land in `.swarmforge/bin/` at the repository root, ignored by git and shared by every task worktree, so a tool install never writes outside the project. Run tools through those wrappers (`sf tool bin` prints the directory to put on PATH); they carry the argument guardrails below.
 
 ## Language Defaults
@@ -30,8 +31,15 @@
 - Keep tests close to the behavior being changed.
 - Separate testable modules from environmentally unsuitable modules that open GUIs, depend on external devices, throw environment errors, emit system errors, or hang under automated tests. Maximize testable code and minimize the unsuitable boundary.
 - IO-near modules must call existing high-level policy and translate the result, not recompute the same domain answer.
+- Ask the toolchain (dotnet, msbuild, maven, the package manager) for its facts instead of re-implementing its rules in wrapper code.
 - Exclude environmentally unsuitable adapters from any analysis that runs tests: unit, acceptance, property, coverage, mutation, CRAP, and test-running DRY checks.
 - Keep property tests separate from normal verification. Do not include property-test tags in normal unit coverage, Gherkin acceptance mutation, language mutation tools, CRAP, or coverage commands unless the role owns property-test verification or the user explicitly asks for property tests.
+- In each increment, settle the shape of the data the slice needs before writing its logic.
+- Make illegal combinations of the values the slice handles unrepresentable, including invariants a runtime check guards today: construct those values only through a validating constructor or a closed type, so no other code path can create an invalid one. Do not model states for future behavior.
+- Parse outside data once, in a testable module right after the adapter receives it, and trust the parsed value inside. Boundary parsing does not replace authorization or escaping at sensitive sinks.
+- Lines the task's diff adds against the merge base must not suppress compiler, type-checker, or linter diagnostics. When a suppression is unavoidable, scope it as narrowly as the tool allows and record the reason in a Lore `Constraint`.
+- Operations that may be retried or re-run (commands, handlers, migrations) must end in the same state when run twice: a retried handler that marks an order paid leaves it paid once. Where a write can be interrupted midway, re-running after the interruption must also end in that state. Exempt only relative effects (advance, increment, toggle, accumulate) and effects the specification explicitly says are not idempotent.
+- Give parties that do not need the same mutable state their own copies. Give state they must share exactly one writer, enforced by ownership (module privacy, a single owning process or type).
 
 ## Acceptance Pipeline
 - When executable Gherkin acceptance tests are useful, use github.com/unclebob/Acceptance-Pipeline-Specification and reuse the project's existing pipeline. Do not create acceptance scaffolding merely because a task visits a role.

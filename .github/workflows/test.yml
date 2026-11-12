@@ -3,6 +3,25 @@ on:
   push:
   pull_request:
 jobs:
+  sf-min-bb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the oldest Babashka sf supports
+        env:
+          BB_VERSION: 1.12.200
+          BB_SHA256: c38adba2954b52f2ba410e24c94ef42c3f7285335f253e9f8125c47ae0b4aeae
+        run: |
+          mkdir -p "$HOME/bin"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          curl -fsSL --retry 5 --retry-all-errors -o bb.tar.gz \
+            "https://github.com/babashka/babashka/releases/download/v$BB_VERSION/babashka-$BB_VERSION-linux-amd64.tar.gz"
+          echo "$BB_SHA256  bb.tar.gz" | sha256sum --check
+          tar -xzf bb.tar.gz -C "$HOME/bin"
+          rm bb.tar.gz
+          "$HOME/bin/bb" --version
+      - name: Test sf
+        run: bash test/sf_test.sh
   sf:
     runs-on: ubuntu-latest
     steps:
@@ -12,17 +31,26 @@ jobs:
       - name: Test the manifest guard
         run: bash test/no_manifests_test.sh
       - name: Install Babashka
+        env:
+          BB_VERSION: 1.13.229
+          BB_SHA256: a98c90a0530943dfa9a0b03bcccbc2030777a6ce094af303d5bb47d77e193299
         run: |
           mkdir -p "$HOME/bin"
           echo "$HOME/bin" >> "$GITHUB_PATH"
-          curl -sSL https://raw.githubusercontent.com/babashka/babashka/master/install -o install-bb
-          bash install-bb --dir "$HOME/bin"
+          curl -fsSL --retry 5 --retry-all-errors -o bb.tar.gz \
+            "https://github.com/babashka/babashka/releases/download/v$BB_VERSION/babashka-$BB_VERSION-linux-amd64.tar.gz"
+          echo "$BB_SHA256  bb.tar.gz" | sha256sum --check
+          tar -xzf bb.tar.gz -C "$HOME/bin"
+          rm bb.tar.gz
+          "$HOME/bin/bb" --version
       - name: Test sf
         run: bash test/sf_test.sh
       - name: Test sf tool
         run: bash test/sf_tool_test.sh
       - name: Unit specs for sf
         run: bb --config swarmforge/tools/sf/bb.edn spec
+      - name: Hardening checks for sf
+        run: bb --config swarmforge/tools/sf/bb.edn hardening
       - name: Property tests for sf
         run: bb --config swarmforge/tools/sf/bb.edn property
       - name: Acceptance tests for sf
@@ -31,6 +59,8 @@ jobs:
           bash test/acceptance.sh
       - name: Test sf-cs
         run: bb --config swarmforge/tools/csharp/bb.edn test
+      - name: Property-test sf-cs
+        run: bb --config swarmforge/tools/csharp/bb.edn property
       - name: Test sf-js
         run: bb --config swarmforge/tools/javascript/bb.edn test
       - name: Property-test sf-js
@@ -39,6 +69,16 @@ jobs:
         run: |
           swarmforge/bin/sf tool ensure gherkin-parser
           bb --config swarmforge/tools/javascript/bb.edn acceptance
+      - name: Unit specs for sf-java
+        run: bb --config swarmforge/tools/java/bb.edn spec
+      - name: Hardening checks for sf-java
+        run: bb --config swarmforge/tools/java/bb.edn hardening
+      - name: Property tests for sf-java
+        run: bb --config swarmforge/tools/java/bb.edn property
+      - name: Accept sf-java
+        run: |
+          swarmforge/bin/sf tool ensure gherkin-parser
+          bb --config swarmforge/tools/java/bb.edn acceptance
       - name: Test sf-rb
         run: bb --config swarmforge/tools/ruby/bb.edn test
       - name: Property-test sf-rb

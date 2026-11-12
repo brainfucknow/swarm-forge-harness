@@ -3,18 +3,48 @@
   title and request of a task, and the key: value blocks that sf start and sf
   show print."
   (:refer-clojure :exclude [resolve])
-  (:require [clojure.string :as str])
-  (:import (java.text Normalizer Normalizer$Form)))
+  (:require [clojure.string :as str]))
 
 (def ^:private slug-limit 30)
 
+(def ^:private bases
+  "Each letter of U+00C0..U+024F and U+1E00..U+1EFF that has a canonical
+  decomposition, followed by the letter its decomposition starts with: the
+  rest of the decomposition is combining marks, which slug drops."
+  (apply hash-map (seq (str
+   "ÀAÁAÂAÃAÄAÅAÇCÈEÉEÊEËEÌIÍIÎIÏIÑNÒOÓOÔOÕOÖOÙUÚUÛU"
+   "ÜUÝYàaáaâaãaäaåaçcèeéeêeëeìiíiîiïiñnòoóoôoõoöoùu"
+   "úuûuüuýyÿyĀAāaĂAăaĄAąaĆCćcĈCĉcĊCċcČCčcĎDďdĒEēeĔE"
+   "ĕeĖEėeĘEęeĚEěeĜGĝgĞGğgĠGġgĢGģgĤHĥhĨIĩiĪIīiĬIĭiĮI"
+   "įiİIĴJĵjĶKķkĹLĺlĻLļlĽLľlŃNńnŅNņnŇNňnŌOōoŎOŏoŐOőo"
+   "ŔRŕrŖRŗrŘRřrŚSśsŜSŝsŞSşsŠSšsŢTţtŤTťtŨUũuŪUūuŬUŭu"
+   "ŮUůuŰUűuŲUųuŴWŵwŶYŷyŸYŹZźzŻZżzŽZžzƠOơoƯUưuǍAǎaǏI"
+   "ǐiǑOǒoǓUǔuǕUǖuǗUǘuǙUǚuǛUǜuǞAǟaǠAǡaǢÆǣæǦGǧgǨKǩkǪO"
+   "ǫoǬOǭoǮƷǯʒǰjǴGǵgǸNǹnǺAǻaǼÆǽæǾØǿøȀAȁaȂAȃaȄEȅeȆEȇe"
+   "ȈIȉiȊIȋiȌOȍoȎOȏoȐRȑrȒRȓrȔUȕuȖUȗuȘSșsȚTțtȞHȟhȦAȧa"
+   "ȨEȩeȪOȫoȬOȭoȮOȯoȰOȱoȲYȳyḀAḁaḂBḃbḄBḅbḆBḇbḈCḉcḊDḋd"
+   "ḌDḍdḎDḏdḐDḑdḒDḓdḔEḕeḖEḗeḘEḙeḚEḛeḜEḝeḞFḟfḠGḡgḢHḣh"
+   "ḤHḥhḦHḧhḨHḩhḪHḫhḬIḭiḮIḯiḰKḱkḲKḳkḴKḵkḶLḷlḸLḹlḺLḻl"
+   "ḼLḽlḾMḿmṀMṁmṂMṃmṄNṅnṆNṇnṈNṉnṊNṋnṌOṍoṎOṏoṐOṑoṒOṓo"
+   "ṔPṕpṖPṗpṘRṙrṚRṛrṜRṝrṞRṟrṠSṡsṢSṣsṤSṥsṦSṧsṨSṩsṪTṫt"
+   "ṬTṭtṮTṯtṰTṱtṲUṳuṴUṵuṶUṷuṸUṹuṺUṻuṼVṽvṾVṿvẀWẁwẂWẃw"
+   "ẄWẅwẆWẇwẈWẉwẊXẋxẌXẍxẎYẏyẐZẑzẒZẓzẔZẕzẖhẗtẘwẙyẛſẠA"
+   "ạaẢAảaẤAấaẦAầaẨAẩaẪAẫaẬAậaẮAắaẰAằaẲAẳaẴAẵaẶAặaẸE"
+   "ẹeẺEẻeẼEẽeẾEếeỀEềeỂEểeỄEễeỆEệeỈIỉiỊIịiỌOọoỎOỏoỐO"
+   "ốoỒOồoỔOổoỖOỗoỘOộoỚOớoỜOờoỞOởoỠOỡoỢOợoỤUụuỦUủuỨU"
+   "ứuỪUừuỬUửuỮUữuỰUựuỲYỳyỴYỵyỶYỷyỸYỹy"))))
+
+(def ^:private folds
+  (merge bases {\å "aa" \ä "ae" \æ "ae" \ö "oe" \ø "oe"}))
+
 (defn slug
-  "The title in lowercase ASCII, each run of other characters one -, cut to at
-  most 30 characters just before a -."
+  "The title in lowercase ASCII, cut to at most 30 characters just before a -:
+  å becomes aa, ä and æ ae, ö and ø oe, other accented letters lose their
+  accents, and each run of other characters becomes one -."
   [title]
-  (let [plain (-> (Normalizer/normalize title Normalizer$Form/NFD)
+  (let [plain (-> (str/lower-case title)
+                  (str/escape folds)
                   (str/replace #"\p{M}" "")
-                  str/lower-case
                   (str/replace #"[^a-z0-9]+" "-")
                   (str/replace #"^-|-$" ""))
         cut (str/last-index-of plain "-" slug-limit)]
@@ -56,7 +86,35 @@
 (def ^:private trailers
   [["SwarmForge-Task" :task] ["SwarmForge-Record" :record] ["SwarmForge-From" :from]
    ["SwarmForge-Stage" :stage] ["SwarmForge-Route" :route] ["SwarmForge-Needs" :needs]
-   ["SwarmForge-Merged-Into" :merged-into]])
+   ["SwarmForge-Merged-Into" :merged-into] ["SwarmForge-Reviewed" :reviewed]
+   ["SwarmForge-Audit-Refusals" :audit-refusals] ["SwarmForge-Verdict" :verdict]])
+
+(defn rejected-refusal
+  "Why value cannot be the value of a `Rejected: <finding> | <reason>` trailer,
+  or nil: it must be one line, split at its last ` | ` into a finding and a
+  reason that are not blank."
+  [value]
+  (let [at (str/last-index-of value " | ")]
+    (cond (re-find #"[\r\n]" value) "--rejected takes one line"
+          (nil? at) (str "--rejected needs '<finding> | <reason>', got '" value "'")
+          (or (str/blank? (subs value 0 at)) (str/blank? (subs value (+ at 3))))
+          (str "--rejected needs a finding and a reason around its last ' | ', got '" value "'"))))
+
+(defn rejected-finding
+  "The :finding and :reason of a `Rejected:` value, split at its last ` | `, and
+  the :kind and :severity of a finding that starts with `<KIND>, <SEVERITY>: `
+  (KIND DEFECT or PREMISE, SEVERITY CRITICAL, HIGH, MEDIUM or LOW), else nil."
+  [value]
+  (let [at (str/last-index-of value " | ")
+        finding (if at (subs value 0 at) value)
+        [_ kind severity] (re-find #"^(DEFECT|PREMISE), (CRITICAL|HIGH|MEDIUM|LOW): " finding)]
+    {:finding finding :reason (when at (subs value (+ at 3))) :kind kind :severity severity}))
+
+(defn- lore-trailers
+  "The Lore-id and Rejected trailer lines of a record that has a :lore-id."
+  [{:keys [lore-id rejected]}]
+  (when lore-id
+    (cons (str "Lore-id: " lore-id) (map #(str "Rejected: " %) rejected))))
 
 (defn message
   "The commit message of a record."
@@ -64,8 +122,10 @@
   (str "sf " record ": " task
        (when-not (str/blank? text) (str "\n\n" text))
        "\n\n"
-       (apply str (for [[key field] trailers :when (rec field)]
-                    (str key ": " (rec field) "\n")))))
+       (apply str (for [line (concat (lore-trailers rec)
+                                     (for [[key field] trailers :when (rec field)]
+                                       (str key ": " (rec field))))]
+                    (str line "\n")))))
 
 (defn- message-text
   "The paragraphs between the subject and the trailer block."
@@ -77,17 +137,27 @@
 (defn parse
   "The record in a commit, given as :sha, :parents, :message and :trailers
   (the unfolded trailer lines). Its :commit is its own sha for a created
-  record, else its first parent: the role's commit it was made on."
+  record, else its first parent: the role's commit it was made on. An
+  approval also has the values of its `Rejected:` trailers, in order, as
+  :rejected."
   [{:keys [sha parents message] :as commit}]
-  (let [by-key (into {} (for [line (:trailers commit)
-                              :let [[_ k v] (re-matches #"([^:]+): ?(.*)" line)]
-                              :when k]
-                          [k v]))
+  (let [pairs (for [line (:trailers commit)
+                    :let [[_ k v] (re-matches #"([^:]+): ?(.*)" line)]
+                    :when k]
+                [k v])
+        by-key (into {} pairs)
         fields (into {} (for [[key field] trailers :when (by-key key)] [field (by-key key)]))
         text (message-text message)]
     (cond-> (assoc fields :sha sha
                    :commit (if (= "created" (:record fields)) sha (first parents)))
-      (not (str/blank? text)) (assoc :text text))))
+      (not (str/blank? text)) (assoc :text text)
+      (= "approval" (:record fields)) (assoc :rejected (vec (for [[k v] pairs :when (= "Rejected" k)] v))))))
+
+(defn same-commit?
+  "True when a and b name the same commit, each a full or an abbreviated sha."
+  [a b]
+  (boolean (and (not (str/blank? a)) (not (str/blank? b))
+                (or (str/starts-with? a b) (str/starts-with? b a)))))
 
 (defn role-commits
   "The records, oldest first, with each :commit that names an earlier record
@@ -139,20 +209,23 @@
     {:records (keep-indexed #(when-not (dropped %1) %2) records)
      :omitted omitted}))
 
-(defn- fields [{:keys [task record from text stage route commit files merged-into]}]
+(defn- fields [{:keys [task record from verdict text stage route commit files merged-into audit-refusals]}]
   (concat
    [["type" record] ["from" from]]
+   (when verdict [["verdict" verdict]])
    (case record
      "created" [["branch" (branch task)] ["commit" commit] ["route" route]]
      "question" [["question" text]]
      "answer" [["answer" text]]
      "review" [["commit" commit] ["files" files] ["summary" text]]
-     "changes-requested" [["reason" text]]
+     ("changes-requested" "verdict") [["reason" text]]
      "route" [["route" route]]
      "handoff" [["to" stage] ["branch" (branch task)] ["commit" commit] ["files" files] ["summary" text]]
      "finished" [["merged-into" merged-into]]
      "moved" [["path" text]]
-     [])))
+     [])
+   (when (and audit-refusals (#{"review" "handoff"} record))
+     [["audit-refusals" audit-refusals]])))
 
 (defn block
   "The record as key: value lines; later lines of a value are indented by two spaces."

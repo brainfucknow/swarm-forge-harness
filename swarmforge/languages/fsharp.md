@@ -3,15 +3,18 @@
 Run `swarmforge/bin/sf-fs` from the task worktree for SDK-style `.fsproj`
 projects. It reuses the .NET wrapper and writes reports under `./tmp/`.
 Prerequisites: Babashka (`bb`), the .NET SDK, and Node with `npx` on PATH.
-Test projects must reference `coverlet.collector`.
+Coverage runs dotnet-coverage, which the project pins in a committed
+`dotnet-tools.json` or `.config/dotnet-tools.json` at the repository root, as
+for Stryker in [C#](csharp.md); `sf-fs tools` restores it. Test projects need
+no coverage package, on VSTest or Microsoft.Testing.Platform.
 
 | Command | Behavior |
 |---|---|
-| `tools` | Check prerequisites and prepare jscpd; no Stryker installation. |
+| `tools` | Check prerequisites, `dotnet tool restore` (it installs nothing), and prepare jscpd. |
 | `test [dotnet test args]` | `dotnet test --filter Category!=Property`; with Expecto, one run per test project (below). |
 | `property [dotnet test args]` | `dotnet test --filter Category=Property`. Mark FsCheck/xUnit properties with `[<Trait("Category", "Property")>]`. With Expecto, one run per test project (below). |
-| `coverage [dotnet test args]` | Fresh Coverlet Cobertura reports in `tmp/coverage/`, excluding properties. |
-| `crap [--all] [--base REF] [--report DIR]` | Compiled `.fs` methods using Coverlet's complexity, line coverage and coverable source span. CRAP = complexity² × (1 − coverage)³ + complexity; fail above 10. Missing or unusable method data is an input error. |
+| `coverage [dotnet test args]` | The C# `coverage` (see [C#](csharp.md)): each run of `test` under `dotnet dotnet-coverage collect`, each walked project restored and evaluated, a fresh Cobertura report per run in `tmp/coverage/`, test projects' assemblies left out; exit 2 when no project or only test projects are under the current directory. |
+| `crap [--all] [--base REF] [--report DIR]` | Compiled `.fs` methods using dotnet-coverage's complexity, line coverage and coverable source span. CRAP = complexity² × (1 − coverage)³ + complexity; fail above 10. Missing or unusable method data is an input error. |
 | `dry [--all] [--base REF] [--min-tokens N] [--report-only]` | `jscpd@4 --format fsharp`; report clones touching changed `.fs` lines in `tmp/jscpd/`. `--report-only` reuses the last report; new runs discard it first. |
 | `mutate` | Unsupported: exit 2. Stryker.NET supports C#; there is no F# mutation or scan/count mode. |
 
@@ -57,8 +60,8 @@ Acceptance Pipeline Specification tools and the project's runtime/handlers.
 - Code scanner: none. The SDK's security analyzers skip F# and no maintained
   F# scanner exists, so an F# project adds
   `Security code scanner absent: <reason>` to `project.md`.
-- Dependency audit: as in [csharp.md](csharp.md#security-scanners), restore
-  included, with `*.fsproj` in place of `*.csproj` among the dependency files.
+- Dependency audit: as in [csharp.md](csharp.md#security-scanners), with
+  `*.fsproj` in place of `*.csproj` among the dependency files.
 
 ## Code-smell check
 

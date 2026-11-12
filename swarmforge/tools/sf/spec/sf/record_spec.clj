@@ -1,5 +1,5 @@
 (ns sf.record-spec
-  (:require [speclj.core :refer [describe it should=]]
+  (:require [speclj.core :refer [describe it should= should should-not should-be-nil]]
             [sf.record :as record]))
 
 (describe "slug"
@@ -9,8 +9,21 @@
   (it "makes each run of other characters one - and trims - at both ends"
     (should= "fix-the-api-s-2-bugs" (record/slug "Fix: the API's 2 bugs!")))
 
-  (it "drops the combining marks of decomposed letters"
-    (should= "andra-inloggningen-for" (record/slug "Ändra inloggningen för användare")))
+  (it "writes å as aa, ä and æ as ae, ö and ø as oe"
+    (should= "aendra-inloggningen-foer" (record/slug "Ändra inloggningen för användare"))
+    (should= "blaabaersyltetoey" (record/slug "Blåbærsyltetøy"))
+    (should= "oel-og-aeble-paa-oen" (record/slug "ØL OG ÆBLE PÅ ÖN")))
+
+  (it "drops the marks of other accented letters"
+    (should= "creme-brulee" (record/slug "Crème brûlée"))
+    (should= "tieng-viet" (record/slug "Tiếng Việt"))
+    (should= "pinyin-a-u" (record/slug "Pīnyīn ǎ ǜ")))
+
+  (it "makes letters with no decomposition one -"
+    (should= "odz-stra-e" (record/slug "Łódź Straße")))
+
+  (it "drops a combining mark after a plain letter"
+    (should= "andra" (record/slug "A\u0308ndra")))
 
   (it "keeps a slug of 30 characters"
     (should= "twelve-chars-one-two-three-fou" (record/slug "twelve chars one two three fou")))
@@ -71,6 +84,14 @@
              (record/message {:task "t-1" :record "approval" :from "operator"
                               :stage "coder" :route "coder" :needs "none"})))
 
+  (it "puts a Lore-id and one Rejected trailer per value, in order, above the snapshot trailers"
+    (should= (str "sf approval: t-1\n\n"
+                  "Lore-id: 0a1b2c3d\nRejected: A | b\nRejected: C | x | d\n"
+                  "SwarmForge-Task: t-1\nSwarmForge-Record: approval\nSwarmForge-From: operator\n"
+                  "SwarmForge-Stage: coder\nSwarmForge-Route: coder\nSwarmForge-Needs: none\n")
+             (record/message {:task "t-1" :record "approval" :from "operator" :stage "coder" :route "coder"
+                              :needs "none" :lore-id "0a1b2c3d" :rejected ["A | b" "C | x | d"]})))
+
   (it "ends with Merged-Into for the finished record"
     (should= (str "sf finished: t-1\n\n"
                   "SwarmForge-Task: t-1\nSwarmForge-Record: finished\nSwarmForge-From: operator\n"
@@ -78,6 +99,39 @@
                   "SwarmForge-Merged-Into: main\n")
              (record/message {:task "t-1" :record "finished" :from "operator" :stage "done"
                               :route "coder" :needs "none" :merged-into "main"}))))
+
+(describe "a review record"
+  (it "names the commit it reviewed in a last trailer and reads it back"
+    (let [review {:task "t-1" :record "review" :from "specifier" :stage "specifier" :route "specifier,coder"
+                  :needs "approval" :reviewed "0123456789abcdef0123456789abcdef01234567"}
+          message (record/message review)]
+      (should= "SwarmForge-Reviewed: 0123456789abcdef0123456789abcdef01234567"
+               (last (clojure.string/split-lines message)))
+      (should= (assoc review :sha "abc1234" :commit "par1234")
+               (record/parse {:sha "abc1234" :parents ["par1234"] :message message
+                              :trailers (drop 2 (clojure.string/split-lines message))})))))
+
+(describe "a verdict record"
+  (it "carries its verdict in a trailer that parse reads back"
+    (let [rec {:task "t-1" :record "verdict" :from "judge" :verdict "stuck" :stage "specifier"
+               :route "specifier,coder" :needs "approval" :text "cap"}
+          message (record/message rec)
+          lines (clojure.string/split-lines message)]
+      (should= "SwarmForge-Verdict: stuck" (some #(when (clojure.string/starts-with? % "SwarmForge-Verdict") %) lines))
+      (should= ["verdict" "stuck" "cap"]
+               ((juxt :record :verdict :text)
+                (record/parse {:sha "s" :parents ["p"] :message message :trailers (drop 4 lines)}))))))
+
+(describe "same-commit?"
+  (it "matches a full sha and its abbreviation either way round"
+    (should (record/same-commit? "0123456789abcdef" "0123456"))
+    (should (record/same-commit? "0123456" "0123456789abcdef"))
+    (should (record/same-commit? "0123456" "0123456")))
+
+  (it "tells different commits and missing ones apart"
+    (should-not (record/same-commit? "0123456" "0123457"))
+    (should-not (record/same-commit? nil "0123456"))
+    (should-not (record/same-commit? "0123456" ""))))
 
 (describe "parse"
   (it "reads a record commit back"
@@ -90,7 +144,38 @@
                                                :trailers ["SwarmForge-Record: created"]}))))
 
   (it "keeps a value with a colon"
-    (should= "a: b" (:route (record/parse {:sha "s" :parents [] :message "" :trailers ["SwarmForge-Route: a: b"]})))))
+    (should= "a: b" (:route (record/parse {:sha "s" :parents [] :message "" :trailers ["SwarmForge-Route: a: b"]}))))
+
+  (it "reads the Rejected trailers of an approval in order, none as an empty list"
+    (should= ["DEFECT, LOW: a | b | reason" "C | d"]
+             (:rejected (record/parse {:sha "s" :parents ["p"] :message ""
+                                       :trailers ["Lore-id: 0badc0de" "Rejected: DEFECT, LOW: a | b | reason"
+                                                  "Rejected: C | d" "SwarmForge-Record: approval"]})))
+    (should= [] (:rejected (record/parse {:sha "s" :parents ["p"] :message "" :trailers ["SwarmForge-Record: approval"]})))
+    (should-be-nil (:rejected (record/parse {:sha "s" :parents ["p"] :message ""
+                                             :trailers ["Rejected: x | y" "SwarmForge-Record: handoff"]}))))
+
+  (it "writes the audit refusals of a record as a trailer and reads them back"
+    (let [handoff {:task "t-1" :record "handoff" :from "coder" :stage "qa" :route "coder,qa" :needs "none"
+                   :commit "c1" :text "done" :audit-refusals 2}
+          message (record/message handoff)]
+      (should= "SwarmForge-Audit-Refusals: 2" (last (clojure.string/split-lines message)))
+      (should= "2" (:audit-refusals (record/parse {:sha "s" :parents ["c1"] :message message
+                                                   :trailers (drop 4 (clojure.string/split-lines message))}))))))
+
+(describe "rejected-finding"
+  (it "splits a Rejected value at its last ' | ' and reads the kind and severity of its prefix"
+    (should= {:finding "DEFECT, LOW: a | b" :reason "accepted" :kind "DEFECT" :severity "LOW"}
+             (record/rejected-finding "DEFECT, LOW: a | b | accepted"))
+    (should= {:finding "PREMISE, CRITICAL: x" :reason "y" :kind "PREMISE" :severity "CRITICAL"}
+             (record/rejected-finding "PREMISE, CRITICAL: x | y")))
+
+  (it "has no kind or severity without the prefix"
+    (doseq [value ["C | d" "DEFECT, SEVERE: x | y" "defect, low: x | y" "NOTE, LOW: x | y" "DEFECT LOW: x | y"]]
+      (should= [nil nil] ((juxt :kind :severity) (record/rejected-finding value)))))
+
+  (it "keeps a value without ' | ' whole as the finding"
+    (should= {:finding "x" :reason nil :kind nil :severity nil} (record/rejected-finding "x"))))
 
 (describe "role-commits"
   (it "takes the commit of a record made on another record from that record"
@@ -119,6 +204,13 @@
     (should= (clojure.string/join "," (map str (range 40)))
              (record/files-value (map str (range 40))))))
 
+(describe "block of a record with a verdict"
+  (it "prints the verdict after from, and a verdict record's text as reason"
+    (should= "type: verdict\nfrom: judge\nverdict: stuck\nreason: cap\n  used"
+             (record/block {:record "verdict" :from "judge" :verdict "stuck" :text "cap\nused"}))
+    (should= "type: changes-requested\nfrom: judge\nverdict: continue\nreason: new findings"
+             (record/block {:record "changes-requested" :from "judge" :verdict "continue" :text "new findings"}))))
+
 (describe "block"
   (it "renders the keys of the record type, later lines of a value indented"
     (should= "type: question\nfrom: coder\nquestion: Which?\n  1) a" (record/block question)))
@@ -143,6 +235,13 @@
              (record/block {:record "changes-requested" :from "operator" :text "vague"}))
     (should= "type: route\nfrom: operator\nroute: coder,qa"
              (record/block {:record "route" :from "operator" :route "coder,qa"})))
+
+  (it "renders the audit refusals of a review and a handoff that carry them"
+    (should= "type: review\nfrom: specifier\ncommit: c1\nfiles: -\nsummary: ready\naudit-refusals: 2"
+             (record/block {:record "review" :from "specifier" :commit "c1" :files "-" :text "ready" :audit-refusals "2"}))
+    (should= "type: handoff\nfrom: coder\nto: qa\nbranch: swarm/t-1\ncommit: c1\nfiles: -\nsummary: done\naudit-refusals: 1"
+             (record/block {:task "t-1" :record "handoff" :from "coder" :stage "qa" :commit "c1"
+                            :files "-" :text "done" :audit-refusals "1"})))
 
   (it "renders only the type and the sender of a record without fields"
     (should= "type: approval\nfrom: operator"
@@ -210,3 +309,21 @@
   (it "tells equal records apart by position"
     (let [route {:record "route" :route "a,b"}]
       (should= {:records [route] :omitted 2} (record/brief [route route route] 1)))))
+
+(describe "rejected-refusal"
+  (it "accepts a finding and a reason split at the last ' | '"
+    (should-be-nil (record/rejected-refusal "DEFECT, LOW: a | b is wrong | accepted"))
+    (should-be-nil (record/rejected-refusal "A | b")))
+
+  (it "refuses a value with no ' | '"
+    (should= "--rejected needs '<finding> | <reason>', got 'A|b'" (record/rejected-refusal "A|b"))
+    (should= "--rejected needs '<finding> | <reason>', got 'A'" (record/rejected-refusal "A")))
+
+  (it "refuses a blank finding or reason around the last ' | '"
+    (doseq [value [" | b" "A | " "A |   " "A | b |  " "  |  "]]
+      (should= (str "--rejected needs a finding and a reason around its last ' | ', got '" value "'")
+               (record/rejected-refusal value))))
+
+  (it "refuses a value of more than one line"
+    (doseq [value ["A | b\nc" "A\n | b" "A | b\rc"]]
+      (should= "--rejected takes one line" (record/rejected-refusal value)))))

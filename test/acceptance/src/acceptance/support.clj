@@ -37,7 +37,7 @@
 
 (defn home [] (str (fs/path @scratch "home")))
 
-(defn- clean-env
+(defn clean-env
   "The process environment without SWARMFORGE_ and GIT_ variables, with HOME
   in the scratch directory (or home) and git-bug off PATH."
   [home-dir]

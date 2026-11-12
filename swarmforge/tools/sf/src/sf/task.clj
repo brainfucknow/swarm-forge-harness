@@ -6,11 +6,14 @@
             [sf.config :as config]
             [sf.flow :as flow]
             [sf.git :as plumbing]
+            [sf.harvest :as harvest]
             [sf.history :as history]
             [sf.hook :as hook]
+            [sf.lore :as lore]
             [sf.metrics :as metrics]
             [sf.options :as options]
             [sf.record :as record]
+            [sf.rounds :as rounds]
             [sf.shell :as shell]
             [sf.store :as store]
             [sf.verify :as verify]))
@@ -28,6 +31,11 @@
   "Stops with the refusal, when there is one."
   [refusal]
   (when refusal (shell/die refusal)))
+
+(defn- operator-only!
+  "Stops when a role or gate that sf dispatch runs tries the operator's command."
+  [command]
+  (refuse (flow/operator-refusal command (shell/env "SWARMFORGE_DISPATCHED" nil))))
 
 (defn- open-task
   "The task that arg names; stops when it is finished."
@@ -92,6 +100,7 @@
   (println (str "routes: " (str/join " " (map first (config/named-routes))))))
 
 (defn new-task [[title & args]]
+  (operator-only! "new")
   (when (str/blank? title) (shell/die "new needs a title"))
   (let [{:keys [body route] :or {body title}}
         (options/parse "new" args {"-m" :body "-F" [:body options/read-file] "--route" :route} {})
@@ -104,18 +113,16 @@
 (defn route [[id-arg spec]]
   (if (str/blank? spec)
     (println (:route (store/state (store/resolve-id id-arg))))
-    (let [id (open-task id-arg)
+    (let [_ (operator-only! "route")
+          id (open-task id-arg)
           route (config/resolve-route spec)]
       (write! id "route" "operator"
               (fn [state] (refuse (flow/route-refusal state route)) {:route route}))
       (println (str "ROUTE: " id " " route)))))
 
-(defn- open-ids []
-  (sort (remove (set (store/finished-ids)) (store/branch-ids))))
-
 (defn ls [args]
   (let [{:keys [stage needs]} (options/parse "ls" args {"--stage" :stage} {"--needs" :needs})]
-    (doseq [id (open-ids)
+    (doseq [id (store/open-ids)
             :let [records (store/open-records id)
                   state (last records)]
             :when (and (or (nil? stage) (= stage (:stage state)))
@@ -128,7 +135,7 @@
   (config/require-role role)
   (let [ready (filter #(let [state (store/state %)]
                          (and (= role (:stage state)) (not (flow/waiting? state))))
-                      (open-ids))]
+                      (store/open-ids))]
     (if (seq ready)
       (run! println ready)
       (println "NO_TASK"))))
@@ -168,17 +175,19 @@
         {:keys [to summary]} (options/handoff args)
         state (store/state id)
         _ (refuse (flow/handoff-refusal state))
+        _ (refuse (flow/to-refusal state to))
         from (or role (acting-role state))
         to (flow/next-stage state to)
         _ (when (not= "done" to) (config/require-role to))
         head (role-head id)]
     (refuse (flow/handoff-refusal state head))
-    (when-not audit-passed? (audit/gate id from head))
-    (store/write! id (fn [records]
-                       (let [state (last records)
-                             rec (flow/handoff state from to head summary)]
-                         (refuse (flow/handoff-refusal state (role-head id)))
-                         rec)))
+    (let [refusals (when-not audit-passed? (audit/gate id from head))]
+      (store/write! id (fn [records]
+                         (let [state (last records)
+                               rec (flow/handoff state from to head summary)]
+                           (refuse (flow/handoff-refusal state (role-head id)))
+                           (cond-> rec refusals (assoc :audit-refusals refusals)))))
+      (when refusals (audit/clear! id from)))
     (metrics/save! id (worktree-of id))
     (when (and (= "done" to) (fs/directory? (worktree-of id)))
       (git (worktree-of id) "reset" "--quiet" "--hard"))
@@ -191,6 +200,7 @@
     (println (str "ASKED: " id " waits for the operator"))))
 
 (defn answer [[id-arg & args]]
+  (operator-only! "answer")
   (let [id (open-task id-arg)
         text (options/free-text args "answer needs text")
         rec (write! id "answer" "operator" (constantly {:text text :needs "none"}))]
@@ -201,12 +211,24 @@
         summary (str/trim (options/message "specification ready for review" args))
         head (role-head id)
         role (acting-role (store/state id))]
-    (audit/gate id role head)
-    (write! id "review" role (constantly {:text summary :needs "approval"}))
+    (let [refusals (audit/gate id role head)]
+      (write! id "review" role (constantly (cond-> {:text summary :needs "approval"
+                                                    :reviewed (git (shell/repo-root) "rev-parse" head)}
+                                             refusals (assoc :audit-refusals refusals))))
+      (when refusals (audit/clear! id role)))
     (println (str "REVIEW: " id " waits for operator approval"))))
 
-(defn approve [[id-arg]]
+(defn- approval-fields
+  "The approval record's fields: with a Lore-id and the rejected values when
+  the operator approved over any findings."
+  [rejected]
+  (cond-> {:needs "none"}
+    (seq rejected) (assoc :lore-id (lore/new-id) :rejected rejected)))
+
+(defn approve [[id-arg & args]]
+  (operator-only! "approve")
   (let [id (open-task id-arg)
+        rejected (options/rejections args)
         state (store/state id)
         to (flow/next-stage state nil)]
     (refuse (flow/approval-refusal state))
@@ -217,17 +239,44 @@
                   (fn [records]
                     (let [state (last records)]
                       (refuse (flow/approval-refusal state (flow/reviewed-commit records) (role-head id)))
-                      (flow/follow state "approval" "operator" {:needs "none"}))))
+                      (flow/follow state "approval" "operator" (approval-fields rejected)))))
     ;; The review that asked for approval passed the audit gate at this commit.
     ;; Thus the handoff must not run the gate again.
     (handoff [id] {:role (acting-role state) :audit-passed? true})))
 
 (defn reject [[id-arg & args]]
+  (operator-only! "reject")
   (let [id (open-task id-arg)
         text (options/free-text args "reject needs a reason")
         rec (write! id "changes-requested" "operator"
                     (fn [state] (refuse (flow/approval-refusal state)) {:text text :needs "none"}))]
     (println (str "REJECTED: " id " stays at stage:" (:stage rec)))))
+
+(defn verdict
+  "Records the judge's verdict on the newest round. Continue is an automatic
+  send-back that sf refuses when a limit holds."
+  [[id-arg verdict & args]]
+  (operator-only! "verdict")
+  (let [id (open-task id-arg)
+        text (record/free-text args)
+        judge (config/judge)]
+    (store/write! id
+                  (fn [records]
+                    (let [state (last records)]
+                      (refuse (rounds/verdict-refusal {:state state :rounds (rounds/rounds records)
+                                                       :verdict verdict :text text :judge judge}))
+                      (if (= "continue" verdict)
+                        (do (refuse (first (:limits (history/gate-rounds records))))
+                            (flow/follow state "changes-requested" judge {:verdict verdict :text text :needs "none"}))
+                        (flow/follow state "verdict" judge {:verdict verdict :text text})))))
+    (println (str "VERDICT: " id " " verdict))))
+
+(defn rounds
+  "Prints the rounds of the task's specification gate. Reads only."
+  [[id-arg]]
+  (let [{:keys [records]} (history/view (store/resolve-id id-arg))
+        {found :rounds limits :limits} (history/gate-rounds records)]
+    (run! println (rounds/report found limits))))
 
 (defn- finished-message [id state target]
   (record/message (assoc (flow/finished state target) :task id)))
@@ -239,25 +288,40 @@
     (shell/die "verification failed on the merge of " (record/branch id) " into " target ": "
                command " exited " exit)))
 
-(defn- verify-candidate!
-  "Verifies the merge of the task branch into target, built without a commit in
-  the task's worktree detached at target, so target is the current side as in
-  the real merge. Then returns the worktree to the branch tip. A candidate with
-  conflicts is not verified; the merge into target reports them."
-  [id target]
-  (let [dir (add-worktree id)
-        commit (or (plumbing/rev target) (shell/die "no branch " target))
-        _ (git dir "checkout" "--quiet" "--detach" commit)
-        merged (shell/run {:dir dir :env (plumbing/author-env)}
-                          "git" "merge" "--no-ff" "--no-commit" "--quiet" (record/branch id))]
+(defn- detached!
+  "Calls (f dir) with the task's worktree at dir detached at commit. Then
+  returns the worktree to the branch tip with no uncommitted change, discarding
+  what f created or changed there."
+  [id commit f]
+  (let [dir (add-worktree id)]
+    (git dir "checkout" "--quiet" "--detach" commit)
     (try
-      (cond (shell/ok? merged) (verified! id target dir)
-            (seq (shell/lines (git dir "diff" "--name-only" "--diff-filter=U"))) nil
-            :else (shell/fail (:exit merged) (shell/chomp (:err merged))))
+      (f dir)
       (finally
         (git dir "reset" "--quiet" "--hard")
         (git dir "clean" "--quiet" "-d" "--force")
         (git dir "checkout" "--quiet" (record/branch id))))))
+
+(defn- verify-candidate!
+  "Verifies the merge of the task branch into target, built without a commit in
+  the task's worktree detached at target, so target is the current side as in
+  the real merge. A candidate with conflicts is not verified; the merge into
+  target reports them."
+  [id target]
+  (detached! id (or (plumbing/rev target) (shell/die "no branch " target))
+             (fn [dir]
+               (let [merged (shell/run {:dir dir :env (plumbing/author-env)}
+                                       "git" "merge" "--no-ff" "--no-commit" "--quiet" (record/branch id))]
+                 (cond (shell/ok? merged) (verified! id target dir)
+                       (seq (shell/lines (git dir "diff" "--name-only" "--diff-filter=U"))) nil
+                       :else (shell/fail (:exit merged) (shell/chomp (:err merged))))))))
+
+(defn- verify-head!
+  "Verifies the main checkout's HEAD as committed, in the task's worktree
+  detached there, so uncommitted changes in the main checkout count for
+  nothing."
+  [id target]
+  (detached! id (git (shell/repo-root) "rev-parse" "HEAD") #(verified! id target %)))
 
 (defn- merge-task!
   "Merges the task into target, or stops with the conflicted files."
@@ -269,15 +333,15 @@
 
 (defn- finish-by!
   "Does what flow/finish-action decided for the task and target: merges the
-  branch, verifies the merge already in HEAD and rewords it with the finished
-  record when it lacks one, or stops."
+  branch, or verifies the merge already in HEAD and records the finished merge
+  on top of it when HEAD lacks one, or stops."
   [id state target action]
   (case action
     :merge (do (verify-candidate! id target)
                (merge-task! id state target))
-    :keep (verified! id target (shell/repo-root))
-    :reword (do (verified! id target (shell/repo-root))
-                (store/reword-head! (finished-message id state target)))
+    :keep (verify-head! id target)
+    :record (do (verify-head! id target)
+                (store/record-merge! id (finished-message id state target)))
     :unmerged (shell/die (record/branch id) " has commits that HEAD does not contain; merge them, then run: sf finish " id)
     (shell/die "task " id " is finished")))
 
@@ -286,6 +350,7 @@
   its worktree and branch. Refuses a worktree with uncommitted changes. Run
   again after the operator commits a conflicting merge, it completes it."
   [[id-arg & args]]
+  (operator-only! "finish")
   (let [id (store/resolve-id id-arg)
         {:keys [target]} (options/parse "finish" args {"--into" :target} {})
         _ (when (store/merging?) (shell/die "a merge is in progress; commit the merge first"))
@@ -296,10 +361,16 @@
         dir (worktree-of id)
         current (git root "rev-parse" "--abbrev-ref" "HEAD")
         tip (store/tip id)
-        action (flow/finish-action (store/finished? id) tip (store/head-parents)
-                                   (boolean (and tip (store/in-head? tip))))
+        action (flow/finish-action (store/finished? id) tip (boolean (and tip (store/in-head? tip))))
         target (if (= :merge action) (or (not-empty target) current) current)]
     (finish-by! id state target action)
     (when (fs/directory? dir) (git root "worktree" "remove" dir))
     (git root "branch" "-D" (record/branch id))
     (println (str "FINISHED: " id " merged into " target))))
+
+(defn harvest
+  "Prints each task sf knows as one JSON line: the finished ones first. Reads
+  only; writes nothing."
+  [args]
+  (when (seq args) (shell/die "harvest takes no arguments"))
+  (run! (comp println harvest/line) (history/harvest)))

@@ -3,5 +3,9 @@
 (require '[babashka.classpath :as classpath] '[babashka.fs :as fs])
 (let [home (fs/path (fs/parent (fs/canonicalize *file*)) ".." "tools" "sf")]
   (run! #(classpath/add-classpath (str (fs/path home %))) ["src" "resources"]))
+(require 'sf.runtime)
+(when-let [refusal ((resolve 'sf.runtime/refusal) (System/getProperty "babashka.version"))]
+  (binding [*out* *err*] (println refusal))
+  (System/exit 1))
 (require 'sf.cli)
 ((resolve 'sf.cli/-main) *command-line-args*)

@@ -4,7 +4,7 @@
             [clojure.test.check.properties :as prop]
             [speclj.core :refer [describe it should]]
             [sf.lore :as lore]
-            [sf.property-support :refer [hex7 passes? sentence]]))
+            [sf.property-support :refer [commit-with hex7 passes? sentence]]))
 
 (def ^:private trailer-key
   (gen/one-of [(gen/elements ["Constraint" "Rejected" "Tested" "Not-tested" "Directive" "Confidence"])
@@ -105,14 +105,7 @@
                                     sentence))
                (gen/fmap #(str "Supersedes: " %) lore-id)]))
 
-(def ^:private brief-commit
-  "A commit with an optional Lore-id first, as the hook writes it."
-  (gen/let [sha hex7
-            r role
-            id (gen/one-of [(gen/return nil) lore-id])
-            trailers (gen/vector brief-trailer 0 4)]
-    {:sha sha :message (str "M\n\nBy " r ".\n")
-     :trailers (vec (cond->> trailers id (cons (str "Lore-id: " id))))}))
+(def ^:private brief-commit (commit-with lore-id brief-trailer))
 
 (def ^:private evidence #{"Tested" "Not-tested" "Confidence" "Lore-id"})
 
