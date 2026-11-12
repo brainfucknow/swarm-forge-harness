@@ -623,6 +623,58 @@ set +e; sf review "$is" >/dev/null; set -e
 sf review "$is" >/dev/null
 sf approve "$is" >/dev/null
 assert_eq "the handoff of an approval has no count; the audited review has one" "$(count "$is")" "[1,null]"
+roles() { sf harvest | jq -c --arg id "$1" 'select(.id == $id) | [.records[] | select(.type == "handoff" or .type == "review") | [.from, .audit_refusals]]'; }
+# a specifier refused while waiting for approval: one task through sf approve
+spec_waits() {
+  local t; t="$(sf new "$1" -m x --route specifier,coder)"
+  sf start "$t" >/dev/null
+  git -C ".worktrees/$t" commit -q --allow-empty -m "Spec"
+  set +e; sf review "$t" >/dev/null; set -e
+  sf review "$t" >/dev/null
+  set +e; sf review "$t" >/dev/null; set -e
+  echo "$t"
+}
+iq1="$(spec_waits "Audit per role 1")"
+sf approve "$iq1" >/dev/null
+set +e; out="$(sf handoff "$iq1")"; rc=$?; set -e
+assert_eq "the coder is refused at the specifier's refused head" "$rc" "3"
+assert_match "the coder's refusal prints the checklist" "$out" "^AUDIT_REQUIRED: $iq1 at "
+sf handoff "$iq1" >/dev/null
+assert_eq "each role is charged its own refusals" "$(roles "$iq1")" '[["specifier",1],["specifier",null],["coder",1]]'
+iq2="$(spec_waits "Audit per role 2")"
+sf approve "$iq2" >/dev/null
+git -C ".worktrees/$iq2" commit -q --allow-empty -m "Code"
+set +e; sf handoff "$iq2" >/dev/null; set -e
+sf handoff "$iq2" >/dev/null
+assert_eq "a refusal the specifier left behind is not the coder's" "$(roles "$iq2" | jq -c '.[-1]')" '["coder",1]'
+iq4="$(spec_waits "Audit per role 4")"
+sf reject "$iq4" "again" >/dev/null
+git -C ".worktrees/$iq4" commit -q --allow-empty -m "Spec 2"
+set +e; sf review "$iq4" >/dev/null; set -e
+sf review "$iq4" >/dev/null
+assert_eq "the left refusal counts toward the specifier's next review" "$(roles "$iq4" | jq -c '.[-1]')" '["specifier",2]'
+sed -i 's/^hardener  fast     subagent$/hardener fast subagent audit/' swarmforge/roles.conf
+iq3="$(sf new "Audit per role 3" -m x --route coder,hardener)"
+sf start "$iq3" >/dev/null
+git -C ".worktrees/$iq3" commit -q --allow-empty -m "Code"
+set +e; SWARMFORGE_ROLE=coder sf handoff "$iq3" --to coder >/dev/null; rc1=$?
+SWARMFORGE_ROLE=hardener sf handoff "$iq3" --to coder >/dev/null; rc2=$?
+SWARMFORGE_ROLE=hardener sf handoff "$iq3" --to coder >/dev/null; rc3=$?
+SWARMFORGE_ROLE=coder sf handoff "$iq3" --to coder >/dev/null; rc4=$?; set -e
+assert_eq "each audited role gets its own first refusal" "$rc1 $rc2 $rc3 $rc4" "3 3 0 0"
+assert_eq "a role's record keeps another role's pending state" "$(roles "$iq3")" '[["hardener",1],["coder",1]]'
+assert_eq "no audit state is left once no role is pending" "$(test -e ".swarmforge/audit/$iq3" && echo kept || echo cleared)" "cleared"
+for legacy in 'h\n2\n' 'h\n'; do
+  iq5="$(sf new "Audit roleless $legacy" -m x --route coder)"
+  sf start "$iq5" >/dev/null
+  git -C ".worktrees/$iq5" commit -q --allow-empty -m "Code"
+  h="$(git -C ".worktrees/$iq5" rev-parse --short HEAD)"
+  mkdir -p .swarmforge/audit && printf "${legacy/h/$h}" > ".swarmforge/audit/$iq5"
+  set +e; sf handoff "$iq5" >/dev/null; rc1=$?; sf handoff "$iq5" >/dev/null; rc2=$?; set -e
+  assert_eq "a roleless file ($legacy) admits no role" "$rc1 $rc2" "3 0"
+  assert_eq "a roleless file ($legacy) adds no refusal" "$(roles "$iq5")" '[["coder",1]]'
+  assert_eq "a roleless file ($legacy) is gone after the record" "$(test -e ".swarmforge/audit/$iq5" && echo kept || echo cleared)" "cleared"
+done
 cp "$HERE/swarmforge/roles.conf" swarmforge/roles.conf
 
 # truncated task in a shallow clone
