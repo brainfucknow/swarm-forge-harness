@@ -253,9 +253,8 @@
     (println (str "REJECTED: " id " stays at stage:" (:stage rec)))))
 
 (defn verdict
-  "Records the judge's verdict on the newest round: continue as an automatic
-  send-back, which sf refuses once a limit holds, any other as a verdict
-  record that leaves the task waiting for approval."
+  "Records the judge's verdict on the newest round. Continue is an automatic
+  send-back that sf refuses when a limit holds."
   [[id-arg verdict & args]]
   (operator-only! "verdict")
   (let [id (open-task id-arg)

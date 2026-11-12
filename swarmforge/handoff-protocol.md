@@ -67,7 +67,7 @@ Use `sf show <id>` when the brief omits needed history or evidence.
 | `sf new` | Creates a route and starts its first role. Route precedence: `--route`, `SWARMFORGE_ROUTE`, named `feature`, then all non-optional catalogue roles. |
 | `sf review` | Specifier requests operator approval of its committed specification. |
 | `sf approve` / `sf reject` | Approve advances the specifier; reject requests changes. Approval must match the reviewed role commit; a new specification needs review again. An answer or rejection is not approval. Each `--rejected "<finding> \| <reason>"` on approve records a gate finding the operator approved over as a `Rejected:` trailer of the approval record. |
-| `sf verdict <id> <verdict> <text>` | Records the judge's verdict on the newest round (see below). `continue` is an automatic send-back; the others leave the task waiting for approval. |
+| `sf verdict <id> <verdict> <text>` | Records the judge's verdict on the newest round ([rules](#specification-rounds)). |
 | `sf ask` / `sf answer` | Block for an operator decision, then resume the same role. |
 | `sf handoff` | Requires a clean task worktree and needs `none`; records HEAD and advances to the next route role, then `done`. Use `--to` only as the role prompt directs; it names the current stage or a later route role, and `done` only after the route's last role. |
 | `sf route <id> <route>` | Changes an open task's route, retaining the current stage. Roles must follow catalogue order. |
@@ -128,44 +128,32 @@ writes the finished-record trailers manually.
 
 ## Specification rounds
 
-With a `judge` row in `roles.conf`, the specification gate loops: after the
-gates of each round the judge gives a verdict, which the orchestrator
-records with `sf verdict`. Removing the judge line turns the loop off;
-`sf verdict` then refuses.
+With a `judge` row in `roles.conf`, the specification gate loops. After the gates of each round, the judge gives a verdict and the orchestrator records it with `sf verdict`. Remove the judge line to turn the loop off. `sf verdict` then refuses.
 
-- A round is one `review` record made at stage specifier, numbered from 1,
-  with the `verdict` and `changes-requested` records after it and before the
-  next one. A review of another stage is not a round.
-- `sf verdict <id> converged|needs-operator|stuck <text>` writes a `verdict`
-  record from the judge; stage, route and needs stay, so the task still
-  waits for approval. `sf verdict <id> continue <text>` writes a
-  `changes-requested` record from the judge, an automatic send-back: it
-  keeps the stage and clears needs like `sf reject`. Records with a verdict
-  print a `verdict:` line after `from:`. sf refuses a verdict, recording
-  nothing, under `SWARMFORGE_DISPATCHED`, without a judge, outside stage
-  specifier, when the task is not waiting for approval, and when the round
-  already has one.
-- sf refuses `continue` when a limit holds, cap first: the task already has
-  2 automatic send-backs (`sf reject` never counts), or the round is over the
-  growth limit.
-- Counted commits of a round: the first-parent commits after the created
-  record up to the round's reviewed commit that are neither records nor
-  merges. Size is the sum of the nonblank message lines, without the trailer
-  block, of each counted commit no counted commit supersedes (by
-  `Supersedes: <Lore-id>`), and of the lines added minus removed over every
-  counted commit (`git show --numstat`, at least 0 in total). A merge of the
-  base branch adds nothing.
-- The baseline of a round is the first round after the newest `sf reject`
-  before it, else round 1; B is its size. Growth is shown as
-  `(size - B) * 100 / B` rounded down, `-` when B is 0. The round is over the
-  growth limit when `(size - B) * 100 > 50 * B` and B is not 0.
-- `sf rounds <id>` reads only and runs for any role on any task `sf show`
-  reads. It prints `NO_ROUNDS`, or per round
-  `ROUND <n> <sha> size:<size> growth:<growth>% verdict:<verdict or ->`
-  with each of its verdict and changes-requested texts, then one line per
-  limit that holds for the newest round:
-  `LIMIT: cap 2 of 2 automatic send-backs used` and
-  `LIMIT: growth size <size> is more than half over <B>`.
+- A round is one `review` record made at stage specifier, numbered from 1. It includes the `verdict` and `changes-requested` records before the next review. A review of another stage is not a round.
+- `sf verdict <id> converged|needs-operator|stuck <text>` writes a `verdict` record from the judge. The task keeps stage, route and needs, and waits for approval.
+- `sf verdict <id> continue <text>` writes a `changes-requested` record from the judge, an automatic send-back. Like `sf reject`, it keeps the stage and clears needs.
+- A record with a verdict prints a `verdict:` line after `from:`.
+- sf records nothing and refuses a verdict when:
+  - `SWARMFORGE_DISPATCHED` is set;
+  - there is no judge;
+  - the stage is not specifier;
+  - the task is not waiting for approval;
+  - the round already has a verdict.
+- sf refuses `continue` when a limit holds. It checks the cap first.
+  - Cap: the task has 2 automatic send-backs. `sf reject` never counts.
+  - Growth: the round is over the growth limit.
+- Counted commits of a round: the first-parent commits after the created record, up to the round's reviewed commit, that are not records or merges.
+- Size is the sum of:
+  - the nonblank message lines, without the trailer block, of each counted commit that no counted commit supersedes (`Supersedes: <Lore-id>`);
+  - the lines added minus removed over all counted commits (`git show --numstat`), at least 0 in total.
+- A merge of the base branch adds nothing.
+- The baseline of a round is the first round after the newest `sf reject` before it, else round 1. B is its size.
+- Growth is `(size - B) * 100 / B`, rounded down, or `-` when B is 0.
+- A round is over the growth limit when B is not 0 and `(size - B) * 100 > 50 * B`.
+- `sf rounds <id>` only reads. It runs for any role on any task `sf show` reads. It prints `NO_ROUNDS`, or:
+  - per round, `ROUND <n> <sha> size:<size> growth:<growth>% verdict:<verdict or ->` and the text of its verdict and changes-requested records;
+  - one line per limit that holds for the newest round: `LIMIT: cap 2 of 2 automatic send-backs used` and `LIMIT: growth size <size> is more than half over <B>`.
 
 ## Sharing
 
