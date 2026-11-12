@@ -18,13 +18,25 @@ Before running this command again:
 - Read the whole diff since the previous record (git diff " (flow/last-milestone-commit (store/records-at (store/ref-of id) id)) "..HEAD), the tests, and anything generated or left in the working tree.
 - Fix every finding, commit, rerun the checks, then run this command again. It records the handoff when HEAD is still " head "; a new commit starts a new audit."))
 
-(defn- path-of [id]
+(defn- task-path
+  "The task's pending audit directory, one file per audited role."
+  [id]
   (fs/path (shell/repo-root) ".swarmforge" "audit" id))
+
+(defn- role-path [id role]
+  (fs/path (task-path id) role))
+
+(defn- drop-roleless!
+  "Deletes a pending file an earlier sf wrote for the whole task. It names no
+  role, so it counts for none."
+  [id]
+  (when (fs/regular-file? (task-path id))
+    (fs/delete (task-path id))))
 
 (defn- pending
   "The :head the gate refused last and the number of :refusals since the
-  task's last audited record, from the pending audit file. A file an earlier sf
-  wrote holds only the head; it stands for one refusal."
+  role's last audited record, from the role's pending audit file. A file that
+  holds only the head stands for one refusal."
   [path]
   (if (fs/exists? path)
     (let [[head refusals] (str/split-lines (slurp (str path)))]
@@ -33,12 +45,13 @@ Before running this command again:
 
 (defn gate
   "nil when role does not audit. Otherwise stops with exit 3 when it refuses
-  role's attempt to record head, or returns the number of refusals the record
-  carries. The count stays pending until clear! runs after the record is
-  written."
+  role's attempt to record head, or returns the number of role's refusals the
+  record carries. The count stays pending until clear! runs for role after
+  the record is written."
   [id role head]
   (when (config/role-audits? role)
-    (let [path (path-of id)
+    (drop-roleless! id)
+    (let [path (role-path id role)
           {:keys [refusals] refused :head} (pending path)]
       (if (= head refused)
         refusals
@@ -48,6 +61,10 @@ Before running this command again:
             (shell/fail 3 nil))))))
 
 (defn clear!
-  "Removes the task's pending audit state once its record is written."
-  [id]
-  (fs/delete-if-exists (path-of id)))
+  "Removes role's pending audit state once its record is written, and the
+  task's audit directory once no role is pending."
+  [id role]
+  (fs/delete-if-exists (role-path id role))
+  (let [dir (task-path id)]
+    (when (and (fs/directory? dir) (empty? (fs/list-dir dir)))
+      (fs/delete dir))))

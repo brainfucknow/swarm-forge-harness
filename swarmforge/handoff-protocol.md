@@ -81,11 +81,19 @@ so for them this rule rests on the role prompts.
 
 For an `audit` role, the first handoff or review at a HEAD exits 3 with
 `AUDIT_REQUIRED`, recording nothing. Complete the self-review before retrying
-at that HEAD; a new commit requires a new audit. Pending audit state lives
-under `.swarmforge/audit/<id>`: the refused HEAD and the number of refusals
-since the task's last audited record. It is cleared only once the record is
-written, so refusals before a write that failed still count. A file from an
-earlier sf holds only the HEAD and counts as one refusal.
+at that HEAD; a new commit requires a new audit. The role is the acting role:
+`SWARMFORGE_ROLE`, else the task's stage. Pending audit state is kept per
+role, in `.swarmforge/audit/<id>/<role>`: the HEAD the gate last refused that
+role at and the number of that role's refusals since its last audited record
+on the task. Only a refusal of the same role at the same HEAD lets an attempt
+through, and another role's refusals never add to its count. Writing a role's
+record clears that role's file alone, and only once the record is written, so
+refusals before a write that failed still count; the directory goes when no
+role is pending. `sf approve` clears nothing: a specifier refused while
+waiting for approval keeps that refusal for its own next audited record. A
+file at `.swarmforge/audit/<id>` itself is from an earlier sf that kept one
+state per task. It names no role, so it counts for none: the next audited
+attempt deletes it and is refused as that role's first.
 
 The audited role's review or handoff record carries that number in an
 sf-only `SwarmForge-Audit-Refusals` trailer, which `sf show` and `sf start`

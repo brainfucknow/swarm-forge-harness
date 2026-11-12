@@ -9,7 +9,13 @@
 
 (def ^:dynamic *root* nil)
 
-(defn- pending-file [] (str (fs/path *root* ".swarmforge" "audit" "t1")))
+(defn- task-path [] (str (fs/path *root* ".swarmforge" "audit" "t1")))
+
+(defn- pending-file [role] (str (fs/path (task-path) role)))
+
+(defn- roleless-file [text]
+  (fs/create-dirs (fs/parent (task-path)))
+  (spit (task-path) text))
 
 (defn- attempt [role head]
   (let [out (java.io.StringWriter.)
@@ -24,7 +30,7 @@
       (try
         (binding [*root* root]
           (with-redefs [shell/repo-root (constantly root)
-                        config/role-audits? (fn [role] (= "coder" role))
+                        config/role-audits? (fn [role] (contains? #{"coder" "hardener"} role))
                         store/ref-of (constantly "ref")
                         store/records-at (constantly [])
                         flow/last-milestone-commit (constantly "base123")]
@@ -33,43 +39,68 @@
 
   (it "does nothing for a role that does not audit"
     (should= {:result nil :out ""} (attempt "cleaner" "h1"))
-    (should-not (fs/exists? (pending-file))))
+    (should-not (fs/exists? (task-path))))
 
   (it "refuses the first attempt at a head and names the diff to review"
     (let [{:keys [result out]} (attempt "coder" "h1")]
       (should= 3 result)
       (should-contain "AUDIT_REQUIRED: t1 at h1" out)
       (should-contain "git diff base123..HEAD" out)
-      (should= "h1\n1\n" (slurp (pending-file)))))
+      (should= "h1\n1\n" (slurp (pending-file "coder")))))
 
   (it "counts every refusal, at the same head and at a new one"
     (attempt "coder" "h1")
     (attempt "coder" "h2")
-    (should= "h2\n2\n" (slurp (pending-file))))
+    (should= "h2\n2\n" (slurp (pending-file "coder"))))
 
   (it "passes the retry at the refused head with the number of refusals"
     (attempt "coder" "h1")
     (attempt "coder" "h2")
     (should= {:result 2 :out ""} (attempt "coder" "h2"))
-    (should= "h2\n2\n" (slurp (pending-file))))
+    (should= "h2\n2\n" (slurp (pending-file "coder"))))
 
-  (it "treats a pending file that holds only a head as one refusal"
-    (fs/create-dirs (fs/parent (pending-file)))
-    (spit (pending-file) "h9\n")
+  (it "refuses a role whose head another role was refused at"
+    (attempt "coder" "h1")
+    (should= 3 (:result (attempt "hardener" "h1")))
+    (should= {:result 1 :out ""} (attempt "hardener" "h1")))
+
+  (it "keeps each role's head and count apart"
+    (attempt "coder" "h1")
+    (attempt "coder" "h2")
+    (attempt "hardener" "h2")
+    (should= "h2\n2\n" (slurp (pending-file "coder")))
+    (should= "h2\n1\n" (slurp (pending-file "hardener"))))
+
+  (it "reads a role's pending file that holds only a head as one refusal"
+    (fs/create-dirs (task-path))
+    (spit (pending-file "coder") "h9\n")
     (should= {:result 1 :out ""} (attempt "coder" "h9")))
 
-  (it "counts the next refusal after a head-only file as the second"
-    (fs/create-dirs (fs/parent (pending-file)))
-    (spit (pending-file) "h9\n")
-    (attempt "coder" "h10")
-    (should= "h10\n2\n" (slurp (pending-file))))
+  (it "refuses every role's first attempt over a roleless file, counting 1"
+    (roleless-file "h9\n2\n")
+    (should= 3 (:result (attempt "coder" "h9")))
+    (should= "h9\n1\n" (slurp (pending-file "coder")))
+    (should= 3 (:result (attempt "hardener" "h9")))
+    (should= {:result 1 :out ""} (attempt "coder" "h9")))
+
+  (it "refuses a role's first attempt over a head-only roleless file"
+    (roleless-file "h9\n")
+    (should= 3 (:result (attempt "coder" "h9")))
+    (should= {:result 1 :out ""} (attempt "coder" "h9")))
 
   (it "refuses a role's first attempt when no file is pending, even at an empty head"
     (should= 3 (:result (attempt "coder" "")))
-    (should= "\n1\n" (slurp (pending-file))))
+    (should= "\n1\n" (slurp (pending-file "coder"))))
 
-  (it "clear! removes the pending state and tolerates none"
+  (it "clear! removes only that role's pending state"
     (attempt "coder" "h1")
-    (audit/clear! "t1")
-    (should-not (fs/exists? (pending-file)))
-    (audit/clear! "t1")))
+    (attempt "hardener" "h1")
+    (audit/clear! "t1" "coder")
+    (should-not (fs/exists? (pending-file "coder")))
+    (should= "h1\n1\n" (slurp (pending-file "hardener"))))
+
+  (it "clear! of the last pending role removes the task's audit path"
+    (attempt "coder" "h1")
+    (audit/clear! "t1" "coder")
+    (should-not (fs/exists? (task-path)))
+    (audit/clear! "t1" "coder")))
