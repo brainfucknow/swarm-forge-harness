@@ -28,8 +28,8 @@ Operator commands
   reject <id> <text>              send the specification back to the specifier
   verdict <id> <converged|continue|needs-operator|stuck> <text>
                                   record the judge's verdict on the newest round; continue
-                                  sends the specification back, refused once 2 automatic
-                                  send-backs are used or it grew more than half over its baseline
+                                  sends the specification back, refused after 2 automatic
+                                  send-backs or growth of more than half over the baseline
   finish <id> [--into BRANCH]     refuse uncommitted work in the worktree, run swarmforge/verify.conf
                                   on the merge, then merge the task branch into BRANCH
                                   (default: current) and remove it

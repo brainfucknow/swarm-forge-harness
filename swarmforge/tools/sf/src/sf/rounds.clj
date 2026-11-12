@@ -1,13 +1,11 @@
 (ns sf.rounds
-  "The rounds of a specification gate, as plain values: each specifier review
-  with the verdicts and change requests after it, the size of the
-  specification it reviewed, its growth over its baseline, the limits on an
-  automatic send-back, and the lines sf rounds prints."
+  "The rounds of a specification gate: sizes, growth, limits on automatic
+  send-backs, and the lines sf rounds prints."
   (:require [clojure.string :as str]
             [sf.lore :as lore]))
 
 (def verdicts
-  "The verdicts sf verdict records, in the order the judge's rules name them."
+  "The verdicts sf verdict records."
   ["converged" "continue" "needs-operator" "stuck"])
 
 (def cap
@@ -32,8 +30,8 @@
   (contains? #{"verdict" "changes-requested"} record))
 
 (defn- open-round
-  "Starts round n at review; its baseline is n after an operator send-back or
-  for round 1, else the baseline before it."
+  "Starts round n at review. Its baseline is n after an operator send-back or
+  in round 1, else the previous baseline."
   [{:keys [rounds reset?]} review]
   (let [n (inc (count rounds))
         baseline (if (or reset? (= 1 n)) n (:baseline (peek rounds)))]
@@ -47,9 +45,8 @@
     (operator-send-back? rec) (assoc :reset? true)))
 
 (defn rounds
-  "The rounds of records, oldest first: :n from 1, the :reviewed commit, the
-  :baseline round and the verdict and changes-requested :records after the
-  review and before the next."
+  "The rounds of records, oldest first, each with :n, :reviewed, :baseline and
+  the verdict and changes-requested :records after its review."
   [records]
   (:rounds (reduce (fn [acc rec] (if (round-start? rec) (open-round acc rec) (add-record acc rec)))
                    {:rounds [] :reset? false}
@@ -75,8 +72,7 @@
     (if gap (subvec lines 0 gap) lines)))
 
 (defn- message-lines
-  "The nonblank lines of the message, without its last paragraph when git
-  reads a trailer from it."
+  "The nonblank lines of the message, without the trailer paragraph."
   [{:keys [message trailers]}]
   (let [lines (vec (str/split-lines (str/replace (or message "") #"\s+\z" "")))]
     (count (remove str/blank? (if (seq trailers) (without-last-paragraph lines) lines)))))
@@ -90,9 +86,8 @@
                      (- (numstat-count added) (numstat-count removed))))))
 
 (defn size
-  "The size of the specification at the commits of a round: the message lines
-  of the counted commits current among them (lore/current), plus the lines
-  added minus the lines removed over every counted commit, at least 0."
+  "The size of a round: the message lines of the current counted commits
+  (lore/current), plus the lines added minus removed over all of them, at least 0."
   [commits]
   (let [commits (counted commits)]
     (+ (reduce + (map message-lines (lore/current commits))) (tracked-lines commits))))
@@ -120,8 +115,7 @@
 ;; growth and limits
 
 (defn growth
-  "The growth of size over base for display: the percentage rounded down, with
-  %, or - when base is 0."
+  "The growth of size over base: a percentage rounded down, or - when base is 0."
   [size base]
   (if (zero? base) "-" (str (Math/floorDiv (* 100 (- size base)) base) "%")))
 
@@ -131,8 +125,7 @@
   (and (pos? base) (> (* 100 (- size base)) (* 50 base))))
 
 (defn limits
-  "The LIMIT lines that hold for the newest round, cap first, from the task's
-  count of automatic send-backs and the newest round's size and base."
+  "The LIMIT lines that hold for the newest round, cap first."
   [automatic size base]
   (cond-> []
     (>= automatic cap) (conj (str "LIMIT: cap " cap " of " cap " automatic send-backs used"))
@@ -141,17 +134,14 @@
 ;; output
 
 (defn- text-lines
-  "A record's block: its first text line after `  <from>: `, the other
-  nonblank lines indented by four spaces."
+  "A record's text: the first line after `  <from>: `, the rest indented four spaces."
   [{:keys [from text]}]
   (let [[first-line & more] (str/split-lines (or text ""))]
     (cons (str "  " from ": " first-line)
           (for [line more] (if (str/blank? line) "" (str "    " line))))))
 
 (defn report
-  "The lines of sf rounds: NO_ROUNDS, or a ROUND line per round (each with
-  :n, :short, :size, :growth and :records) followed by its records' blocks,
-  then limit-lines."
+  "The lines of sf rounds: NO_ROUNDS, or each round's line and records, then limit-lines."
   [rounds limit-lines]
   (if (empty? rounds)
     ["NO_ROUNDS"]
@@ -165,9 +155,7 @@
 ;; sf verdict
 
 (defn verdict-refusal
-  "Why sf verdict cannot record verdict with text on the task whose newest
-  record is state, or nil. judge is the judge role in roles.conf, or nil.
-  The limits on continue are not checked here."
+  "Why sf verdict cannot record verdict, or nil. Does not check the limits on continue."
   [{:keys [state rounds verdict text judge]}]
   (let [current (peek (vec rounds))]
     (cond
