@@ -50,25 +50,33 @@
            (not (matches-any? [include] sibling))
            (not (matches-any? [include] nested))))))
 
-(defn- excluded-path?
-  "What the settings promise to leave out: anything inside a test dir or an obj/ directory."
-  [test-dirs path]
-  (or (some #(str/starts-with? path (str % "/")) test-dirs)
-      (some #{"obj"} (str/split path #"/"))))
-
-(defspec settings-exclude-test-dirs-and-obj-and-nothing-else trials
+(defspec settings-exclude-obj-sources-and-nothing-else trials
   (prop/for-all [root-parts segments
-                 test-names (gen/vector-distinct segment {:min-elements 1 :max-elements 3})
                  dir (gen/one-of [segment (gen/return "obj")])
                  below segments
-                 suffix segment]
+                 assemblies (gen/vector segment 0 3)]
     (let [root (absolute root-parts)
-          test-dirs (mapv #(str root "/" %) test-names)
-          excludes (sources (xml/parse-str (coverage/settings-xml root test-dirs)) "Exclude")
-          paths [(str (first test-dirs) "/" (str/join "/" below))
-                 (str (first test-dirs) suffix "/" (str/join "/" below))
-                 (str root "/" dir "/" (str/join "/" below))]]
-      (every? #(= (boolean (excluded-path? test-dirs %)) (matches-any? excludes %)) paths))))
+          excludes (sources (xml/parse-str (coverage/settings-xml root assemblies)) "Exclude")
+          path (str root "/" dir "/" (str/join "/" below))]
+      (= (= "obj" dir) (matches-any? excludes path)))))
+
+(defn- module-patterns [settings]
+  (->> (xml-seq settings)
+       (filter #(= :ModulePath (:tag %)))
+       (mapv #(re-pattern (apply str (:content %))))))
+
+(defspec settings-exclude-exactly-the-test-assemblies trials
+  (prop/for-all [assemblies (gen/vector-distinct segment {:min-elements 1 :max-elements 3})
+                 other segment
+                 dirs segments
+                 sep separator
+                 extension (gen/elements [".dll" ".exe"])]
+    (let [patterns (module-patterns (xml/parse-str (coverage/settings-xml "/r" assemblies)))
+          module (fn [name] (str (join-with sep (cons "" dirs)) sep name extension))]
+      (and (every? #(matches-any? patterns (module %)) assemblies)
+           (= (boolean (some #{other} assemblies)) (matches-any? patterns (module other)))
+           (not (matches-any? patterns (str (module (first assemblies)) ".config")))
+           (not (matches-any? patterns (str (join-with sep (cons "" dirs)) sep "x" (first assemblies) extension)))))))
 
 (def property-value
   (gen/one-of [(gen/elements ["true" "True" " TRUE " "false" "" "yes"]) gen/string-ascii]))
