@@ -528,14 +528,28 @@
       (should-contain "REVIEW" (out task/review [id]))
       (should= "1" (audit-trailer id))))
 
-  (it "reads a pending audit file of an earlier sf, which holds only the HEAD, as one refusal"
+  (it "counts a pending audit file of an earlier sf, which names no role, for no role"
     (let [id (new-id "Quick" "--route" "coder,cleaner")]
       (out task/start [id])
       (commit-in-worktree id "a")
       (fs/create-dirs (fs/parent (audit-file id)))
-      (spit (audit-file id) (str (git (worktree id) "rev-parse" "--short" "HEAD") "\n"))
+      (spit (audit-file id) (str (git (worktree id) "rev-parse" "--short" "HEAD") "\n2\n"))
+      (refused-handoff id)
       (should-contain "HANDOFF" (out task/handoff [id] {}))
-      (should= "1" (audit-trailer id))))
+      (should= "1" (audit-trailer id))
+      (should-not (fs/exists? (audit-file id)))))
+
+  (it "keeps a specifier's refusal through approval for the specifier alone"
+    (write-conf! *dir* "roles.conf" "specifier frontier subagent audit\ncoder strong subagent audit\ncleaner fast subagent\n")
+    (let [id (new-id "Add login")]
+      (should= 3 (:status (captured #(task/review [id]))))
+      (out task/review [id])
+      (should= 3 (:status (captured #(task/review [id]))))
+      (out task/approve [id])
+      (refused-handoff id)
+      (should-contain "HANDOFF" (out task/handoff [id] {}))
+      (should= "1" (audit-trailer id))
+      (should (fs/exists? (fs/path (audit-file id) "specifier")))))
 
   (it "writes no count for a role without audit or for the handoff of an approval"
     (write-conf! *dir* "roles.conf" "specifier frontier subagent audit\ncoder strong subagent\ncleaner fast subagent\n")

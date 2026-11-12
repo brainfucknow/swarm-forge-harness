@@ -186,7 +186,7 @@
                                rec (flow/handoff state from to head summary)]
                            (refuse (flow/handoff-refusal state (role-head id)))
                            (cond-> rec refusals (assoc :audit-refusals refusals)))))
-      (when refusals (audit/clear! id)))
+      (when refusals (audit/clear! id from)))
     (metrics/save! id (worktree-of id))
     (when (and (= "done" to) (fs/directory? (worktree-of id)))
       (git (worktree-of id) "reset" "--quiet" "--hard"))
@@ -214,7 +214,7 @@
       (write! id "review" role (constantly (cond-> {:text summary :needs "approval"
                                                     :reviewed (git (shell/repo-root) "rev-parse" head)}
                                              refusals (assoc :audit-refusals refusals))))
-      (when refusals (audit/clear! id)))
+      (when refusals (audit/clear! id role)))
     (println (str "REVIEW: " id " waits for operator approval"))))
 
 (defn- approval-fields
