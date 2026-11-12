@@ -103,3 +103,44 @@
       (should= 11 (count (re-seq #"type: route" out)))
       (should= 6 (count (re-seq #"(?m)^LORE: " out)))
       (should-be-nil (re-find #"RECORDS|LORE-OMITTED" out)))))
+
+(defn- harvested []
+  (let [err (java.io.StringWriter.)
+        tasks (binding [*err* err] (doall (history/harvest)))]
+    {:tasks tasks :err (str err)}))
+
+(describe "harvest"
+  (around [it] (with-repo it))
+
+  (it "reads the finished tasks first, then the open ones by id"
+    (store/create! "t-9" (record/message (assoc (flow/created "Later" "Open request." "coder") :task "t-9")))
+    (finish-through-second-parent! *dir*)
+    (store/create! "t-0" (record/message (assoc (flow/created "Open" "Another." "coder") :task "t-0")))
+    (let [{:keys [tasks err]} (harvested)]
+      (should= [["t-1" "finished" false "Add login" "Users log in."]
+                ["t-0" "open" false "Open" "Another."]
+                ["t-9" "open" false "Later" "Open request."]]
+               (map (juxt :id :status :truncated :title :request) tasks))
+      (should= [["created" "finished"] ["created"] ["created"]]
+               (map #(map :record (:records %)) tasks))
+      (should= [] (:commits (first tasks)))
+      (should= "" err)))
+
+  (it "skips a swarm branch without records and names it on stderr"
+    (store/create! "t-0" (record/message (assoc (flow/created "Open" "Another." "coder") :task "t-0")))
+    (git *dir* "branch" "swarm/experiment")
+    (let [{:keys [tasks err]} (harvested)]
+      (should= ["t-0"] (map :id tasks))
+      (should= "sf: swarm/experiment has no records; skipped\n" err)))
+
+  (it "reads a branch whose history has no created record as truncated, Lore after its oldest record"
+    (git *dir* "checkout" "-q" "-b" "swarm/t-2")
+    (git *dir* "commit" "-q" "--allow-empty" "-m"
+         (record/message {:task "t-2" :record "handoff" :from "coder" :stage "qa" :route "coder,qa" :needs "none"
+                          :text "done"}))
+    (git *dir* "commit" "-q" "--allow-empty" "-m" "QA\n\nBy qa.\n\nTested: it\n")
+    (git *dir* "checkout" "-q" "main")
+    (let [[task] (:tasks (harvested))]
+      (should= ["t-2" "open" true "" ""] ((juxt :id :status :truncated :title :request) task))
+      (should= ["handoff"] (map :record (:records task)))
+      (should= [["Tested: it"]] (map :trailers (:commits task))))))

@@ -204,3 +204,17 @@
   (it "counts the LORE lines it leaves out"
     (should= 4 (:omitted (lore/brief [(commit "c1" "qa" "Lore-id: a" "Directive: one" "Tested: t")
                                       (commit "c2" "qa" "Lore-id: b" "Supersedes: a" "Co-Authored-By: A <a@b>")])))))
+
+(describe "entries"
+  (it "gives each Lore trailer but Lore-id, oldest commit first, with the Lore-id of its commit"
+    (should= [{:sha "c1" :role "specifier" :key "Directive" :value "one" :lore-id "0000000a"}
+              {:sha "c1" :role "specifier" :key "Tested" :value "a b" :lore-id "0000000a"}
+              {:sha "c2" :role "-" :key "Rejected" :value "x | y" :lore-id nil}]
+             (lore/entries [(commit "c1" "specifier" "Directive: one" "Lore-id: 0000000a" "Tested: a b"
+                                    "Co-Authored-By: A <a@b>")
+                            {:sha "c2" :message "sf approval: t\n" :trailers ["Rejected: x | y"]}])))
+
+  (it "keeps the trailers of superseded commits and the evidence"
+    (should= ["Directive" "Tested" "Supersedes"]
+             (map :key (lore/entries [(commit "c1" "qa" "Lore-id: 1" "Directive: d" "Tested: t")
+                                      (commit "c2" "qa" "Supersedes: 1")])))))

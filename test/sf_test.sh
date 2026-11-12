@@ -521,6 +521,173 @@ git add tasks && git commit -q -m "Old archive"
 assert_match "an old archive makes no task" "$(sf show old-archive-7654321 2>&1 || true)" "no task 'old-archive-7654321'"
 cd "$repo"
 
+# sf harvest: one JSON line per task, read-only
+hv="$scratch/harvest"
+mkdir -p "$hv" && cd "$hv"
+git init -q . && copy_swarmforge . && git add -A && git commit -q -m seed
+sf init >/dev/null
+assert_eq "harvest of a repository without tasks prints nothing" "$(sf harvest)" ""
+hf="$(sf new "Harvest finished" -m "$(printf 'First line of the request.\n\nSecond paragraph, é.')" --route specifier,coder,cleaner)"
+sf start "$hf" >/dev/null
+git -C ".worktrees/$hf" commit -q --allow-empty -m "$(printf 'Specify harvest\n\nConstraint: keep it read-only\nTested: a folded\n value\nSupersedes: 0badc0de')"
+spec_lore_id="$(git -C ".worktrees/$hf" log -1 --format='%(trailers:key=Lore-id,valueonly)')"
+sf ask "$hf" "Which format?" >/dev/null
+sf answer "$hf" "JSON lines" >/dev/null
+sf review "$hf" -m "spec ready" >/dev/null
+sf reject "$hf" "split the criteria" >/dev/null
+sf review "$hf" -m "spec revised" >/dev/null
+sf approve "$hf" --rejected "DEFECT, LOW: a | b | reason" --rejected "plain finding | accepted" >/dev/null
+git -C ".worktrees/$hf" commit -q --allow-empty -m "Code harvest"
+sf handoff "$hf" -m "coded" >/dev/null
+sf route "$hf" specifier,coder,cleaner,qa >/dev/null
+sf handoff "$hf" >/dev/null
+sf handoff "$hf" >/dev/null
+sf finish "$hf" >/dev/null
+git clone -q --depth 3 "file://$hv" "$scratch/harvest-shallow" 2>/dev/null
+ho="$(sf new "Harvest open" -m "Open request." --route coder)"
+sf ask "$ho" "Open question?" >/dev/null
+out="$(sf harvest)"
+line_f="$(echo "$out" | sed -n 1p)"
+line_o="$(echo "$out" | sed -n 2p)"
+assert_eq "harvest prints one line per task" "$(echo "$out" | wc -l | tr -d ' ')" "2"
+assert_eq "every harvest line is JSON" "$(echo "$out" | jq -e -c 'type' | sort -u)" '"object"'
+assert_eq "harvest prints the finished task first" "$(echo "$out" | jq -r '.id' | paste -sd ' ' -)" "$hf $ho"
+assert_eq "harvest keys every line" "$(echo "$out" | jq -c 'keys' | sort -u)" '["id","lore","needs","records","request","route","stage","status","title","truncated"]'
+for t in "$hf" "$ho"; do
+  line="$(echo "$out" | jq -c --arg id "$t" 'select(.id == $id)')"
+  assert_eq "harvest title equals sf show ($t)" "$(echo "$line" | jq -r '.title')" "$(sf show "$t" | sed -n 's/^TITLE: //p')"
+  assert_eq "harvest status equals sf show ($t)" "$(echo "$line" | jq -r '.status')" "$(sf show "$t" | sed -n 's/^STATUS: //p')"
+  assert_eq "harvest stage equals sf stage ($t)" "$(echo "$line" | jq -r '.stage')" "$(sf stage "$t")"
+  assert_eq "harvest route equals sf route ($t)" "$(echo "$line" | jq -r '.route | join(",")')" "$(sf route "$t")"
+  assert_eq "harvest records follow sf show's blocks ($t)" "$(echo "$line" | jq -r '.records[].type' | paste -sd ' ' -)" \
+    "$(sf show "$t" | sed -n 's/^type: //p' | paste -sd ' ' -)"
+  assert_eq "harvest lore follows sf show's LORE lines but Lore-id ($t)" \
+    "$(echo "$line" | jq -r '.lore[] | "LORE: \(.commit) \(.role // "-") \(.key): \(.value)"')" \
+    "$(sf show "$t" | grep '^LORE: ' | grep -v '^LORE: [^ ]* [^ ]* Lore-id: ' || true)"
+done
+assert_eq "harvest keeps the request" "$(echo "$line_f" | jq -r '.request')" "$(printf 'First line of the request.\n\nSecond paragraph, é.')"
+assert_eq "harvest statuses" "$(echo "$out" | jq -r '.status' | paste -sd ' ' -)" "finished open"
+assert_eq "harvest needs of the waiting open task equals sf ls" "$(echo "$line_o" | jq -r '.needs')" "$(sf ls | awk -F'\t' -v id="$ho" '$1 == id {print $3}')"
+assert_eq "harvest needs of the finished task" "$(echo "$line_f" | jq -r '.needs')" "none"
+assert_eq "harvest texts" "$(echo "$line_f" | jq -c '[.records[] | select(.text != null) | .text]')" \
+  '["Which format?","JSON lines","spec ready","split the criteria","spec revised","specifier work complete","coded","cleaner work complete","qa work complete"]'
+assert_eq "harvest gives the route change its new route" "$(echo "$line_f" | jq -c '[.records[] | select(.type == "route") | .route]')" '[["specifier","coder","cleaner","qa"]]'
+assert_eq "harvest review records wait for approval" "$(echo "$line_f" | jq -r '[.records[] | select(.type == "review") | .needs] | unique | .[]')" "approval"
+assert_eq "harvest gives the finished record its branch" "$(echo "$line_f" | jq -r '.records[-1] | "\(.type) \(.merged_into)"')" "finished main"
+assert_eq "harvest commits equal sf show's" "$(echo "$line_f" | jq -r '.records[] | select(.commit != null) | .commit')" "$(sf show "$hf" | sed -n 's/^commit: //p')"
+assert_eq "harvest parses the approved-over findings" "$(echo "$line_f" | jq -c '.records[] | select(.type == "approval") | .rejected')" \
+  '[{"finding":"DEFECT, LOW: a | b","reason":"reason","kind":"DEFECT","severity":"LOW"},{"finding":"plain finding","reason":"accepted","kind":null,"severity":null}]'
+assert_eq "harvest gives unaudited records no refusal count" "$(echo "$out" | jq -c '[.records[].audit_refusals] | unique')" "$(printf '[null]\n[null]')"
+assert_eq "harvest gives lore the Lore-id of its commit" "$(echo "$line_f" | jq -r --arg id "$spec_lore_id" '[.lore[] | select(.lore_id == $id) | .key] | join(" ")')" "Constraint Tested Supersedes"
+assert_eq "harvest unfolds a folded value" "$(echo "$line_f" | jq -r '.lore[] | select(.key == "Tested") | .value')" "a folded value"
+assert_eq "harvest gives the approval's Rejected lore role null" "$(echo "$line_f" | jq -c '[.lore[] | select(.key == "Rejected") | .role] | unique')" "[null]"
+assert_eq "harvest lines are not truncated in the full repository" "$(echo "$out" | jq -c '.truncated' | sort -u)" "false"
+snapshot() { git for-each-ref; git status --porcelain --ignored; git worktree list; find .git | sort; { find .swarmforge 2>/dev/null || true; } | sort; }
+before="$(snapshot)"
+sf harvest >/dev/null
+assert_eq "harvest changes no ref, worktree or file" "$(snapshot)" "$before"
+assert_eq "a dispatched role can harvest" "$(SWARMFORGE_DISPATCHED=coder sf harvest)" "$out"
+set +e; extra="$(sf harvest extra 2>"$scratch/harvest.err")"; rc=$?; set -e
+assert_eq "harvest refuses an argument" "$rc-$extra" "1-"
+assert_match "harvest names the refusal" "$(cat "$scratch/harvest.err")" "^sf: harvest takes no arguments$"
+git branch swarm/experiment
+set +e; stray="$(sf harvest 2>"$scratch/harvest.err")"; rc=$?; set -e
+assert_eq "harvest skips a branch without records" "$rc" "0"
+assert_eq "harvest still prints the tasks beside a stray branch" "$stray" "$out"
+assert_match "harvest names the stray branch" "$(cat "$scratch/harvest.err")" "swarm/experiment"
+git branch -D -q swarm/experiment
+
+# audit refusal count
+sed -i 's/^coder     strong   subagent$/coder strong subagent audit/; s/^specifier frontier subagent$/specifier frontier subagent audit/' swarmforge/roles.conf
+ia="$(sf new "Audit count" -m x --route coder,cleaner)"
+sf start "$ia" >/dev/null
+git -C ".worktrees/$ia" commit -q --allow-empty -m "X"
+set +e; sf handoff "$ia" --to coder >/dev/null; rc1=$?
+git -C ".worktrees/$ia" commit -q --allow-empty -m "Y"
+sf handoff "$ia" --to coder >/dev/null; rc2=$?; set -e
+assert_eq "each refusal exits 3" "$rc1 $rc2" "3 3"
+sf handoff "$ia" --to coder >/dev/null
+count() { sf harvest | jq -c --arg id "$1" 'select(.id == $id) | [.records[] | select(.type == "handoff" or .type == "review") | .audit_refusals]'; }
+assert_eq "the record counts the refusals since the last record" "$(sf harvest | jq --arg id "$ia" 'select(.id == $id) | .records[-1].audit_refusals == 2')" "true"
+assert_match "show prints the count" "$(sf show "$ia")" "^audit-refusals: 2$"
+assert_match "start prints the count" "$(sf start "$ia")" "^audit-refusals: 2$"
+git -C ".worktrees/$ia" commit -q --allow-empty -m "Z"
+set +e; sf handoff "$ia" >/dev/null; set -e
+sf handoff "$ia" >/dev/null
+sf handoff "$ia" >/dev/null
+assert_eq "the count resets at each record; an unaudited role has none" "$(count "$ia")" "[2,1,null]"
+is="$(sf new "Audit spec" -m x --route specifier,coder)"
+sf start "$is" >/dev/null
+git -C ".worktrees/$is" commit -q --allow-empty -m "Spec"
+set +e; sf review "$is" >/dev/null; set -e
+sf review "$is" >/dev/null
+sf approve "$is" >/dev/null
+assert_eq "the handoff of an approval has no count; the audited review has one" "$(count "$is")" "[1,null]"
+roles() { sf harvest | jq -c --arg id "$1" 'select(.id == $id) | [.records[] | select(.type == "handoff" or .type == "review") | [.from, .audit_refusals]]'; }
+# a specifier refused while waiting for approval: one task through sf approve
+spec_waits() {
+  local t; t="$(sf new "$1" -m x --route specifier,coder)"
+  sf start "$t" >/dev/null
+  git -C ".worktrees/$t" commit -q --allow-empty -m "Spec"
+  set +e; sf review "$t" >/dev/null; set -e
+  sf review "$t" >/dev/null
+  set +e; sf review "$t" >/dev/null; set -e
+  echo "$t"
+}
+iq1="$(spec_waits "Audit per role 1")"
+sf approve "$iq1" >/dev/null
+set +e; out="$(sf handoff "$iq1")"; rc=$?; set -e
+assert_eq "the coder is refused at the specifier's refused head" "$rc" "3"
+assert_match "the coder's refusal prints the checklist" "$out" "^AUDIT_REQUIRED: $iq1 at "
+sf handoff "$iq1" >/dev/null
+assert_eq "each role is charged its own refusals" "$(roles "$iq1")" '[["specifier",1],["specifier",null],["coder",1]]'
+iq2="$(spec_waits "Audit per role 2")"
+sf approve "$iq2" >/dev/null
+git -C ".worktrees/$iq2" commit -q --allow-empty -m "Code"
+set +e; sf handoff "$iq2" >/dev/null; set -e
+sf handoff "$iq2" >/dev/null
+assert_eq "a refusal the specifier left behind is not the coder's" "$(roles "$iq2" | jq -c '.[-1]')" '["coder",1]'
+iq4="$(spec_waits "Audit per role 4")"
+sf reject "$iq4" "again" >/dev/null
+git -C ".worktrees/$iq4" commit -q --allow-empty -m "Spec 2"
+set +e; sf review "$iq4" >/dev/null; set -e
+sf review "$iq4" >/dev/null
+assert_eq "the left refusal counts toward the specifier's next review" "$(roles "$iq4" | jq -c '.[-1]')" '["specifier",2]'
+sed -i 's/^hardener  fast     subagent$/hardener fast subagent audit/' swarmforge/roles.conf
+iq3="$(sf new "Audit per role 3" -m x --route coder,hardener)"
+sf start "$iq3" >/dev/null
+git -C ".worktrees/$iq3" commit -q --allow-empty -m "Code"
+set +e; SWARMFORGE_ROLE=coder sf handoff "$iq3" --to coder >/dev/null; rc1=$?
+SWARMFORGE_ROLE=hardener sf handoff "$iq3" --to coder >/dev/null; rc2=$?
+SWARMFORGE_ROLE=hardener sf handoff "$iq3" --to coder >/dev/null; rc3=$?
+SWARMFORGE_ROLE=coder sf handoff "$iq3" --to coder >/dev/null; rc4=$?; set -e
+assert_eq "each audited role gets its own first refusal" "$rc1 $rc2 $rc3 $rc4" "3 3 0 0"
+assert_eq "a role's record keeps another role's pending state" "$(roles "$iq3")" '[["hardener",1],["coder",1]]'
+assert_eq "no audit state is left once no role is pending" "$(test -e ".swarmforge/audit/$iq3" && echo kept || echo cleared)" "cleared"
+for legacy in 'h\n2\n' 'h\n'; do
+  iq5="$(sf new "Audit roleless $legacy" -m x --route coder)"
+  sf start "$iq5" >/dev/null
+  git -C ".worktrees/$iq5" commit -q --allow-empty -m "Code"
+  h="$(git -C ".worktrees/$iq5" rev-parse --short HEAD)"
+  mkdir -p .swarmforge/audit && printf "${legacy/h/$h}" > ".swarmforge/audit/$iq5"
+  set +e; sf handoff "$iq5" >/dev/null; rc1=$?; sf handoff "$iq5" >/dev/null; rc2=$?; set -e
+  assert_eq "a roleless file ($legacy) admits no role" "$rc1 $rc2" "3 0"
+  assert_eq "a roleless file ($legacy) adds no refusal" "$(roles "$iq5")" '[["coder",1]]'
+  assert_eq "a roleless file ($legacy) is gone after the record" "$(test -e ".swarmforge/audit/$iq5" && echo kept || echo cleared)" "cleared"
+done
+cp "$HERE/swarmforge/roles.conf" swarmforge/roles.conf
+
+# truncated task in a shallow clone
+cd "$scratch/harvest-shallow"
+set +e; shallow="$(sf harvest 2>"$scratch/harvest.err")"; rc=$?; set -e
+assert_eq "harvest in a shallow clone exits 0 with empty stderr" "$rc:$(cat "$scratch/harvest.err")" "0:"
+assert_eq "harvest prints the cut-off task as truncated" "$(echo "$shallow" | jq -c '[.id, .truncated, .title, .request, .status]')" "[\"$hf\",true,\"\",\"\",\"finished\"]"
+assert_eq "the truncated task keeps its readable records, finished last" "$(echo "$shallow" | jq -r '[.records[].type] | join(" ")')" "handoff handoff finished"
+assert_eq "no commit of the truncated task is blank" "$(echo "$shallow" | jq '[.records[].commit] | index("")')" "null"
+cd "$hv"
+assert_match "help lists harvest" "$(sf --help)" "^  harvest  "
+cd "$repo"
+
 for pair in ".claude/skills/swarm/SKILL.md .agents/skills/swarm/SKILL.md"; do
   set -- $pair
   cmp -s "$HERE/$1" "$HERE/$2" && pass "$1 matches $2" || fail "$1 differs from $2"

@@ -43,6 +43,8 @@ Catalogue commands
   gates                           print the gate roles that audit a specification before approval
   routes                          print the named routes
   stage <id>                      print the task's current stage
+  harvest                         print every task's history as one JSON line each, finished
+                                  tasks first (handoff-protocol.md describes the keys)
   dispatch <role> <id> [backend]  run a role or gate headlessly (claude, codex, copilot)
   run <id> [backend]              dispatch stage after stage until done or blocked; runs the
                                   gates when the specification it dispatched waits for approval
@@ -79,6 +81,7 @@ Environment
    "show" task/show
    "next" task/next-task
    "stage" task/stage
+   "harvest" task/harvest
    "start" task/start
    "handoff" #(task/handoff % {})
    "ask" task/ask

@@ -112,6 +112,17 @@
 (defn- values-of [key trailers]
   (for [trailer trailers :when (= key (:key trailer))] (str/trim (:value trailer))))
 
+(defn entries
+  "The Lore trailers of commits, in the order of their LORE: lines, as maps of
+  :sha, :role, :key, :value and :lore-id, the Lore-id of their commit or nil.
+  The Lore-id trailers themselves are left out."
+  [commits]
+  (for [trailers (map commit-trailers commits)
+        :let [lore-id (first (values-of "Lore-id" trailers))]
+        trailer trailers
+        :when (not= "Lore-id" (:key trailer))]
+    (assoc trailer :lore-id lore-id)))
+
 (defn brief
   "The LORE: lines of commits that sf start prints, as :lines, and how many of
   the lines that sf show prints it leaves out, as :omitted. It leaves out the
