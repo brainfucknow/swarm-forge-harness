@@ -36,18 +36,9 @@ needs to know to run them on Babashka code.
   ```
 
 - Extra, encouraged but not blocking (not the code scanner): Semgrep on the
-  changed `.clj`, `.cljc`, `.cljs` and `.edn` files (it skips `.bb`), with
-  rules from a pinned semgrep-rules commit in `tmp/` (never commit them:
-  Semgrep Rules License). The fetch and the first uvx run reach github.com and
-  pypi.org. When it cannot run, record `Not-tested: semgrep: <reason>` and
-  continue:
-
-  ```sh
-  git init -q tmp/semgrep-rules
-  git -C tmp/semgrep-rules fetch -q --depth 1 https://github.com/semgrep/semgrep-rules.git 16b9e6d45f10649f6a531ec4838ed9924372c3bc
-  git -C tmp/semgrep-rules checkout -q FETCH_HEAD
-  uvx semgrep@1.183.0 scan --config tmp/semgrep-rules/clojure --metrics=off --disable-version-check --error <changed files>
-  ```
+  changed `.clj`, `.cljc`, `.cljs` and `.edn` files (it skips `.bb`). Read and
+  follow the [shared Semgrep setup](semgrep.md) with
+  `--config tmp/semgrep-rules/clojure`.
 
 - Dependency audit: nvd-clojure (`sf tool ensure nvd-clojure`), when the task
   changes `deps.edn`, `bb.edn` or `project.clj`. It needs `NVD_API_TOKEN` and

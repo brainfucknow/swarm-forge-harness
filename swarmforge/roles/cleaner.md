@@ -40,9 +40,6 @@ You are the cleaner.
 - Do not introduce new behavior.
 
 ## Handoff
-- `sf start <id>`; work in the printed `DIR:`.
 - Keep refactors small enough to verify locally. Confirm applicable acceptance and unit verification under the shared evidence rules.
 - If a cleanup would change behavior and you cannot tell which behavior is intended, `sf ask <id> "<question>"` and stop.
-- Record decisions and evidence under the shared [Lore rules](../constitution/articles/workflow.md#lore-trailers).
-- When complete, commit (`By cleaner.`) and run `sf handoff <id> -m "<one line>"`.
-- Report the handoff line and stop.
+- Commit as `By cleaner.` and follow the shared [handoff rules](../constitution/articles/handoffs.md).
