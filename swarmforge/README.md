@@ -11,6 +11,7 @@ this repository.
 | `routes.conf` | Named routes: which roles a task visits. `feature` is the default. |
 | `tiers.conf` | Model per tier per harness. |
 | `constitution.md`, `constitution/articles/` | Rules every role obeys. |
+| `constitution/existing-code.md` | Refactoring policy read only when the project opts into `Existing code: ask before refactoring`. |
 | `roles/*.md` | What each role owns, verifies, and hands off. `orchestrator.md` is the session's own role. |
 | `bin/sf`, `tools/sf/` | The only writer of task state. `sf --help` lists the commands. |
 | `bin/sf-cs`, `languages/csharp.md` | C# tool wrapper: tests, coverage, CRAP, DRY, mutation, each scoped to the task's changes. |
@@ -20,6 +21,7 @@ this repository.
 | `bin/sf-js`, `languages/javascript.md` | JavaScript and TypeScript tool wrapper: the same commands for Vitest or Jest, oxlint or ESLint complexity with Istanbul coverage, jscpd, and StrykerJS. |
 | `bin/sf-rb`, `languages/ruby.md` | Ruby tool wrapper: SimpleCov coverage, CRAP from RuboCop or flog, DRY from jscpd or flay, and optional mutant. |
 | `bin/sf-java`, `languages/java.md` | Maven Java 17+ / JUnit 5 tests, JaCoCo coverage, pinned Java CRAP, DRY and differential mutation. |
+| `languages/semgrep.md` | Shared scanner setup used by language guides, which define the scan scope and required/optional status. |
 | `tools/core/` | Report readers shared by the language tool wrappers: changed lines, CRAP, jscpd, Stryker. |
 | `handoff-protocol.md` | The task branch, record commits, and lifecycle. |
 | `verify.conf` | Optional, written by the project: one shell command per line that `sf finish` runs on the merge before it merges, for example `make test`. |

@@ -1,6 +1,6 @@
 # Existing Code Refactoring Policy
 
-- This section applies only when `project.md` says `Existing code: ask before refactoring`. With `refactor freely`, or with no such line, skip it. When it applies, it takes precedence, for existing code, over the cleanup, file-split, CRAP, DRY, code-smell and mutation instructions in role prompts.
+- This policy applies only when `project.md` says `Existing code: ask before refactoring`. With `refactor freely`, or with no such line, skip it. When it applies, it takes precedence, for existing code, over the cleanup, file-split, CRAP, DRY, code-smell and mutation instructions in role prompts.
 - Decide existing code per function against the merge base of the task branch with the base branch. A function, method, test or file present at that merge base is existing; one the task added is new. "Function" covers methods and their equivalents. Refactor new code as usual.
 - Editing an existing function to deliver the requested behaviour needs no approval. Adding tests, including tests of existing code, never needs approval.
 - Restructuring existing code needs the operator's approval: renaming, extracting, inlining, moving, splitting a file, removing duplication, or reformatting.
