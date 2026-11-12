@@ -87,7 +87,7 @@
   [["SwarmForge-Task" :task] ["SwarmForge-Record" :record] ["SwarmForge-From" :from]
    ["SwarmForge-Stage" :stage] ["SwarmForge-Route" :route] ["SwarmForge-Needs" :needs]
    ["SwarmForge-Merged-Into" :merged-into] ["SwarmForge-Reviewed" :reviewed]
-   ["SwarmForge-Audit-Refusals" :audit-refusals]])
+   ["SwarmForge-Audit-Refusals" :audit-refusals] ["SwarmForge-Verdict" :verdict]])
 
 (defn rejected-refusal
   "Why value cannot be the value of a `Rejected: <finding> | <reason>` trailer,
@@ -209,15 +209,16 @@
     {:records (keep-indexed #(when-not (dropped %1) %2) records)
      :omitted omitted}))
 
-(defn- fields [{:keys [task record from text stage route commit files merged-into audit-refusals]}]
+(defn- fields [{:keys [task record from verdict text stage route commit files merged-into audit-refusals]}]
   (concat
    [["type" record] ["from" from]]
+   (when verdict [["verdict" verdict]])
    (case record
      "created" [["branch" (branch task)] ["commit" commit] ["route" route]]
      "question" [["question" text]]
      "answer" [["answer" text]]
      "review" [["commit" commit] ["files" files] ["summary" text]]
-     "changes-requested" [["reason" text]]
+     ("changes-requested" "verdict") [["reason" text]]
      "route" [["route" route]]
      "handoff" [["to" stage] ["branch" (branch task)] ["commit" commit] ["files" files] ["summary" text]]
      "finished" [["merged-into" merged-into]]

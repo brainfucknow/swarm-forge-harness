@@ -24,7 +24,7 @@
 
 (def ^:private pure
   "The high-level namespaces: plain values in and out, no IO."
-  '#{sf.lore sf.record sf.flow sf.harvest sf.feature-block sf.coverage-args sf.catalogue sf.runtime})
+  '#{sf.lore sf.record sf.flow sf.rounds sf.harvest sf.feature-block sf.coverage-args sf.catalogue sf.runtime})
 
 (def ^:private allowed
   "The sf namespaces each sf namespace may require. Dependencies point from the
@@ -35,6 +35,7 @@
     sf.record #{}
     sf.flow #{sf.record}
     sf.catalogue #{}
+    sf.rounds #{sf.lore}
     sf.harvest #{sf.flow sf.lore sf.record}
     sf.config #{sf.catalogue sf.flow sf.shell}
     sf.entry-point #{}
@@ -54,9 +55,9 @@
     sf.hook #{sf.lore sf.record sf.shell}
     sf.options #{sf.record sf.shell}
     sf.audit #{sf.config sf.flow sf.shell sf.store}
-    sf.history #{sf.flow sf.lore sf.record sf.shell sf.store}
+    sf.history #{sf.flow sf.lore sf.record sf.rounds sf.shell sf.store}
     sf.dispatch #{sf.config sf.flow sf.shell sf.store sf.task}
-    sf.task #{sf.audit sf.config sf.flow sf.git sf.harvest sf.history sf.hook sf.lore sf.metrics sf.options sf.record sf.shell sf.store sf.verify}
+    sf.task #{sf.audit sf.config sf.flow sf.git sf.harvest sf.history sf.hook sf.lore sf.metrics sf.options sf.record sf.rounds sf.shell sf.store sf.verify}
     sf.cli #{sf.adapters sf.config sf.dispatch sf.hook sf.shell sf.task sf.tool}})
 
 (defn- source-namespaces []

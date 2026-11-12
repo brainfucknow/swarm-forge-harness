@@ -101,7 +101,7 @@
      :records records :commits commits}))
 
 (def ^:private record-keys
-  #{"type" "from" "stage" "needs" "route" "commit" "text" "merged_into" "rejected" "audit_refusals"})
+  #{"type" "from" "stage" "needs" "route" "commit" "text" "merged_into" "rejected" "audit_refusals" "verdict"})
 
 (describe "line"
   (it "is one line of JSON that reads back the task's id, status and newest state"

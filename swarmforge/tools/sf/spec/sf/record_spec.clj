@@ -111,6 +111,17 @@
                (record/parse {:sha "abc1234" :parents ["par1234"] :message message
                               :trailers (drop 2 (clojure.string/split-lines message))})))))
 
+(describe "a verdict record"
+  (it "carries its verdict in a trailer that parse reads back"
+    (let [rec {:task "t-1" :record "verdict" :from "judge" :verdict "stuck" :stage "specifier"
+               :route "specifier,coder" :needs "approval" :text "cap"}
+          message (record/message rec)
+          lines (clojure.string/split-lines message)]
+      (should= "SwarmForge-Verdict: stuck" (some #(when (clojure.string/starts-with? % "SwarmForge-Verdict") %) lines))
+      (should= ["verdict" "stuck" "cap"]
+               ((juxt :record :verdict :text)
+                (record/parse {:sha "s" :parents ["p"] :message message :trailers (drop 4 lines)}))))))
+
 (describe "same-commit?"
   (it "matches a full sha and its abbreviation either way round"
     (should (record/same-commit? "0123456789abcdef" "0123456"))
@@ -192,6 +203,13 @@
   (it "lists exactly 40 paths in full"
     (should= (clojure.string/join "," (map str (range 40)))
              (record/files-value (map str (range 40))))))
+
+(describe "block of a record with a verdict"
+  (it "prints the verdict after from, and a verdict record's text as reason"
+    (should= "type: verdict\nfrom: judge\nverdict: stuck\nreason: cap\n  used"
+             (record/block {:record "verdict" :from "judge" :verdict "stuck" :text "cap\nused"}))
+    (should= "type: changes-requested\nfrom: judge\nverdict: continue\nreason: new findings"
+             (record/block {:record "changes-requested" :from "judge" :verdict "continue" :text "new findings"}))))
 
 (describe "block"
   (it "renders the keys of the record type, later lines of a value indented"

@@ -688,6 +688,55 @@ cd "$hv"
 assert_match "help lists harvest" "$(sf --help)" "^  harvest  "
 cd "$repo"
 
+# judge loop: sf verdict and sf rounds through the CLI
+copy_swarmforge .
+assert_match "help lists verdict" "$(sf help)" "^  verdict <id> <converged\|continue\|needs-operator\|stuck> <text>$"
+assert_match "help lists rounds" "$(sf help)" "^  rounds <id>  "
+assert_match "a route that names the judge is refused" "$(sf new "Judge route" -m x --route specifier,judge,coder 2>&1 || true)" "'judge' in route 'specifier,judge,coder' is a judge, not a stage"
+jq_spec() {
+  local t; t="$(sf new "$1" -m x --route specifier,coder)"
+  sf start "$t" >/dev/null
+  git -C ".worktrees/$t" commit -q --allow-empty -m "$(printf 'Spec\n1\n2\n3\n4\n5\n6\n7\n8\n9')"
+  sf review "$t" >/dev/null
+  echo "$t"
+}
+jl="$(jq_spec "Judge loop")"
+assert_match "dispatch refuses the judge" "$(sf dispatch judge "$jl" claude 2>&1 || true)" "^sf: 'judge' is the judge"
+assert_eq "verdict continue prints its line" "$(sf verdict "$jl" continue "r1")" "VERDICT: $jl continue"
+assert_eq "start shows the send-back with its verdict" "$(sf start "$jl" | grep -A2 '^from: judge$')" "$(printf 'from: judge\nverdict: continue\nreason: r1')"
+git -C ".worktrees/$jl" commit -q --allow-empty -m "Rework"
+sf review "$jl" >/dev/null
+sf verdict "$jl" continue "r2" >/dev/null
+git -C ".worktrees/$jl" commit -q --allow-empty -m "Rework again"
+sf review "$jl" >/dev/null
+rounds="$(sf rounds "$jl")"
+assert_eq "rounds prints three rounds, the first two continued" "$(echo "$rounds" | grep '^ROUND' | sed 's/ [0-9a-f]* size:/ size:/')" \
+  "$(printf 'ROUND 1 size:11 growth:0%% verdict:continue\nROUND 2 size:13 growth:18%% verdict:continue\nROUND 3 size:15 growth:36%% verdict:-')"
+assert_match "rounds prints each send-back" "$rounds" "^  judge: r2$"
+assert_match "rounds prints the cap" "$rounds" "^LIMIT: cap 2 of 2 automatic send-backs used$"
+tip="$(git rev-parse "swarm/$jl")"
+assert_match "continue past the cap is refused with the limit" "$(sf verdict "$jl" continue x 2>&1 || true)" "^sf: LIMIT: cap 2 of 2 automatic send-backs used$"
+assert_eq "the refused continue records nothing" "$(git rev-parse "swarm/$jl")" "$tip"
+assert_eq "stuck is recorded" "$(sf verdict "$jl" stuck "cap")" "VERDICT: $jl stuck"
+assert_fails "a second verdict in the round" sf verdict "$jl" converged "x"
+assert_fails "a dispatched role cannot record a verdict" env SWARMFORGE_DISPATCHED=judge sf verdict "$jl" converged "x"
+assert_eq "a dispatched role can read the rounds" "$(SWARMFORGE_DISPATCHED=judge sf rounds "$jl" | grep -c '^ROUND')" "3"
+assert_eq "harvest gives the verdicts" "$(sf harvest | jq -c --arg id "$jl" 'select(.id == $id) | [.records[] | .verdict]')" \
+  '[null,null,"continue",null,"continue",null,"stuck"]'
+assert_match "approve hands off after a verdict" "$(sf approve "$jl")" "specifier -> coder"
+assert_fails "verdict at the next stage" sf verdict "$jl" converged "x"
+jg="$(jq_spec "Judge growth")"
+sf verdict "$jg" continue "r1" >/dev/null
+git -C ".worktrees/$jg" commit -q --allow-empty -m "$(printf 'Rework\n1\n2\n3\n4\n5')"
+sf review "$jg" >/dev/null
+assert_match "growth over half the baseline is a limit" "$(sf rounds "$jg")" "^LIMIT: growth size 18 is more than half over 11$"
+assert_match "continue over the growth limit is refused" "$(sf verdict "$jg" continue x 2>&1 || true)" "^sf: LIMIT: growth"
+assert_eq "a task without a review has no rounds" "$(sf rounds "$(sf new "Unreviewed" -m x)")" "NO_ROUNDS"
+sed -i '/^judge /d' swarmforge/roles.conf
+assert_match "check passes without the judge" "$(sf check)" "^CHECK: ok"
+assert_match "verdict fails without the judge" "$(sf verdict "$jg" stuck x 2>&1 || true)" "roles.conf has no judge"
+copy_swarmforge .
+
 for pair in ".claude/skills/swarm/SKILL.md .agents/skills/swarm/SKILL.md"; do
   set -- $pair
   cmp -s "$HERE/$1" "$HERE/$2" && pass "$1 matches $2" || fail "$1 differs from $2"

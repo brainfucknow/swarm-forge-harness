@@ -32,16 +32,26 @@
 (defn- gate-row? [row]
   (boolean (some #{"gate"} (drop 3 row))))
 
+(defn- judge-row? [row]
+  (boolean (some #{"judge"} (drop 3 row))))
+
 (defn pipeline
-  "The roles a route can visit, in canonical order. Gate roles are not stages."
+  "The roles a route can visit, in canonical order. Gate and judge roles are
+  not stages."
   []
-  (map first (remove gate-row? (rows "roles.conf"))))
+  (map first (remove #(or (gate-row? %) (judge-row? %)) (rows "roles.conf"))))
 
 (defn gates
   "The gate roles in file order: subagents that audit a specification after
   the specifier's sf review and before the operator approves it."
   []
   (map first (filter gate-row? (rows "roles.conf"))))
+
+(defn judge
+  "The judge role: the subagent that gives a verdict on each round of gate
+  findings. nil when roles.conf has none."
+  []
+  (first (map first (filter judge-row? (rows "roles.conf")))))
 
 (defn role-field [role column]
   (field (rows "roles.conf") role column))
@@ -68,6 +78,9 @@
 (defn gate? [role]
   (boolean (some #{"gate"} (role-flags role))))
 
+(defn judge? [role]
+  (boolean (some #{"judge"} (role-flags role))))
+
 (defn named-routes []
   (rows "routes.conf"))
 
@@ -86,6 +99,8 @@
               (let [index (.indexOf catalogue role)]
                 (when (and (neg? index) (some #{role} (gates)))
                   (shell/die "'" role "' in route '" spec "' is a gate, not a stage; it runs at the specification gate"))
+                (when (and (neg? index) (= role (judge)))
+                  (shell/die "'" role "' in route '" spec "' is a judge, not a stage; it runs at the specification gate"))
                 (when (neg? index)
                   (shell/die "unknown role '" role "' in route '" spec "' (see swarmforge/roles.conf)"))
                 (when (<= index last)
@@ -125,14 +140,18 @@
 
 (defn- flag-problems [role runs flags]
   (concat
-    (for [flag (distinct flags) :when (not (#{"audit" "optional" "gate"} flag))]
-      (str "roles.conf: '" role "' has unknown flag '" flag "' (only audit, optional, gate)"))
+    (for [flag (distinct flags) :when (not (#{"audit" "optional" "gate" "judge"} flag))]
+      (str "roles.conf: '" role "' has unknown flag '" flag "' (only audit, optional, gate, judge)"))
     (for [[flag n] (frequencies flags) :when (> n 1)]
       (str "roles.conf: '" role "' repeats flag '" flag "'"))
     (when (some #{"gate"} flags)
       (cond-> []
         (some #{"audit" "optional"} flags) (conj (str "roles.conf: '" role "' is a gate and cannot also be audit or optional"))
-        (not= "subagent" runs) (conj (str "roles.conf: '" role "' is a gate and must run as subagent"))))))
+        (not= "subagent" runs) (conj (str "roles.conf: '" role "' is a gate and must run as subagent"))))
+    (when (some #{"judge"} flags)
+      (cond-> []
+        (some #{"audit" "optional" "gate"} flags) (conj (str "roles.conf: '" role "' is a judge and cannot also be audit, optional or gate"))
+        (not= "subagent" runs) (conj (str "roles.conf: '" role "' is a judge and must run as subagent"))))))
 
 (defn- check-role [[role tier runs & flags :as row] seen]
   (if-not (<= 3 (count row) 5)
@@ -145,10 +164,14 @@
       (not (#{"subagent" "session"} runs)) (conj (str "roles.conf: '" role "' runs-as must be subagent or session, not '" runs "'"))
       (not (fs/exists? (fs/path (conf-dir) "roles" (str role ".md")))) (conj (str "roles/" role ".md: missing role prompt for '" role "'")))))
 
+(defn- second-judges []
+  (for [role (rest (map first (filter judge-row? (rows "roles.conf"))))]
+    (str "roles.conf: '" role "' is a second judge; roles.conf has one")))
+
 (defn- check-roles []
   (if-not (fs/exists? (conf-file "roles.conf"))
     ["roles.conf: missing"]
-    (cond-> (scan (rows "roles.conf") check-role)
+    (cond-> (into (scan (rows "roles.conf") check-role) (second-judges))
       (empty? (pipeline)) (conj "roles.conf: no roles"))))
 
 (defn- route-problem [route]
