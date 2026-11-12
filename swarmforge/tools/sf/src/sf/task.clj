@@ -13,6 +13,7 @@
             [sf.metrics :as metrics]
             [sf.options :as options]
             [sf.record :as record]
+            [sf.rounds :as rounds]
             [sf.shell :as shell]
             [sf.store :as store]
             [sf.verify :as verify]))
@@ -250,6 +251,32 @@
         rec (write! id "changes-requested" "operator"
                     (fn [state] (refuse (flow/approval-refusal state)) {:text text :needs "none"}))]
     (println (str "REJECTED: " id " stays at stage:" (:stage rec)))))
+
+(defn verdict
+  "Records the judge's verdict on the newest round. Continue is an automatic
+  send-back that sf refuses when a limit holds."
+  [[id-arg verdict & args]]
+  (operator-only! "verdict")
+  (let [id (open-task id-arg)
+        text (record/free-text args)
+        judge (config/judge)]
+    (store/write! id
+                  (fn [records]
+                    (let [state (last records)]
+                      (refuse (rounds/verdict-refusal {:state state :rounds (rounds/rounds records)
+                                                       :verdict verdict :text text :judge judge}))
+                      (if (= "continue" verdict)
+                        (do (refuse (first (:limits (history/gate-rounds records))))
+                            (flow/follow state "changes-requested" judge {:verdict verdict :text text :needs "none"}))
+                        (flow/follow state "verdict" judge {:verdict verdict :text text})))))
+    (println (str "VERDICT: " id " " verdict))))
+
+(defn rounds
+  "Prints the rounds of the task's specification gate. Reads only."
+  [[id-arg]]
+  (let [{:keys [records]} (history/view (store/resolve-id id-arg))
+        {found :rounds limits :limits} (history/gate-rounds records)]
+    (run! println (rounds/report found limits))))
 
 (defn- finished-message [id state target]
   (record/message (assoc (flow/finished state target) :task id)))

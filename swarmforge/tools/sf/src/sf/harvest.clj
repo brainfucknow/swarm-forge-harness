@@ -18,7 +18,7 @@
 
 (defn- record-entry
   "The record with every key of a harvested record, null where it does not apply."
-  [{:keys [record from stage needs route commit text merged-into rejected audit-refusals] :as rec}]
+  [{:keys [record from stage needs route commit text merged-into rejected audit-refusals verdict] :as rec}]
   (array-map
    "type" record
    "from" from
@@ -29,7 +29,8 @@
    "text" (when (not= "created" record) text)
    "merged_into" (when (= "finished" record) merged-into)
    "rejected" (when (= "approval" record) (mapv rejected-entry rejected))
-   "audit_refusals" (when (#{"review" "handoff"} record) (refusal-count audit-refusals))))
+   "audit_refusals" (when (#{"review" "handoff"} record) (refusal-count audit-refusals))
+   "verdict" (when (#{"verdict" "changes-requested"} record) verdict)))
 
 (defn- lore-entry [{:keys [sha role key value lore-id]}]
   (array-map "commit" sha "role" (when (not= "-" role) role) "key" key "value" value "lore_id" lore-id))

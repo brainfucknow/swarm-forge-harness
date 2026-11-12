@@ -173,7 +173,17 @@
 
   (it "needs a known role"
     (should-contain "dispatch needs a role" (:err (support/captured #(dispatch/dispatch []))))
-    (should-contain "unknown role" (:err (support/captured #(dispatch/dispatch ["nobody" "x"]))))))
+    (should-contain "unknown role" (:err (support/captured #(dispatch/dispatch ["nobody" "x"])))))
+
+  (it "refuses the judge without starting a backend"
+    (support/write-conf! *dir* "roles.conf" "specifier frontier subagent\njudge strong subagent judge\ncoder strong subagent\ncleaner fast subagent\n")
+    (let [started (atom false)
+          id (new-id "Judged" "-m" "x")]
+      (with-redefs [p/shell (backend-shell (fn [_] (reset! started true) {:exit 0}))]
+        (let [{:keys [status err]} (support/captured #(dispatch/dispatch ["judge" id "claude"]))]
+          (should= 1 status)
+          (should-contain "'judge' is the judge: it needs the round's gate reports and runs only as a subagent of the session" err)))
+      (should= false @started))))
 
 (describe "run"
   (around [it] (with-repo it))
