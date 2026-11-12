@@ -62,12 +62,8 @@
 
 ;; size
 
-(defn- trailer-values [key trailers]
-  (for [line trailers :when (= key (lore/trailer-key line))]
-    (str/trim (subs line (inc (count key))))))
-
 (defn- record-commit? [{:keys [trailers]}]
-  (boolean (seq (trailer-values "SwarmForge-Record" trailers))))
+  (boolean (some #(= "SwarmForge-Record" (lore/trailer-key %)) trailers)))
 
 (defn- counted
   "The commits that count toward size: no record commit, no merge."
@@ -95,13 +91,11 @@
 
 (defn size
   "The size of the specification at the commits of a round: the message lines
-  of the counted commits no counted commit supersedes, plus the lines added
-  minus the lines removed over every counted commit, at least 0."
+  of the counted commits current among them (lore/current), plus the lines
+  added minus the lines removed over every counted commit, at least 0."
   [commits]
-  (let [commits (counted commits)
-        superseded (set (mapcat #(trailer-values "Supersedes" (:trailers %)) commits))
-        kept (remove #(some superseded (trailer-values "Lore-id" (:trailers %))) commits)]
-    (+ (reduce + (map message-lines kept)) (tracked-lines commits))))
+  (let [commits (counted commits)]
+    (+ (reduce + (map message-lines (lore/current commits))) (tracked-lines commits))))
 
 (def log-format
   "The git log --numstat --format that read-log reads."
