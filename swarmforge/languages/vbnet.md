@@ -38,13 +38,9 @@ Checks exit 0 when clean, 1 on findings, and 2 on usage/input errors; test and
 external-tool failures retain their exit status. Acceptance tests use the shared
 Acceptance Pipeline Specification tools and the project's runtime/handlers.
 
-CRAP also lists in-scope source files absent from usable method data and exits 2.
-Repeat `--no-executable-code PATH` to explicitly declare non-executable-only
-files; paths must exist inside the repository and be in scope. Exemptions are
-visible and never hide measured methods. See the [shared C# behavior](csharp.md)
-for file-level limits, `--all` scope, and opt-in test-assembly coverage. The
-coverage flag goes before an optional `--`; it preserves `obj/` exclusion and
-cannot measure a project the run never loads.
+CRAP lists unmeasured in-scope `.vb` files and exits 2. For explicit
+`--no-executable-code PATH` declarations, file-level limits and opt-in test
+coverage, follow the [shared .NET coverage rules](csharp.md#coverage-completeness).
 
 ## Security scanners
 

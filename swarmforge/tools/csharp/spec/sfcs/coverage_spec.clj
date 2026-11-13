@@ -15,7 +15,7 @@
                     "FAKE_DOTNET_LOG" log
                     "FAKE_COVERAGE" (str (fs/path support/fixtures "coverage" "coverage.cobertura.xml"))}]
            (should= 2 (:status (#'support/sfcs env "coverage")))
-           (let [{:keys [status err]} (#'support/sfcs env "coverage" "--include-test-assemblies" "App.sln" "--no-build")
+           (let [{:keys [status]} (#'support/sfcs env "coverage" "--include-test-assemblies" "App.sln" "--no-build")
                  settings (slurp (str (fs/path support/*repo* "tmp/dotnet-coverage.xml")))
                  calls (#'support/dotnet-calls log)]
              (should= 0 status)
@@ -40,5 +40,4 @@
                                  "coverage" "--include-test-assemblies" "--" "--no-build" "--logger" "trx")]
            (should= 1 status)
            (should= ["--" "--no-build" "--logger" "trx"]
-                    (take-last 4 (last (#'support/dotnet-calls log))))))))
-)
+                    (take-last 4 (last (#'support/dotnet-calls log)))))))))

@@ -208,8 +208,7 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
        (mapv #(shell/capture "dotnet" (coverage/evaluate-args %)))))
 
 (defn- measured-test-assemblies
-  "The test assemblies of the projects under `root`; stops when there is no project
-  to measure: none at all, or only test projects among those restored."
+  "Test assemblies to exclude; rejects roots with no collectible project under the selected mode."
   [root include-test-assemblies?]
   (let [projects (walked-projects root)
         evaluated (evaluations projects)]

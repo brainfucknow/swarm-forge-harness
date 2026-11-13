@@ -38,6 +38,11 @@ committed or not, plus untracked `.cs` files. `--base` defaults to
 any line from its signature (attributes and wrapped parameters included) to
 its last coverable line changed.
 
+Mutation must be differential: use `sf-cs mutate` without `--all`, so Stryker
+mutates only files changed since the base branch.
+
+## Coverage completeness
+
 CRAP lists every in-scope existing source file without usable method data in
 any report as `UNMEASURED source: <path>` and exits 2. `--all` checks all
 tracked and nonignored untracked source files. This is file-level evidence;
@@ -54,9 +59,6 @@ assertions. Put the flag before an optional `--`. This also permits a test-only
 root that contains a project; an empty root still fails. Sources under `obj/`
 remain excluded. The default still excludes test assemblies. Including them
 cannot measure a project the run never loads.
-
-Mutation must be differential: use `sf-cs mutate` without `--all`, so Stryker
-mutates only files changed since the base branch.
 
 ## Reading the output
 
