@@ -2,11 +2,12 @@
   (:require [babashka.fs :as fs]
             [clj-yaml.core :as yaml]
             [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [speclj.core :refer [describe it should should-not should= should-be-nil]]
             [sf.runtime :as runtime]))
 
 (def ^:private sf-home
-  (fs/parent (fs/absolutize (System/getProperty "babashka.config"))))
+  (fs/parent (fs/parent (fs/parent (fs/absolutize (.getPath (io/resource "sf/shell.clj")))))))
 
 (defn- ci-bb-version
   "The BB_VERSION the CI job named job installs."
@@ -16,7 +17,7 @@
 
 (describe "minimum"
   (it "is the Babashka the sf-min-bb CI job tests on"
-    (should= "1.12.200" runtime/minimum)
+    (should= "1.12.215" runtime/minimum)
     (should= runtime/minimum (str (ci-bb-version :sf-min-bb))))
 
   (it "is the :min-bb-version of the sf bb.edn"
@@ -27,13 +28,13 @@
 
 (describe "too-old?"
   (it "refuses a Babashka older than the minimum"
-    (should (runtime/too-old? "1.12.199"))
+    (should (runtime/too-old? "1.12.214"))
     (should (runtime/too-old? "1.11.300"))
     (should (runtime/too-old? "1.3.191")))
 
   (it "accepts the minimum and every later version"
-    (should-not (runtime/too-old? "1.12.200"))
-    (should-not (runtime/too-old? "1.12.201-SNAPSHOT"))
+    (should-not (runtime/too-old? "1.12.215"))
+    (should-not (runtime/too-old? "1.12.216-SNAPSHOT"))
     (should-not (runtime/too-old? "1.13.229"))
     (should-not (runtime/too-old? "2.0.0")))
 
@@ -47,8 +48,8 @@
 
 (describe "refusal"
   (it "names the version and the minimum"
-    (should= "sf: Babashka 1.12.199 is too old; sf needs 1.12.200 or newer: https://babashka.org"
-             (runtime/refusal "1.12.199")))
+    (should= "sf: Babashka 1.12.214 is too old; sf needs 1.12.215 or newer: https://babashka.org"
+             (runtime/refusal "1.12.214")))
 
   (it "is nil for a version sf runs on"
     (should-be-nil (runtime/refusal runtime/minimum))))
