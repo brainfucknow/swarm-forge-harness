@@ -94,8 +94,9 @@
 
 (defn gate-rounds
   "The rounds of the task whose records these are, oldest first, each with
-  its :size, :base (the size of its baseline round), :growth and :short
-  reviewed sha, and the :limits that hold for the newest round."
+  its :size, :base (the size of its baseline round), :growth, :total (its
+  growth over round 1) and :short reviewed sha, and the :limits that hold for
+  the newest round."
   [records]
   (let [created (flow/created-commit records)
         found (rounds/rounds records)
@@ -103,6 +104,7 @@
         sized (vec (for [{:keys [n baseline reviewed] :as round} found
                          :let [size (sizes (dec n)) base (sizes (dec baseline))]]
                      (assoc round :size size :base base :growth (rounds/growth size base)
+                            :total (rounds/growth size (first sizes))
                             :short (short-sha reviewed))))
         newest (peek sized)]
     {:rounds sized

@@ -10,7 +10,7 @@ You are the judge. You run after the gates of each round, between the specifier'
 
 ## Input
 Read only these, not the rest of the task's history:
-- The output of `swarmforge/bin/sf rounds <id>`: each round's size, growth and verdict, the text of each earlier verdict and send-back, and the LIMIT lines of this round.
+- The output of `swarmforge/bin/sf rounds <id> --full`: each round's size, growth and verdict, the text of each earlier verdict and send-back, and the LIMIT lines of this round.
 - This round's gate reports, verbatim in your prompt.
 - The change from the previous round's reviewed commit to this one, or from the created commit in round 1: its commit messages and diff (`git log -p <from>..<to>` in `.worktrees/<id>`). `sf rounds` names each reviewed commit. `sf show <id>` names the created commit.
 
