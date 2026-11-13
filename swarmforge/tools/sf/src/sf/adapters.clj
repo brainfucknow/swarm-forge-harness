@@ -22,8 +22,9 @@
       (str "model: " model "\n"))))
 
 (def ^:private gate-tools
-  "The tools of a gate's and the judge's agent, by harness: reading, searching
-  and the shell for sf show, sf rounds and git, without the editing tools."
+  "The tools of a gate's and the spec-judge's agent, by harness: reading,
+  searching and the shell for sf show, sf spec-revisions and git, without the
+  editing tools."
   {:claude "Read, Grep, Glob, Bash"
    :copilot "[\"read\", \"search\", \"shell\"]"})
 
@@ -32,12 +33,12 @@
   {:stage {:template "adapter.md" :noun "role" :use "Use for a task whose stage is {{role}}."}
    :gate {:template "gate-adapter.md" :noun "gate"
           :use "Use at a task's specification gate, after the specifier's sf review and before the operator approves."}
-   :judge {:template "judge-adapter.md" :noun "judge"
-           :use "Use at a task's specification gate, after the gates of each round, for the round's verdict."}})
+   :spec-judge {:template "spec-judge-adapter.md" :noun "spec-judge"
+                :use "Use at a task's specification gate, after the gates of each spec revision, for the spec revision's spec verdict."}})
 
 (defn- kind-of [role]
   (cond (config/gate? role) :gate
-        (config/judge? role) :judge
+        (config/spec-judge? role) :spec-judge
         :else :stage))
 
 (defn- agent-files [role tier kind]
@@ -93,7 +94,7 @@
 
 (defn- legacy-ownership
   "The adapters on disk that sf adapters wrote for a role prompt, as a stage,
-  a gate or the judge, whatever roles.conf now says about the role."
+  a gate or the spec-judge, whatever roles.conf now says about the role."
   [root owned]
   (into {} (for [prompt (fs/glob (fs/path (config/conf-dir) "roles") "*.md")
                  :let [role (str/replace (fs/file-name prompt) #"\.md$" "")]

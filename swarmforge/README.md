@@ -79,14 +79,14 @@ Catalogue settings:
   `sf run` also stops when a gate records, commits or changes the task
   worktree. The shipped [falsifier](roles/falsifier.md) is a gate; delete its
   line to turn it off.
-- `judge` is the one read-only subagent that rules on each round of gate
-  findings: converged, continue, needs-operator or stuck. It is neither a
-  stage nor a gate and cannot be on a route. The orchestrator records its
-  verdict with `sf verdict`. Continue sends the specification back
-  automatically, within the caps in
-  [specification rounds](handoff-protocol.md#specification-rounds). The
-  operator still approves. The shipped [judge](roles/judge.md) turns the loop on. Delete its
-  line to turn it off.
+- `spec-judge` is the one read-only subagent that rules on each spec
+  revision's gate findings: converged, continue, needs-operator or stuck. It
+  is neither a stage nor a gate and cannot be on a route. The orchestrator
+  records its spec verdict with `sf spec-verdict`. Continue sends the
+  specification back automatically, within the caps in
+  [spec revisions](handoff-protocol.md#spec-revisions). The operator still
+  approves. The shipped [spec-judge](roles/spec-judge.md) turns the loop on.
+  Delete its line to turn it off.
 - `optional` excludes a role from fallback routes. Include it explicitly in a
   named route, `--route`, or `SWARMFORGE_ROUTE` to enable it; it can also use `audit`.
 
