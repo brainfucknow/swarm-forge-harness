@@ -13,7 +13,7 @@
             [sf.metrics :as metrics]
             [sf.options :as options]
             [sf.record :as record]
-            [sf.rounds :as rounds]
+            [sf.spec-revisions :as spec-revisions]
             [sf.shell :as shell]
             [sf.store :as store]
             [sf.verify :as verify]))
@@ -252,34 +252,37 @@
                     (fn [state] (refuse (flow/approval-refusal state)) {:text text :needs "none"}))]
     (println (str "REJECTED: " id " stays at stage:" (:stage rec)))))
 
-(defn verdict
-  "Records the judge's verdict on the newest round. Continue is an automatic
-  send-back that sf refuses when a limit holds."
-  [[id-arg verdict & args]]
-  (operator-only! "verdict")
+(defn spec-verdict
+  "Records the spec-judge's spec verdict on the newest spec revision. Continue
+  is an automatic send-back that sf refuses when a limit holds."
+  [[id-arg spec-verdict & args]]
+  (operator-only! "spec-verdict")
   (let [id (open-task id-arg)
         text (record/free-text args)
-        judge (config/judge)]
+        spec-judge (config/spec-judge)]
     (store/write! id
                   (fn [records]
-                    (let [state (last records)]
-                      (refuse (rounds/verdict-refusal {:state state :rounds (rounds/rounds records)
-                                                       :verdict verdict :text text :judge judge}))
-                      (if (= "continue" verdict)
-                        (do (refuse (first (:limits (history/gate-rounds records))))
-                            (flow/follow state "changes-requested" judge {:verdict verdict :text text :needs "none"}))
-                        (flow/follow state "verdict" judge {:verdict verdict :text text})))))
-    (println (str "VERDICT: " id " " verdict))))
+                    (let [state (last records)
+                          fields {:spec-verdict spec-verdict :text text}]
+                      (refuse (spec-revisions/spec-verdict-refusal
+                               (assoc fields :state state :spec-judge spec-judge
+                                      :revisions (spec-revisions/spec-revisions records))))
+                      (if (= "continue" spec-verdict)
+                        (do (refuse (first (:limits (history/spec-revisions records))))
+                            (flow/follow state "changes-requested" spec-judge (assoc fields :needs "none")))
+                        (flow/follow state "spec-verdict" spec-judge fields)))))
+    (println (str "SPEC-VERDICT: " id " " spec-verdict))))
 
-(defn rounds
-  "Prints the rounds of the task's specification gate, with the record texts
-  under --full. Reads only."
+(defn spec-revisions
+  "Prints the spec revisions of the task's specification gate, with the record
+  texts under --full. Reads only."
   [[id-arg & flags]]
   (when-not (contains? #{[] ["--full"]} (vec flags))
-    (shell/die "rounds takes <id> [--full]"))
+    (shell/die "spec-revisions takes <id> [--full]"))
   (let [{:keys [records]} (history/view (store/resolve-id id-arg))
-        {found :rounds limits :limits} (history/gate-rounds records)]
-    (run! println (rounds/report found (concat limits (rounds/notes found)) (= ["--full"] flags)))))
+        {found :spec-revisions limits :limits} (history/spec-revisions records)]
+    (run! println (spec-revisions/report found (concat limits (spec-revisions/notes found))
+                                         (= ["--full"] flags)))))
 
 (defn- finished-message [id state target]
   (record/message (assoc (flow/finished state target) :task id)))
