@@ -14,7 +14,16 @@ branches, each task on its own route through the role catalogue. Read
   `SwarmForge-*` trailer by hand.
 - Roles that need a decision stop and ask in chat. Do not guess.
 
-Do not test the text of prompts with an automated unit or acceptance test.
-Constitution articles, role prompts, and adapter bodies are not production
-behavior to pin with string checks. Test `sf` behavior instead
-(`test/sf_test.sh`).
+## Prose and tests
+
+- Follow the ban on tests of SwarmForge prompt text in the Verification
+  section of
+  [the engineering article](swarmforge/constitution/articles/engineering.md#verification).
+  Test `sf` behavior (`test/sf_test.sh`).
+- Write tracked documentation and SwarmForge prompt text in simplified
+  technical English: short sentences, active voice, common words, no
+  filler. Use the imperative for instructions. Change a generated
+  adapter through its template. This rule and the next do not apply to
+  code comments, commit messages, Lore trailers, or `sf` records.
+- Keep that text dry and to the point. Say each rule once, where it
+  belongs. Give no rationale or history that an agent cannot act on.
