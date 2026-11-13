@@ -266,6 +266,14 @@
         (must-in world (:repo world) "sf" "route" (id-of world name) route))
       world)]
 
+   [#"the wrappers for \"([^\"]+)\" are executable in the main checkout"
+    (fn [world tools]
+      (doseq [tool (str/split tools #" ")
+              :let [path (fs/path (:repo world) ".swarmforge" "bin" tool)]]
+        (write-file (:repo world) (str (fs/relativize (:repo world) path)) "#!/usr/bin/env bash\n")
+        (fs/set-posix-file-permissions path "rwxr-xr-x"))
+      world)]
+
    [#"the command environment sets \"([^\"]+)\" to \"([^\"]*)\""
     (fn [world name value] (assoc-in world [:env name] value))]
 

@@ -16,6 +16,13 @@
   | JavaScript/TypeScript | StrykerJS | oxlint or ESLint + Istanbul | jscpd | [`sf-js tools`](../../languages/javascript.md) |
   | Ruby | mutant (optional: needs the project's mutant usage) | RuboCop or flog + SimpleCov | jscpd or flay | [`sf-rb`](../../languages/ruby.md) |
 
+- A tool that is not installed is no reason to skip a check. Run `sf tool ensure <tool>`, then the check. A `Not-tested` trailer may skip a check only for one of these reasons:
+  - The check has no applicable target in the task.
+  - `project.md` declares the tool absent with its matching line.
+  - The language guide says the check is unsupported.
+  - The tool ran and failed. Quote the error.
+  - `sf tool ensure` failed. Quote the error, then `sf ask`, naming the tool in the question.
+- In any `Not-tested` trailer, for a check, a behavior or a bug, name a catalogue tool only for the last two reasons. Otherwise name the check or the behavior. `sf handoff` and `sf review` refuse a trailer that names a missing tool. Pass `--allow-missing-tool` only after an operator answer accepts the missing tool.
 - Stryker.NET and dotnet-coverage are pinned by the project's committed dotnet tool manifest instead of `swarmforge/tools.conf`; `sf-cs tools` (and `sf-fs`/`sf-vb tools` for dotnet-coverage) restores them, and `sf-cs mutate` and `coverage` refuse any other copy.
 - Install every listed tool with `sf tool ensure <tool>` and check it with `sf tool require <tool>`; `sf tool list` prints the catalogue. Cite the `@<ref>` that ends each `INSTALLED:` line of `sf tool ensure` for each tool you ran in your `Tested` trailers. Wrappers land in `.swarmforge/bin/` at the repository root, ignored by git and shared by every task worktree, so a tool install never writes outside the project. Run tools through those wrappers (`sf tool bin` prints the directory to put on PATH); they carry the argument guardrails below.
 

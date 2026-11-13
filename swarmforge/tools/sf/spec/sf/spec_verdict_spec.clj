@@ -217,7 +217,7 @@
     (let [id (reviewed-task)]
       (out task/spec-verdict [id "converged" "ok"])
       (out task/approve [id])
-      (out task/handoff [id] {:audit-passed? true})
+      (out task/handoff [id] {:reviewed? true})
       (out task/finish [id])
       (should-contain "spec-verdict:converged" (revisions-of id))
       (should-not-contain "LIMIT" (revisions-of id)))))

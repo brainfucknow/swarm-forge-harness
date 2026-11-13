@@ -15,7 +15,7 @@ You are the security reviewer, after the hardener and before QA.
 - Run the guide's dependency audit only when the task changes a dependency file that the guide lists.
 - Handle scanner findings like any other: reproduce, fix within scope, or `sf ask`. Record each dismissed finding with its reason.
 - Record each run as `Tested:` with its command and outcome. Changed files the scanner cannot read go in `Not-tested:`; they do not make it missing.
-- A scanner is missing when the language has no guide, the guide names none, or it cannot be installed or run here, a missing key included. If `project.md` has the matching absent line, record `Not-tested: <code scanner|dependency audit>: absent, <reason>` and continue. Otherwise `sf ask` and stop.
+- A scanner is missing when the language has no guide, the guide names none, or it cannot be installed or run here, a missing key included. If `project.md` has the matching absent line, record `Not-tested: <code scanner|dependency audit>: absent, <reason>` and continue. Do not name the tool in the reason ([missing-tool rule](../constitution/articles/engineering.md#startup-tools)). Otherwise `sf ask` and stop.
 
 ## Ownership
 - The hardener owns mutation testing and quality gates. Review relevant existing evidence without taking over those checks.

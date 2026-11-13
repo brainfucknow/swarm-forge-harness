@@ -95,6 +95,15 @@
        reverse
        record/role-commits))
 
+(defn trailers-between
+  "The trailer lines of each commit after from up to to, oldest first, without
+  the record commits."
+  [from to]
+  (->> (git/git "log" "--reverse" (str "--format=" log-format) (str from ".." to) "--")
+       read-commits
+       (map :trailers)
+       (remove (fn [trailers] (some #(str/starts-with? % "SwarmForge-Task:") trailers)))))
+
 (defn with-files
   "The records with the files of each review and handoff."
   [records]

@@ -314,6 +314,13 @@ sf handoff "$id6" >/dev/null || true
 git -C ".worktrees/$id6" commit -q --allow-empty -m "Second"
 set +e; sf handoff "$id6" >/dev/null; rc=$?; set -e
 assert_eq "a new commit restarts the audit" "$rc" "3"
+idm="$(sf new "Audited missing tool" -m "x" --route "coder,qa")"
+sf start "$idm" >/dev/null
+git -C ".worktrees/$idm" commit -q --allow-empty -m "Code" -m "Not-tested: DRY: dry4clj is not installed"
+set +e; out="$(sf handoff "$idm")"; rc=$?; set -e
+assert_eq "the missing-tool check runs before the audit gate" "$rc" "4"
+assert_match "the missing-tool refusal names the tool" "$out" "^MISSING_TOOL: $idm dry4clj "
+assert_eq "a missing-tool refusal leaves no audit state" "$(test -e ".swarmforge/audit/$idm/coder" && echo kept || echo none)" "none"
 sed -i 's/^specifier frontier subagent$/specifier frontier subagent audit/' swarmforge/roles.conf
 id7="$(sf new "Audited spec" -m "x" --route "specifier,coder")"
 sf start "$id7" >/dev/null
@@ -690,6 +697,8 @@ assert_eq "the truncated task keeps its readable records, finished last" "$(echo
 assert_eq "no commit of the truncated task is blank" "$(echo "$shallow" | jq '[.records[].commit] | index("")')" "null"
 cd "$hv"
 assert_match "help lists harvest" "$(sf --help)" "^  harvest  "
+assert_match "help lists --allow-missing-tool for handoff" "$(sf --help)" "^  handoff <id> \[--to ROLE\] \[--allow-missing-tool\] \[-m text\]"
+assert_match "help lists --allow-missing-tool for review" "$(sf --help)" "^  review <id> \[--allow-missing-tool\] \[-m text\]"
 cd "$repo"
 
 # spec-judge loop: sf spec-verdict and sf spec-revisions through the CLI

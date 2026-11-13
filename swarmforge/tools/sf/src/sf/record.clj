@@ -87,7 +87,8 @@
   [["SwarmForge-Task" :task] ["SwarmForge-Record" :record] ["SwarmForge-From" :from]
    ["SwarmForge-Stage" :stage] ["SwarmForge-Route" :route] ["SwarmForge-Needs" :needs]
    ["SwarmForge-Merged-Into" :merged-into] ["SwarmForge-Reviewed" :reviewed]
-   ["SwarmForge-Audit-Refusals" :audit-refusals] ["SwarmForge-Spec-Verdict" :spec-verdict]])
+   ["SwarmForge-Audit-Refusals" :audit-refusals] ["SwarmForge-Spec-Verdict" :spec-verdict]
+   ["SwarmForge-Missing-Tools" :missing-tools]])
 
 (def ^:private old-trailers
   "The trailers that records written before a rename hold, with the trailer
@@ -221,7 +222,7 @@
     {:records (keep-indexed #(when-not (dropped %1) %2) records)
      :omitted omitted}))
 
-(defn- fields [{:keys [task record from spec-verdict text stage route commit files merged-into audit-refusals]}]
+(defn- fields [{:keys [task record from spec-verdict text stage route commit files merged-into audit-refusals missing-tools]}]
   (concat
    [["type" record] ["from" from]]
    (when spec-verdict [["spec-verdict" spec-verdict]])
@@ -237,7 +238,9 @@
      "moved" [["path" text]]
      [])
    (when (and audit-refusals (#{"review" "handoff"} record))
-     [["audit-refusals" audit-refusals]])))
+     [["audit-refusals" audit-refusals]])
+   (when (and missing-tools (#{"review" "handoff"} record))
+     [["missing-tools" missing-tools]])))
 
 (defn block
   "The record as key: value lines; later lines of a value are indented by two spaces."

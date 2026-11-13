@@ -21,6 +21,7 @@ hand. `sf start` and `sf show` print the records;
 - Do not write long handoff summaries. One line. The commits are the content.
 - After `sf handoff`, stop and report its one-line output. Do not take another task unless your prompt tells you to.
 - If `sf handoff` or `sf review` prints `AUDIT_REQUIRED`, nothing was recorded. Do the listed self-review against the committed work, fix and commit what it finds, then run the command again. Running it again without the review defeats the gate and is a failure condition.
+- If `sf handoff` or `sf review` prints `MISSING_TOOL`, nothing was recorded. Follow the [missing-tool rule](engineering.md#startup-tools), commit, and run the command again. If it prints `ALLOW_REFUSED`, ask the operator about each listed tool with `sf ask` before passing `--allow-missing-tool` again.
 
 ## Questions
 - When blocked by ambiguity, contradiction, or a test/specification conflict, run `sf ask <id> "<question>"`, stop, and report the question verbatim. The task then needs the operator; nobody can hand it off until the operator answers with `sf answer`.
