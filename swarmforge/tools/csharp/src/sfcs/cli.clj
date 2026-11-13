@@ -290,6 +290,32 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
         (when (or (nil? changed) (changes/overlaps? file signature-line (:last-line method) changed))
           (assoc method :file file :signature-line signature-line))))))
 
+(defn- source-candidates
+  "Existing selected-language sources in the changed scope, or all Git-listed sources."
+  [root changed extension]
+  (let [paths (if changed
+                (keys changed)
+                (str/split (git/git ["ls-files" "-z" "--cached" "--others" "--exclude-standard"
+                                    "--full-name" "--" (str "*" extension)] :dir root) #"\u0000"))]
+    (into (sorted-set)
+          (filter #(and (str/ends-with? % extension) (fs/regular-file? (fs/path root %))))
+          paths)))
+
+(defn- declaration-path [root scope declared]
+  (let [file (fs/normalize (fs/absolutize (shell/in-dir declared)))
+        relative (str/replace (str (fs/relativize root file)) "\\" "/")]
+    (when-not (and (fs/regular-file? file)
+                   (.startsWith (fs/real-path file) (fs/real-path root))
+                   (contains? scope relative))
+      (throw (outcome/usage-error
+               (str "--no-executable-code " declared ": expected an existing in-scope source file inside " root))))
+    relative))
+
+(defn- no-code-exemptions
+  "Validated caller assertions, normalized and unique; they never remove scored methods."
+  [root scope declarations]
+  (into (sorted-set) (map (partial declaration-path root scope)) declarations))
+
 (defn- cmd-crap [{:keys [opts]}]
   (let [dir (or (:report opts) coverage-dir)
         files (cob/find-cobertura-files (shell/in-dir dir))]
@@ -297,8 +323,8 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
       (throw (outcome/usage-error (str "no coverage.cobertura.xml under " dir "; run " (:name *language*) " coverage first"))))
     (let [root (git/repo-root)
           changed (changed-for opts)
-          scope (measurement/candidates root changed (:extension *language*))
-          exempt (measurement/exemptions root scope (:no-executable-code opts))
+          scope (source-candidates root changed (:extension *language*))
+          exempt (no-code-exemptions root scope (:no-executable-code opts))
           read-source (memoize (partial source-lines root))
           methods (merge-methods files)
           missing (measurement/missing-files root scope exempt methods)
