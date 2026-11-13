@@ -9,7 +9,9 @@ Feature: sf task history
   start_brief.feature specifies; sf show prints them all. In a value of several lines, each later line is indented by two
   spaces. The commit of a review or handoff record is the role's commit that
   the record was made on; files lists what changed since the commit of the
-  previous created, review or handoff record, or "-".
+  previous created, review or handoff record, or "-". A merge commit in that
+  range adds no files: files lists only what the task branch's own commits
+  changed.
 
   Records and LORE: lines come from the first-parent history of the task
   branch only, so the commits that a merge of the base branch brings in are
@@ -123,3 +125,20 @@ Feature: sf task history
     When I run "sf show $A"
     Then the exit status is 1
     And the error output has the line "sf: no task '$A'"
+
+  # sf task history 8
+  Scenario: sf task history 8: a merge of the base branch adds no files: entries
+    Given task "A" titled "Add login" was started on route "specifier"
+    And task "B" titled "Fix bug" was started on route "coder"
+    And role "specifier" committed the file "features/a.feature" with "Spec" in the worktree of task "A" as C1
+    And I ran "sf review $A"
+    And I ran "sf approve $A"
+    And task "A" was finished
+    And role "coder" committed the file "src/b.clj" with "Work" in the worktree of task "B" as C1
+    And I ran "git merge --no-edit main" in the worktree of task "B"
+    And role "coder" committed "Empty" in the worktree of task "B" as C2
+    And I ran "sf handoff $B"
+    When I run "sf show $B"
+    Then the exit status is 0
+    And the output has the lines "commit: C2\nfiles: src/b.clj"
+    And the output has no line containing "features/a.feature"

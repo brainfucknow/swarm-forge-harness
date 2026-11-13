@@ -96,10 +96,15 @@
        record/role-commits))
 
 (defn with-files
-  "The records with the files of each review and handoff."
+  "The records with the files of each review and handoff: the files that the
+  range's own first-parent non-merge commits changed, so a merge of the base
+  branch in the range adds nothing."
   [records]
   (record/with-files records (fn [from to]
-                               (when from (shell/lines (git/git "diff" "--name-only" from to))))))
+                               (when from
+                                 (let [changed (shell/lines (git/git "diff" "--name-only" from to))
+                                       own (set (shell/lines (git/git "log" "--first-parent" "--no-merges" "--name-only" "--format=" (str from ".." to))))]
+                                   (filter own changed))))))
 
 (defn- show-file
   "The text of path at rev."
