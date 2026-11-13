@@ -52,6 +52,11 @@ assert_match "init reports the routes" "$out" "routes: feature bugfix refactor h
 assert_eq "init is idempotent" "$(sf init | head -n 1)" "identity: tester <tester@example.com>"
 assert_eq "init writes no git-bug data" "$(git for-each-ref refs/bugs refs/identities)" ""
 
+sf adapters >/dev/null
+assert_eq "adapters name the falsifier agent" "$(sed -n 's/^name = "\(.*\)"$/\1/p' .codex/agents/peter-falsifier.toml)" "peter-falsifier"
+assert_eq "adapters name the security reviewer agent" "$(sed -n 's/^name = "\(.*\)"$/\1/p' .codex/agents/roger-security-reviewer.toml)" "roger-security-reviewer"
+assert_eq "adapters name the spec judge agent" "$(sed -n 's/^name = "\(.*\)"$/\1/p' .codex/agents/peter-spec-judge.toml)" "peter-spec-judge"
+
 # new
 id="$(sf new "Add login" -m "Users can log in with email and password.")"
 assert_match "new prints a slug and hex id" "$id" '^add-login-[0-9a-f]{7}$'
@@ -349,22 +354,51 @@ rm swarmforge/routes.conf
 # adapters
 printf 'specifier frontier session\ncoder frontier subagent\ncleaner fast subagent\n' > swarmforge/roles.conf
 out="$(sf adapters)"
-assert_eq "adapters only for subagent roles" "$(ls .claude/agents | paste -sd ' ' -)" "cleaner.md coder.md"
-assert_eq "adapters for copilot" "$(ls .github/agents | paste -sd ' ' -)" "cleaner.agent.md coder.agent.md"
-assert_eq "adapters for codex" "$(ls .codex/agents | paste -sd ' ' -)" "cleaner.toml coder.toml"
-assert_eq "adapters for kilo" "$(ls .kilo/agent | paste -sd ' ' -)" "cleaner.md coder.md"
-assert_eq "adapters for vibe" "$(ls .vibe/agents | paste -sd ' ' -)" "cleaner.toml coder.toml"
-assert_match "claude adapter uses the tier model" "$(cat .claude/agents/cleaner.md)" "^model: sonnet$"
-assert_match "frontier adapter inherits the session model" "$(cat .claude/agents/coder.md)" "^model: inherit$"
+assert_eq "adapters only for subagent roles" "$(ls .claude/agents | paste -sd ' ' -)" "bob-cleaner.md bob-coder.md"
+assert_eq "adapters for copilot" "$(ls .github/agents | paste -sd ' ' -)" "bob-cleaner.agent.md bob-coder.agent.md"
+assert_eq "adapters for codex" "$(ls .codex/agents | paste -sd ' ' -)" "bob-cleaner.toml bob-coder.toml"
+assert_eq "adapters for kilo" "$(ls .kilo/agent | paste -sd ' ' -)" "bob-cleaner.md bob-coder.md"
+assert_eq "adapters for vibe" "$(ls .vibe/agents | paste -sd ' ' -)" "bob-cleaner.toml bob-coder.toml"
+assert_match "claude adapter uses the tier model" "$(cat .claude/agents/bob-cleaner.md)" "^model: sonnet$"
+assert_match "frontier adapter inherits the session model" "$(cat .claude/agents/bob-coder.md)" "^model: inherit$"
 assert_eq "copilot adapter uses the tier model" \
-  "$(sed -n 's/^model: //p' .github/agents/cleaner.agent.md)" "$(awk '$1 == "fast" {print $4}' swarmforge/tiers.conf)"
-assert_match "codex adapter uses the tier effort" "$(cat .codex/agents/cleaner.toml)" '^model_reasoning_effort = "low"$'
-assert_match "kilo adapter is a subagent" "$(cat .kilo/agent/cleaner.md)" "^mode: subagent$"
+  "$(sed -n 's/^model: //p' .github/agents/bob-cleaner.agent.md)" "$(awk '$1 == "fast" {print $4}' swarmforge/tiers.conf)"
+assert_match "codex adapter uses the tier effort" "$(cat .codex/agents/bob-cleaner.toml)" '^model_reasoning_effort = "low"$'
+assert_match "kilo adapter is a subagent" "$(cat .kilo/agent/bob-cleaner.md)" "^mode: subagent$"
 assert_eq "kilo adapter inherits the session model" \
-  "$(sed -n 's/^model: //p' .kilo/agent/cleaner.md)" ""
-assert_match "vibe adapter is a subagent" "$(cat .vibe/agents/cleaner.toml)" '^agent_type = "subagent"$'
+  "$(sed -n 's/^model: //p' .kilo/agent/bob-cleaner.md)" ""
+assert_match "vibe adapter is a subagent" "$(cat .vibe/agents/bob-cleaner.toml)" '^agent_type = "subagent"$'
 assert_eq "vibe adapter uses the tier model" \
-  "$(sed -n 's/^active_model = \"//p' .vibe/agents/cleaner.toml | sed 's/\"$//')" "$(awk '$1 == "fast" {print $6}' swarmforge/tiers.conf)"
+  "$(sed -n 's/^active_model = \"//p' .vibe/agents/bob-cleaner.toml | sed 's/\"$//')" "$(awk '$1 == "fast" {print $6}' swarmforge/tiers.conf)"
+
+# Migrate adapters written before agent names gained prefixes.
+for ownership in recorded absent; do
+  legacy_state="$scratch/legacy-adapters.edn"
+  printf '{' > "$legacy_state"
+  for dir in .claude/agents .github/agents .codex/agents .kilo/agent .vibe/agents; do
+    for path in "$dir"/bob-*; do
+      old_path="${path/bob-/}"
+      sed -e 's/^name: bob-/name: /' -e 's/^name = "bob-/name = "/' \
+          -e 's/^display_name = "Bob /display_name = "/' "$path" > "$old_path"
+      rm "$path"
+      hash="$(sha256sum "$old_path" | cut -d ' ' -f 1)"
+      printf '"%s" "%s" ' "$old_path" "$hash" >> "$legacy_state"
+    done
+  done
+  printf '}' >> "$legacy_state"
+  if [ "$ownership" = recorded ]; then
+    cp "$legacy_state" .swarmforge/adapters.edn
+  else
+    rm .swarmforge/adapters.edn
+  fi
+  sf adapters >/dev/null
+  assert_eq "legacy $ownership adapters move to prefixed paths" \
+    "$(ls .codex/agents | paste -sd ' ' -)" "bob-cleaner.toml bob-coder.toml"
+  before="$(git hash-object .claude/agents/* .github/agents/* .codex/agents/* .kilo/agent/* .vibe/agents/* .swarmforge/adapters.edn)"
+  sf adapters >/dev/null
+  assert_eq "legacy $ownership migration is idempotent" \
+    "$(git hash-object .claude/agents/* .github/agents/* .codex/agents/* .kilo/agent/* .vibe/agents/* .swarmforge/adapters.edn)" "$before"
+done
 
 # committed adapters are current
 work="$(mktemp -d "$scratch/adapters.XXXX")"
@@ -435,10 +469,10 @@ cp -R .claude .codex .github "$wt/"
 sed -i 's/^cleaner   fast /cleaner   strong /' "$wt/swarmforge/roles.conf"
 sed -i '3s/.*/Cleans up after the coder./' "$wt/swarmforge/roles/cleaner.md"
 (cd "$wt" && sf adapters >/dev/null) && pass "adapters in a worktree take over main's adapters" || fail "adapters in a worktree"
-assert_match "adapters writes the worktree's agents" "$(cat "$wt/.claude/agents/cleaner.md")" "^model: opus$"
-assert_match "adapters leaves main's agents" "$(cat .claude/agents/cleaner.md)" "^model: sonnet$"
+assert_match "adapters writes the worktree's agents" "$(cat "$wt/.claude/agents/bob-cleaner.md")" "^model: opus$"
+assert_match "adapters leaves main's agents" "$(cat .claude/agents/bob-cleaner.md)" "^model: sonnet$"
 sf adapters >/dev/null && pass "adapters in main still succeeds" || fail "adapters in main after a worktree run"
-assert_match "main's agents follow main's config" "$(cat .claude/agents/cleaner.md)" "^model: sonnet$"
+assert_match "main's agents follow main's config" "$(cat .claude/agents/bob-cleaner.md)" "^model: sonnet$"
 
 # Tasks live in their record commits. Finished state is the finished merge in
 # HEAD's history, any parent included; only local swarm/* branches are read.

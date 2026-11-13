@@ -52,16 +52,16 @@ Feature: sf adapters preserve project agents
 
     Examples:
       | command     | path                                | contents        |
-      | sf adapters | .claude/agents/specialist.md         | project owner   |
-      | sf adapters | .github/agents/specialist.agent.md   | private reviewer |
-      | sf adapters | .codex/agents/specialist.toml        | local specialist |
-      | sf adapters | .kilo/agent/specialist.md            | project owner   |
-      | sf adapters | .vibe/agents/specialist.toml         | local specialist |
-      | install.sh  | .claude/agents/specifier.md          | project owner   |
-      | install.sh  | .github/agents/specifier.agent.md    | private reviewer |
-      | install.sh  | .codex/agents/specifier.toml         | local specialist |
-      | install.sh  | .kilo/agent/specifier.md             | project owner   |
-      | install.sh  | .vibe/agents/specifier.toml          | project owner   |
+      | sf adapters | .claude/agents/bob-specialist.md         | project owner   |
+      | sf adapters | .github/agents/bob-specialist.agent.md   | private reviewer |
+      | sf adapters | .codex/agents/bob-specialist.toml        | local specialist |
+      | sf adapters | .kilo/agent/bob-specialist.md            | project owner   |
+      | sf adapters | .vibe/agents/bob-specialist.toml         | local specialist |
+      | install.sh  | .claude/agents/bob-specifier.md          | project owner   |
+      | install.sh  | .github/agents/bob-specifier.agent.md    | private reviewer |
+      | install.sh  | .codex/agents/bob-specifier.toml         | local specialist |
+      | install.sh  | .kilo/agent/bob-specifier.md             | project owner   |
+      | install.sh  | .vibe/agents/bob-specifier.toml          | project owner   |
 
   # sf adapters preserve project agents 4
   Scenario: sf adapters preserve project agents 4: existing generated adapters remain updatable without local ownership state

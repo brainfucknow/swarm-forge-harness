@@ -74,7 +74,7 @@
     (write-file! *dir* "swarmforge/routes.conf" "feature coder\n")
     (should= 0 (:exit (installed-sf "adapters")))
     (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
-    (let [paths (concat protected [".codex/agents/coder.toml" ".github/agents/coder.agent.md"
+    (let [paths (concat protected [".codex/agents/bob-coder.toml" ".github/agents/bob-coder.agent.md"
                                   "AGENTS.md" "CLAUDE.md" ".github/copilot-instructions.md"
                                   ".gitignore" "swarmforge/.gitignore"])
           before (contents paths)]
