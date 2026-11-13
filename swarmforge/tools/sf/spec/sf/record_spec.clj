@@ -138,7 +138,7 @@
                 (record/parse {:sha "s" :parents ["p"] :message "sf changes-requested: t-1\n" :trailers trailers}))))))
 
 (describe "same-commit?"
-  (it "matches a full sha and its abbreviation either way spec revision"
+  (it "matches a full sha and its abbreviation either way round"
     (should (record/same-commit? "0123456789abcdef" "0123456"))
     (should (record/same-commit? "0123456" "0123456789abcdef"))
     (should (record/same-commit? "0123456" "0123456")))
