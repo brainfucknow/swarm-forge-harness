@@ -14,7 +14,7 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 3. Dispatch the first role of the route (`sf stage <id>`).
 
 ## Dispatching A Role
-- Delegate to the agent named after the role, for every role in `swarmforge/roles.conf`. Each harness defines them: `.claude/agents/<role>.md`, `.github/agents/<role>.agent.md`, `.codex/agents/<role>.toml`, `.kilo/agent/<role>.md`, `.vibe/agents/<role>.toml`. The agent file carries the role's model tier; do not override it.
+- Map each role in `swarmforge/roles.conf` to its agent name: `falsifier` uses `peter-falsifier`, `spec-judge` uses `peter-spec-judge`, `security-reviewer` uses `roger-security-reviewer`, and every other role uses `bob-<role>`. Delegate to that agent. Each harness defines them: `.claude/agents/<agent>.md`, `.github/agents/<agent>.agent.md`, `.codex/agents/<agent>.toml`, `.kilo/agent/<agent>.md`, `.vibe/agents/<agent>.toml`. The agent file carries the role's model tier; do not override it.
 - The whole prompt is: `Task <id>. Run: swarmforge/bin/sf start <id>` plus anything the operator said since the last dispatch that the role needs.
 - Wait for it to return. Then run `sf stage <id>` and `sf ls --needs`.
 - If the stage advanced, dispatch the new stage's role. Do not re-dispatch a role that just finished.
@@ -24,9 +24,9 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 - If the harness cannot run subagents, run `sf dispatch <role> <id>` instead; it starts a headless backend session with the same prompt. `sf run <id>` repeats that until the task is done or blocked.
 
 ## Specification Gate
-- When the specifier returns after `sf review`, run the gates first: for each role `sf gates` prints, delegate to the agent named after it with the prompt `Task <id>. Run: swarmforge/bin/sf show <id>` and wait for its report. Without subagents, run `sf dispatch <gate> <id>`. A gate records nothing; if it committed or recorded anything, tell the operator. Skip the gates for a task or the session when the operator says so.
+- When the specifier returns after `sf review`, run the gates first: for each role `sf gates` prints, delegate to its mapped agent with the prompt `Task <id>. Run: swarmforge/bin/sf show <id>` and wait for its report. Without subagents, run `sf dispatch <gate> <id>`. A gate records nothing; if it committed or recorded anything, tell the operator. Skip the gates for a task or the session when the operator says so.
 - The spec-judge loop runs when `swarmforge/roles.conf` has a spec-judge (a row flagged `spec-judge`), the harness runs subagents, and the operator has not said to skip the gates. Otherwise skip the spec-judge: the gate has no automatic send-back and no spec verdict. After the gates of each spec revision:
-  - Delegate to the spec-judge with the prompt `Task <id>. Run: swarmforge/bin/sf spec-revisions <id> --full` followed by this spec revision's gate reports verbatim. Wait for its `SPEC-VERDICT:` and `REASON:`.
+  - Delegate to the mapped spec-judge agent with the prompt `Task <id>. Run: swarmforge/bin/sf spec-revisions <id> --full` followed by this spec revision's gate reports verbatim. Wait for its `SPEC-VERDICT:` and `REASON:`.
   - Record it: `sf spec-verdict <id> <spec-verdict> "<the spec-judge's reason, then every finding of this spec revision's gate reports verbatim>"`. For continue, end the text with `Sent back: the CRITICAL and HIGH findings.`
   - On continue, after `sf spec-verdict` records it, tell the operator in one line, show the output of `sf spec-revisions <id>`, verbatim, and resume the specifier without stopping. When it returns after `sf review`, run the gates and the spec-judge again.
   - When sf refuses continue, record `stuck` instead. Put sf's message before that same text.

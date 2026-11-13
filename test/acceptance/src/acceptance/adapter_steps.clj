@@ -38,7 +38,7 @@
 
 (defn- require-role-files [world role present?]
   (doseq [[dir suffix] (map vector dirs suffixes)]
-    (let [path (fs/path (:repo world) dir (str role suffix))]
+    (let [path (fs/path (:repo world) dir (str "bob-" role suffix))]
       (check (= present? (fs/exists? path)) (str "unexpected adapter existence: " path))))
   world)
 
@@ -91,7 +91,7 @@
         (doseq [[dir suffix metadata] (map vector dirs suffixes
                                           [(str "model: " claude) (str "model: " copilot)
                                            (str "model_reasoning_effort = \"" codex "\"") kilo-metadata vibe-metadata])]
-          (check (str/includes? (slurp (str (fs/path (:repo world) dir (str role suffix)))) metadata)
+          (check (str/includes? (slurp (str (fs/path (:repo world) dir (str "bob-" role suffix)))) metadata)
                  (str "wrong configured model in " dir))))
       world)]
 
@@ -110,7 +110,7 @@
 
    [#"an unrelated project agent occupies the new role target \"([^\"]+)\" containing \"([^\"]*)\""
     (fn [world path text]
-      (if (str/includes? path "/specialist.")
+      (if (str/includes? path "/bob-specialist.")
         (do
           (spit (str (fs/path (:repo world) "swarmforge/roles.conf")) "specialist fast subagent\n" :append true)
           (write-file! world "swarmforge/roles/specialist.md" "# specialist\n\nProject specialist.\n"))

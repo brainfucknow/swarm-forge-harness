@@ -70,11 +70,14 @@ and sharing rules.
 
 | Harness | Session entry | Subagent roles | Model tier |
 |---|---|---|---|
-| Kilo | `/swarm` from `.kilo/command/` | `.kilo/agent/<role>.md` | `model:` `provider/model`, or the session model when `inherit` |
-| Mistral Vibe | `/swarm` from `.agents/skills/swarm/` | `.vibe/agents/<role>.toml` | `active_model` alias, or the session model when `inherit` |
-| Claude Code | `/swarm` from `.claude/skills/swarm/` | `.claude/agents/<role>.md` | `model: opus` or `sonnet` |
-| Codex CLI | `$swarm` from `.agents/skills/swarm/` | `.codex/agents/<role>.toml` | `model_reasoning_effort` high / medium / low |
-| Copilot CLI | `/swarm` from `.agents/skills/swarm/` | `.github/agents/<role>.agent.md` | `model: gpt-6.1-sol` or `gpt-6.1-terra` |
+| Kilo | `/swarm` from `.kilo/command/` | `.kilo/agent/<agent>.md` | `model:` `provider/model`, or the session model when `inherit` |
+| Mistral Vibe | `/swarm` from `.agents/skills/swarm/` | `.vibe/agents/<agent>.toml` | `active_model` alias, or the session model when `inherit` |
+| Claude Code | `/swarm` from `.claude/skills/swarm/` | `.claude/agents/<agent>.md` | `model: opus` or `sonnet` |
+| Codex CLI | `$swarm` from `.agents/skills/swarm/` | `.codex/agents/<agent>.toml` | `model_reasoning_effort` high / medium / low |
+| Copilot CLI | `/swarm` from `.agents/skills/swarm/` | `.github/agents/<agent>.agent.md` | `model: gpt-6.1-sol` or `gpt-6.1-terra` |
+
+Use the agent names in the [dispatch mapping](swarmforge/roles/orchestrator.md#dispatching-a-role).
+Keep role names in routes and `sf` commands.
 
 `sf adapters` generates agent files from `swarmforge/roles.conf` and
 `swarmforge/tiers.conf`. Each agent reads the shared constitution and its role

@@ -6,14 +6,14 @@
             [clojure.string :as str]
             [sf.repo-support :refer [*dir* with-repo write-conf! captured git]]))
 
-(def paths [".claude/agents/coder.md" ".github/agents/coder.agent.md" ".codex/agents/coder.toml" ".kilo/agent/coder.md" ".vibe/agents/coder.toml"])
+(def paths [".claude/agents/bob-coder.md" ".github/agents/bob-coder.agent.md" ".codex/agents/bob-coder.toml" ".kilo/agent/bob-coder.md" ".vibe/agents/bob-coder.toml"])
 
 (defn write-agent [path text]
   (let [file (fs/path *dir* path)]
     (fs/create-dirs (fs/parent file))
     (spit (str file) text)))
 
-(def gate-paths [".claude/agents/falsifier.md" ".github/agents/falsifier.agent.md" ".codex/agents/falsifier.toml" ".kilo/agent/falsifier.md" ".vibe/agents/falsifier.toml"])
+(def gate-paths [".claude/agents/peter-falsifier.md" ".github/agents/peter-falsifier.agent.md" ".codex/agents/peter-falsifier.toml" ".kilo/agent/peter-falsifier.md" ".vibe/agents/peter-falsifier.toml"])
 
 (defn write-gate!
   "A catalogue with the falsifier gate and its role prompt."
@@ -54,11 +54,11 @@
     (write-conf! *dir* "routes.conf" "feature coder\n")
     (write-agent "swarmforge/roles/security-reviewer.md" "# Fixture\n\nReview fixture.\n")
     (adapters/adapters [])
-    (doseq [[path model] [[".claude/agents/security-reviewer.md" "model: opus"]
-                          [".github/agents/security-reviewer.agent.md" "model: gpt-5"]
-                          [".codex/agents/security-reviewer.toml" "model_reasoning_effort = \"medium\""]
-                          [".kilo/agent/security-reviewer.md" "model: kilo/strong-model"]
-                          [".vibe/agents/security-reviewer.toml" "active_model = \"vibe/strong-model\""]]]
+    (doseq [[path model] [[".claude/agents/roger-security-reviewer.md" "model: opus"]
+                          [".github/agents/roger-security-reviewer.agent.md" "model: gpt-5"]
+                          [".codex/agents/roger-security-reviewer.toml" "model_reasoning_effort = \"medium\""]
+                          [".kilo/agent/roger-security-reviewer.md" "model: kilo/strong-model"]
+                          [".vibe/agents/roger-security-reviewer.toml" "active_model = \"vibe/strong-model\""]]]
       (should-contain model (slurp (str (fs/path *dir* path)))))
     (let [before (snapshot)]
       (adapters/adapters [])
@@ -84,18 +84,18 @@
     (write-gate!)
     (adapters/adapters [])
     (let [read #(slurp (str (fs/path *dir* %)))]
-      (should-contain "\ntools: Read, Grep, Glob, Bash\n" (read ".claude/agents/falsifier.md"))
-      (should-contain "\ntools: [\"read\", \"search\", \"shell\"]\n" (read ".github/agents/falsifier.agent.md"))
-      (should-contain "enabled_tools = [\"read_file\", \"grep\", \"glob\", \"bash\"]" (read ".vibe/agents/falsifier.toml"))
-      (should-not-contain "tools:" (read ".claude/agents/coder.md"))
-      (should-not-contain "enabled_tools" (read ".vibe/agents/coder.toml"))
-      (should-contain "\ntools: [\"*\"]\n" (read ".github/agents/coder.agent.md"))))
+      (should-contain "\ntools: Read, Grep, Glob, Bash\n" (read ".claude/agents/peter-falsifier.md"))
+      (should-contain "\ntools: [\"read\", \"search\", \"shell\"]\n" (read ".github/agents/peter-falsifier.agent.md"))
+      (should-contain "enabled_tools = [\"read_file\", \"grep\", \"glob\", \"bash\"]" (read ".vibe/agents/peter-falsifier.toml"))
+      (should-not-contain "tools:" (read ".claude/agents/bob-coder.md"))
+      (should-not-contain "enabled_tools" (read ".vibe/agents/bob-coder.toml"))
+      (should-contain "\ntools: [\"*\"]\n" (read ".github/agents/bob-coder.agent.md"))))
 
   (it "escapes TOML special characters in the Codex and Vibe descriptions"
     (write-agent "swarmforge/roles/coder.md" "# coder\n\nReviews the \"safe\" mode and C:\\ paths.\n")
     (adapters/adapters [])
-    (let [vibe (slurp (str (fs/path *dir* ".vibe/agents/coder.toml")))
-          codex (slurp (str (fs/path *dir* ".codex/agents/coder.toml")))]
+    (let [vibe (slurp (str (fs/path *dir* ".vibe/agents/bob-coder.toml")))
+          codex (slurp (str (fs/path *dir* ".codex/agents/bob-coder.toml")))]
       (should-contain "\\\"safe\\\"" vibe)
       (should-contain "C:\\\\ paths" vibe)
       (should-contain "\\\"safe\\\"" codex)
@@ -109,22 +109,22 @@
     (should= 0 (:status (captured #(adapters/adapters []))))
     (let [read #(slurp (str (fs/path *dir* %)))
           body (str/replace (shell/template "spec-judge-adapter.md") "{{role}}" "spec-judge")]
-      (doseq [path [".claude/agents/spec-judge.md" ".github/agents/spec-judge.agent.md" ".codex/agents/spec-judge.toml" ".kilo/agent/spec-judge.md" ".vibe/agents/spec-judge.toml"]]
+      (doseq [path [".claude/agents/peter-spec-judge.md" ".github/agents/peter-spec-judge.agent.md" ".codex/agents/peter-spec-judge.toml" ".kilo/agent/peter-spec-judge.md" ".vibe/agents/peter-spec-judge.toml"]]
         (should-contain body (read path))
         (should-contain "Rules on a spec revision." (read path)))
-      (should-contain "\ntools: Read, Grep, Glob, Bash\n" (read ".claude/agents/spec-judge.md"))
-      (should-contain "\ntools: [\"read\", \"search\", \"shell\"]\n" (read ".github/agents/spec-judge.agent.md"))
-      (should-contain "enabled_tools = [\"read_file\", \"grep\", \"glob\", \"bash\"]" (read ".vibe/agents/spec-judge.toml"))
-      (should-contain "model: opus" (read ".claude/agents/spec-judge.md"))
-      (should-contain "active_model = \"vibe/strong-model\"" (read ".vibe/agents/spec-judge.toml"))
-      (should-contain "\ndescription: SwarmForge spec-judge spec-judge. " (read ".claude/agents/spec-judge.md"))))
+      (should-contain "\ntools: Read, Grep, Glob, Bash\n" (read ".claude/agents/peter-spec-judge.md"))
+      (should-contain "\ntools: [\"read\", \"search\", \"shell\"]\n" (read ".github/agents/peter-spec-judge.agent.md"))
+      (should-contain "enabled_tools = [\"read_file\", \"grep\", \"glob\", \"bash\"]" (read ".vibe/agents/peter-spec-judge.toml"))
+      (should-contain "model: opus" (read ".claude/agents/peter-spec-judge.md"))
+      (should-contain "active_model = \"vibe/strong-model\"" (read ".vibe/agents/peter-spec-judge.toml"))
+      (should-contain "\ndescription: SwarmForge spec-judge spec-judge. " (read ".claude/agents/peter-spec-judge.md"))))
 
   (it "replaces gate adapters that an older sf wrote with all tools, without ownership state"
     (write-gate!)
     (adapters/adapters [])
     (let [before (snapshot)
-          claude (fs/path *dir* ".claude/agents/falsifier.md")
-          copilot (fs/path *dir* ".github/agents/falsifier.agent.md")]
+          claude (fs/path *dir* ".claude/agents/peter-falsifier.md")
+          copilot (fs/path *dir* ".github/agents/peter-falsifier.agent.md")]
       (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
       (spit (str claude) (str/replace (slurp (str claude)) "tools: Read, Grep, Glob, Bash\n" ""))
       (spit (str copilot) (str/replace (slurp (str copilot)) "tools: [\"read\", \"search\", \"shell\"]" "tools: [\"*\"]"))
@@ -145,19 +145,19 @@
     (write-conf! *dir* "tiers.conf" "frontier inherit high gpt inherit\nstrong opus medium gpt-5 inherit\nfast sonnet low gpt-mini inherit\n")
     (adapters/adapters [])
     (doseq [role ["specifier" "coder" "cleaner"]]
-      (let [text (slurp (str (fs/path *dir* ".kilo/agent" (str role ".md"))))]
+      (let [text (slurp (str (fs/path *dir* ".kilo/agent" (str "bob-" role ".md"))))]
         (should-contain "mode: subagent" text)
         (should-not-contain "model:" text))
-      (let [text (slurp (str (fs/path *dir* ".vibe/agents" (str role ".toml"))))]
+      (let [text (slurp (str (fs/path *dir* ".vibe/agents" (str "bob-" role ".toml"))))]
         (should-contain "agent_type = \"subagent\"" text)
         (should-not-contain "active_model" text))))
 
   (it "refuses an unowned collision before writing any harness"
-    (write-agent ".codex/agents/coder.toml" "project-owned")
+    (write-agent ".codex/agents/bob-coder.toml" "project-owned")
     (let [before (snapshot)
           {:keys [status err]} (captured #(adapters/adapters []))]
       (should= 1 status)
-      (should-contain ".codex/agents/coder.toml" err)
+      (should-contain ".codex/agents/bob-coder.toml" err)
       (should= before (snapshot))))
 
   (it "updates managed adapters and removes only obsolete managed roles"
@@ -165,7 +165,7 @@
     (write-agent ".codex/agents/specialist.toml" "custom")
     (write-conf! *dir* "roles.conf" "specifier frontier session\ncoder fast subagent\ncleaner fast subagent\n")
     (adapters/adapters [])
-    (should-not (fs/exists? (fs/path *dir* ".claude/agents/specifier.md")))
+    (should-not (fs/exists? (fs/path *dir* ".claude/agents/bob-specifier.md")))
     (should-contain "model: sonnet" (slurp (str (fs/path *dir* (first paths)))))
     (should= "custom" (slurp (str (fs/path *dir* ".codex/agents/specialist.toml"))))
     (let [before (snapshot)]
@@ -174,7 +174,7 @@
 
   (it "refuses locally edited managed adapters without partially regenerating"
     (adapters/adapters [])
-    (write-agent ".codex/agents/coder.toml" "edited project instructions")
+    (write-agent ".codex/agents/bob-coder.toml" "edited project instructions")
     (write-conf! *dir* "roles.conf" "specifier frontier subagent\ncoder fast subagent\ncleaner fast subagent\n")
     (let [before (snapshot)]
       (should= 1 (:status (captured #(adapters/adapters []))))
@@ -185,14 +185,14 @@
     (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
     (write-conf! *dir* "roles.conf" "specifier frontier session\ncoder fast subagent\ncleaner fast subagent\n")
     (should= 0 (:status (captured #(adapters/adapters []))))
-    (should-not (fs/exists? (fs/path *dir* ".codex/agents/specifier.toml")))
+    (should-not (fs/exists? (fs/path *dir* ".codex/agents/bob-specifier.toml")))
     (should-contain "model_reasoning_effort = \"low\"" (slurp (str (fs/path *dir* (nth paths 2)))))
     (should-contain "agent_type = \"subagent\"" (slurp (str (fs/path *dir* (nth paths 4))))))
 
   (it "refuses a Kilo adapter whose mode was edited when ownership state is absent"
     (adapters/adapters [])
     (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
-    (let [path ".kilo/agent/coder.md"
+    (let [path ".kilo/agent/bob-coder.md"
           file (fs/path *dir* path)
           edited (str/replace (slurp (str file)) "mode: subagent" "mode: primary")]
       (write-agent path edited)
@@ -302,12 +302,12 @@
     (should-not (fs/exists? (fs/path *dir* ".claude/agents"))))
 
   (it "preserves a directory occupying an adapter target"
-    (fs/create-dirs (fs/path *dir* ".claude/agents/coder.md"))
-    (write-agent ".claude/agents/coder.md/project.txt" "project files")
+    (fs/create-dirs (fs/path *dir* ".claude/agents/bob-coder.md"))
+    (write-agent ".claude/agents/bob-coder.md/project.txt" "project files")
     (let [{:keys [status err]} (captured #(adapters/adapters []))]
       (should= 1 status)
-      (should-contain ".claude/agents/coder.md" err)
-      (should= "project files" (slurp (str (fs/path *dir* ".claude/agents/coder.md/project.txt"))))
+      (should-contain ".claude/agents/bob-coder.md" err)
+      (should= "project files" (slurp (str (fs/path *dir* ".claude/agents/bob-coder.md/project.txt"))))
       (should-not (fs/exists? (fs/path *dir* ".github/agents")))))
 
   (it "refuses a conflicting parent directory path before generating adapters"
@@ -336,7 +336,7 @@
 
   (it "refuses modified obsolete adapters rather than removing project edits"
     (adapters/adapters [])
-    (write-agent ".codex/agents/coder.toml" "edited")
+    (write-agent ".codex/agents/bob-coder.toml" "edited")
     (write-conf! *dir* "roles.conf" "specifier frontier subagent\ncoder strong session\ncleaner fast subagent\n")
     (let [before (snapshot)]
       (should= 1 (:status (captured #(adapters/adapters []))))
