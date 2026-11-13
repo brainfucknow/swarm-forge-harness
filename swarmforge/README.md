@@ -53,7 +53,7 @@ operator.
 
 After editing `roles.conf`, `routes.conf`, or `tiers.conf`, run `sf adapters`
 to regenerate the agent files under `.claude/agents/`, `.codex/agents/`,
-`.github/agents/`, and `.kilo/agent/`. `sf check` validates the configuration
+`.github/agents/`, `.kilo/agent/`, and `.vibe/agents/`. `sf check` validates the configuration
 files and the role prompts; `sf init` and `sf adapters` run it first and refuse
 a broken setup. `sf check`, `sf adapters`, `sf roles`, `sf routes` and `sf tool`
 read the checkout they run in; `sf init` and task bookkeeping read the main

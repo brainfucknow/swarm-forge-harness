@@ -56,7 +56,7 @@ Catalogue commands
   dispatch <role> <id> [backend]  run a role or gate headlessly (claude, codex, copilot)
   run <id> [backend]              dispatch stage after stage until done or blocked; runs the
                                   gates when the specification it dispatched waits for approval
-  adapters                        regenerate .claude/.codex/.github agent files
+  adapters                        regenerate .claude/.codex/.github/.vibe agent files
   tool require|ensure|list|bin    install constitution tools project-locally (sf tool --help)
   check                           validate roles.conf, tiers.conf, routes.conf, tools.conf, role prompts
 

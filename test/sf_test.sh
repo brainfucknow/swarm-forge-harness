@@ -353,6 +353,7 @@ assert_eq "adapters only for subagent roles" "$(ls .claude/agents | paste -sd ' 
 assert_eq "adapters for copilot" "$(ls .github/agents | paste -sd ' ' -)" "cleaner.agent.md coder.agent.md"
 assert_eq "adapters for codex" "$(ls .codex/agents | paste -sd ' ' -)" "cleaner.toml coder.toml"
 assert_eq "adapters for kilo" "$(ls .kilo/agent | paste -sd ' ' -)" "cleaner.md coder.md"
+assert_eq "adapters for vibe" "$(ls .vibe/agents | paste -sd ' ' -)" "cleaner.toml coder.toml"
 assert_match "claude adapter uses the tier model" "$(cat .claude/agents/cleaner.md)" "^model: sonnet$"
 assert_match "frontier adapter inherits the session model" "$(cat .claude/agents/coder.md)" "^model: inherit$"
 assert_eq "copilot adapter uses the tier model" \
@@ -361,10 +362,13 @@ assert_match "codex adapter uses the tier effort" "$(cat .codex/agents/cleaner.t
 assert_match "kilo adapter is a subagent" "$(cat .kilo/agent/cleaner.md)" "^mode: subagent$"
 assert_eq "kilo adapter inherits the session model" \
   "$(sed -n 's/^model: //p' .kilo/agent/cleaner.md)" ""
+assert_match "vibe adapter is a subagent" "$(cat .vibe/agents/cleaner.toml)" '^agent_type = "subagent"$'
+assert_eq "vibe adapter uses the tier model" \
+  "$(sed -n 's/^active_model = \"//p' .vibe/agents/cleaner.toml | sed 's/\"$//')" "$(awk '$1 == "fast" {print $6}' swarmforge/tiers.conf)"
 
 # committed adapters are current
 work="$(mktemp -d "$scratch/adapters.XXXX")"
-cp -R "$HERE/.claude" "$HERE/.github" "$HERE/.codex" "$work/" \
+cp -R "$HERE/.claude" "$HERE/.github" "$HERE/.codex" "$HERE/.vibe" "$work/" \
   && mkdir -p "$work/.kilo" && cp -R "$HERE/.kilo/agent" "$HERE/.kilo/command" "$work/.kilo/" \
   && copy_swarmforge "$work"
 (cd "$work" && git init -q . && git add -A && git commit -q -m seed && ./swarmforge/bin/sf adapters >/dev/null && git diff --quiet) \

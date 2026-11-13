@@ -8,8 +8,8 @@ branches, each task on its own route through the role catalogue. Read
   `swarmforge/roles/orchestrator.md` when asked to swarm, specify, or forge a
   feature, or when a task id is mentioned.
 - Every role, the specifier included, is defined in `.codex/agents/*.toml`,
-  `.claude/agents/*.md`, and `.github/agents/*.agent.md`. Delegate to them by
-  role name; do not do their work in the session.
+  `.claude/agents/*.md`, `.github/agents/*.agent.md`, and `.vibe/agents/*.toml`.
+  Delegate to them by role name; do not do their work in the session.
 - All task bookkeeping goes through `swarmforge/bin/sf`. Never write a
   `SwarmForge-*` trailer by hand.
 - Roles that need a decision stop and ask in chat. Do not guess.

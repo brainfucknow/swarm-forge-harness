@@ -135,7 +135,7 @@
     (scan (rows "tiers.conf")
           (fn [[tier :as row] seen]
             (cond-> []
-              (not (<= 4 (count row) 5)) (conj (str "tiers.conf: '" tier "' needs exactly <tier> <claude-model> <codex-effort> <copilot-model> [<kilo-model>]"))
+              (not (<= 4 (count row) 6)) (conj (str "tiers.conf: '" tier "' needs exactly <tier> <claude-model> <codex-effort> <copilot-model> [<kilo-model>] [<vibe-model>]"))
               (seen tier) (conj (str "tiers.conf: tier '" tier "' listed twice")))))))
 
 (defn- flag-problems [role runs flags]
