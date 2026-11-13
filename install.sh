@@ -29,10 +29,48 @@ if ! check_err="$(cd "$HERE" && bb "$HERE/swarmforge/bin/sf" help 2>&1 >/dev/nul
   exit 1
 fi
 
+config_sources=("$HERE/swarmforge/constitution/articles/project.md")
+for file in "$HERE"/swarmforge/*.conf; do
+  [ "$(basename "$file")" = verify.conf ] || config_sources+=("$file")
+done
+
+check_config_destination() {
+  if [ -L "$1" ] || { [ -e "$1" ] && [ ! -f "$1" ]; }; then
+    echo "install.sh: project configuration conflict: $1 is not a regular file" >&2
+    exit 1
+  fi
+}
+
+for file in "${config_sources[@]}"; do
+  check_config_destination "$target/${file#"$HERE/"}"
+done
+
+shipped=()
+copy_file() {
+  local src="$1" dst="$2" config
+  shipped+=("${src#"$HERE/"}")
+  for config in "${config_sources[@]}"; do
+    if [ "$src" = "$config" ]; then
+      check_config_destination "$dst"
+      [ ! -e "$dst" ] || return 0
+      break
+    fi
+  done
+  mkdir -p "$(dirname "$dst")"
+  cp -P "$src" "$dst"
+}
+
 copy_tree() {
-  local src="$1" dst="$2"
+  local src="$1" dst="$2" entry
   mkdir -p "$dst"
-  cp -R "$src/." "$dst/"
+  for entry in "$src"/* "$src"/.[!.]* "$src"/..?*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    if [ -d "$entry" ] && [ ! -L "$entry" ]; then
+      copy_tree "$entry" "$dst/$(basename "$entry")"
+    else
+      copy_file "$entry" "$dst/$(basename "$entry")"
+    fi
+  done
 }
 
 mkdir -p "$target/swarmforge"
@@ -40,7 +78,7 @@ mkdir -p "$target/swarmforge"
 for file in "$HERE"/swarmforge/*.md "$HERE"/swarmforge/*.conf; do
   case "$(basename "$file")" in
     verify.conf) ;;
-    *) cp "$file" "$target/swarmforge/" ;;
+    *) copy_file "$file" "$target/swarmforge/$(basename "$file")" ;;
   esac
 done
 for directory in bin constitution languages roles; do
@@ -54,7 +92,7 @@ for module in "$HERE"/swarmforge/tools/*; do
   done
 done
 for module in csharp javascript ruby java; do
-  cp "$HERE/swarmforge/tools/$module/bb.edn" "$target/swarmforge/tools/$module/bb.edn"
+  copy_file "$HERE/swarmforge/tools/$module/bb.edn" "$target/swarmforge/tools/$module/bb.edn"
 done
 copy_tree "$HERE/.claude/skills" "$target/.claude/skills"
 copy_tree "$HERE/.agents/skills" "$target/.agents/skills"
@@ -88,6 +126,30 @@ append_once "$target/swarmforge/.gitignore" "!/bin/"
 append_once "$target/swarmforge/.gitignore" "!/bin/**"
 
 (cd "$target" && ./swarmforge/bin/sf adapters >/dev/null && ./swarmforge/bin/sf init)
+
+# Compare only payload destinations; unknown provenance never permits deletion.
+printf '%s\0' "${shipped[@]}" | (cd "$HERE" && bb -e '
+  (require (quote [babashka.fs :as fs]) (quote [clojure.string :as str]))
+  (let [root (fs/path (first *command-line-args*))
+        expected (set (str/split (slurp *in*) #"\u0000"))
+        found (atom [])
+        remember (fn [path _] (swap! found conj (str (fs/relativize root path))) :continue)
+        caches #{".git" ".swarmforge" ".metrics" ".worktrees" ".cpcache" "node_modules" "tmp"}
+        managed ["swarmforge/bin" "swarmforge/constitution" "swarmforge/languages"
+                 "swarmforge/roles" "swarmforge/tools" ".claude/skills" ".agents/skills" ".kilo/command"]]
+    (doseq [relative managed :let [directory (fs/path root relative)] :when (fs/exists? directory)]
+      (fs/walk-file-tree directory
+        {:pre-visit-dir (fn [path _] (if (caches (fs/file-name path)) :skip-subtree :continue))
+         :visit-file remember}))
+    (doseq [path (fs/list-dir (fs/path root "swarmforge")) :when (not (fs/directory? path))]
+      (remember path nil))
+    (doseq [path (sort (distinct @found))
+            :when (and (not (expected path))
+                       (not= path "swarmforge/.gitignore")
+                       (not (re-matches #"swarmforge/[^/]+\.conf" path))
+                       (not= path "swarmforge/constitution/articles/project.md"))]
+      (println "UNSHIPPED (manual review; may be a user file):" path)))
+  ' "$target")
 
 cat <<EOF
 Installed SwarmForge into $target.
