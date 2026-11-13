@@ -27,10 +27,22 @@ the project, adds instructions to `AGENTS.md`, `CLAUDE.md`, and
 commit-msg hook. It also writes `swarmforge/.gitignore` so that a project
 rule ignoring every `bin/` directory, such as Visual Studio's `[Bb]in/`, does
 not drop `swarmforge/bin`. Commit the result.
-Development assets stay in this source checkout; reinstalling does not prune
-existing project files.
+Development assets stay in this source checkout.
 
 Then set the project language in `swarmforge/constitution/articles/project.md`.
+
+To update, rerun this source checkout's `install.sh`. Runtime, guidance and
+skills are refreshed. The project owns `swarmforge/constitution/articles/project.md`
+and the shipped top-level `swarmforge/*.conf` files: existing files are kept,
+and only missing files receive defaults. `verify.conf` is never installed or
+changed. This also applies to older installs without ownership metadata.
+
+A runtime update can require configuration changes. Compare those files with
+the defaults in the source checkout, merge the changes your project needs,
+then run `swarmforge/bin/sf adapters` to regenerate agents. Invalid preserved
+settings fail validation instead of being reset. The installer lists unshipped
+payload files for manual review; they may be user files, so it never deletes
+them or assumes they were retired upstream.
 
 ## Run
 
