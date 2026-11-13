@@ -99,8 +99,8 @@
   "The files that from..to changed, without what a merge in the range brought
   in: only the files of the range's first-parent non-merge commits."
   [from to]
-  (let [changed (shell/lines (git/git "diff" "--name-only" from to))
-        own (set (shell/lines (git/git "log" "--first-parent" "--no-merges" "--name-only" "--format=" (str from ".." to))))]
+  (let [changed (shell/lines (git/git "diff" "--name-only" "--no-renames" from to))
+        own (set (shell/lines (git/git "log" "--first-parent" "--no-merges" "--no-renames" "--name-only" "--format=" (str from ".." to))))]
     (filter own changed)))
 
 (defn with-files
