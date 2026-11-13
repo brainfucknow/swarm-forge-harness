@@ -58,6 +58,8 @@
   ([xml-text {:keys [extension strict?]}]
    (let [doc (xml/parse-str (-> xml-text (str/replace #"^\uFEFF" "") (str/replace #"<!DOCTYPE[^>]*>" "")))
          sources (map text (elements :source doc))]
+     (when-not (= :coverage (:tag doc))
+       (throw (outcome/usage-error "expected a Cobertura coverage document")))
      (vec (for [class (elements :class doc)
                 :let [class-name (:name (:attrs class))
                       file (resolve-file (:filename (:attrs class)) sources)]

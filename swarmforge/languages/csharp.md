@@ -13,8 +13,8 @@ re-implementing their rules in `sf-cs`.
 | Startup tools | `sf-cs tools` | A check that `dotnet`, `node`, and `npx` are on PATH, `dotnet tool restore` (the pinned dotnet-coverage and dotnet-stryker), then `npx --yes jscpd@4 --version`. It installs nothing and writes no tool manifest. |
 | Unit and acceptance tests | `sf-cs test [dotnet test args]` | `dotnet test --filter Category!=Property`. |
 | Property tests | `sf-cs property` | `dotnet test --filter Category=Property`. |
-| Coverage | `sf-cs coverage [dotnet test args]` | The pin check for dotnet-coverage (as for Stryker under Language mutation; exit 2 when it refuses), the removal of earlier reports under `tmp/coverage/`, then a walk of the current directory for project files: exit 2, asking you to run from the repository or solution root, when it finds none or every project it restored is a test project. For each project, `dotnet restore <project>`, then `dotnet msbuild <project> -getProperty:IsTestProject -getProperty:IsTestingPlatformApplication -getProperty:AssemblyName`; a project whose restore fails gets a warning naming it, is not evaluated, and does not change the exit status. Then `dotnet dotnet-coverage collect -s tmp/dotnet-coverage.xml -f cobertura -o tmp/coverage/run-<i>/coverage.cobertura.xml -- dotnet test --filter Category!=Property [args]`, the args passed through untouched. The settings keep sources under the current directory outside `obj/`, and leave out each test project's assembly (`<AssemblyName>.dll` or `.exe`), so production sources beside or below a test project stay in the report. The same for VSTest and Microsoft.Testing.Platform test projects. A run status other than 0 or 8 (MTP: zero tests ran) is exit 1. |
-| CRAP | `sf-cs crap [--all] [--base REF]` | CRAP per method from the Cobertura files: `comp² × (1 − line coverage)³ + comp`, using dotnet-coverage's own per-method complexity. Lists changed methods, or all with `--all`. Exit 1 when any is over 10. |
+| Coverage | `sf-cs coverage [--include-test-assemblies] [dotnet test args]` | The pin check for dotnet-coverage (as for Stryker under Language mutation; exit 2 when it refuses), the removal of earlier reports under `tmp/coverage/`, then a walk of the current directory for project files: exit 2, asking you to run from the repository or solution root, when it finds none, or every restored project is a test project without `--include-test-assemblies`. For each project, `dotnet restore <project>`, then `dotnet msbuild <project> -getProperty:IsTestProject -getProperty:IsTestingPlatformApplication -getProperty:AssemblyName`; a project whose restore fails gets a warning naming it, is not evaluated, and does not change the exit status. Then `dotnet dotnet-coverage collect -s tmp/dotnet-coverage.xml -f cobertura -o tmp/coverage/run-<i>/coverage.cobertura.xml -- dotnet test --filter Category!=Property [args]`, the args passed through untouched. The settings keep sources under the current directory outside `obj/`, and by default leave out each test project's assembly (`<AssemblyName>.dll` or `.exe`), so production sources beside or below a test project stay in the report. The same for VSTest and Microsoft.Testing.Platform test projects. A run status other than 0 or 8 (MTP: zero tests ran) is exit 1. |
+| CRAP | `sf-cs crap [--all] [--base REF] [--no-executable-code PATH ...]` | CRAP per method from the Cobertura files: `comp² × (1 − line coverage)³ + comp`, using dotnet-coverage's own per-method complexity. Lists changed methods, or all with `--all`. Exit 1 when any is over 10; exit 2 for unmeasured source files. |
 | DRY | `sf-cs dry [--all] [--base REF] [--min-tokens N]` | `npx jscpd@4 --format csharp` with a JSON report under `tmp/jscpd/`, then the clones that touch a changed line. Exit 1 when any. |
 | Language mutation | `sf-cs mutate [--base REF] [--all] [-- stryker args]` | First `dotnet tool list --local dotnet-stryker --format json`: exit 2 unless it names a pin in a committed `dotnet-tools.json` or `.config/dotnet-tools.json` at the repository root. Then `dotnet stryker --help`: exit 2 when it fails (run `sf-cs tools`). Then `dotnet stryker --since:<base>` (differential: only files changed since the base branch) with the JSON report under `tmp/stryker/`, then every `Survived` or `NoCoverage` mutant. Exit 1 when any; exit 2 when Stryker fails without a report. `--all` drops `--since`. |
 
@@ -40,6 +40,25 @@ its last coverable line changed.
 
 Mutation must be differential: use `sf-cs mutate` without `--all`, so Stryker
 mutates only files changed since the base branch.
+
+## Coverage completeness
+
+CRAP lists every in-scope existing source file without usable method data in
+any report as `UNMEASURED source: <path>` and exits 2. `--all` checks all
+tracked and nonignored untracked source files. This is file-level evidence;
+it cannot detect an omitted method in an otherwise measured file. For an
+interface, enum, constants-only file or other source with no executable code,
+repeat `--no-executable-code PATH` for each file. This is your assertion, not
+automatic analysis. Each literal path must exist inside the repository and
+be in scope; every accepted exemption is displayed. A declaration never hides
+a measured method or its score.
+
+Use `coverage --include-test-assemblies [dotnet test args]` to measure test
+helpers and test methods as well as production code; CRAP can then score their
+assertions. Put the flag before an optional `--`. This also permits a test-only
+root that contains a project; an empty root still fails. Sources under `obj/`
+remain excluded. The default still excludes test assemblies. Including them
+cannot measure a project the run never loads.
 
 ## Reading the output
 
@@ -99,7 +118,7 @@ project that treats warnings as errors reports them as errors.
 
 ## Conventions the tools rely on
 
-- Test projects need no coverage package, whether they run on VSTest or on Microsoft.Testing.Platform (for example xUnit v3 with `"test": { "runner": "Microsoft.Testing.Platform" }` in `global.json`): dotnet-coverage, pinned in the committed root tool manifest, instruments `dotnet test` from outside. A test project is one MSBuild evaluates with `IsTestProject` or `IsTestingPlatformApplication` set to `true`; its assembly stays out of the coverage report, run or never run. A test-support library MSBuild does not evaluate as a test project is scored like production code, and so is a test project whose restore failed (the warning names it). A source compiled only into a test assembly is not measured.
+- Test projects need no coverage package, whether they run on VSTest or on Microsoft.Testing.Platform (for example xUnit v3 with `"test": { "runner": "Microsoft.Testing.Platform" }` in `global.json`): dotnet-coverage, pinned in the committed root tool manifest, instruments `dotnet test` from outside. A test project is one MSBuild evaluates with `IsTestProject` or `IsTestingPlatformApplication` set to `true`; its assembly stays out of the coverage report by default, run or never run. `--include-test-assemblies` opts it in. A test-support library MSBuild does not evaluate as a test project is scored like production code, and so is a test project whose restore failed (the warning names it). A source compiled only into a test assembly is not measured without that flag.
 - Property tests (FsCheck, CsCheck, or similar) carry `[Trait("Category", "Property")]` so `sf-cs test` excludes them and `sf-cs property` runs them.
 - Stryker needs a test project it can find; pass `-- --project <csproj>` or `-- --solution <sln>` when the repository holds more than one, or add a `stryker-config.json`.
 - Gherkin acceptance tests use the Acceptance Pipeline Specification tools; the acceptance runtime and step handlers are C# and run through `sf-cs test`.
