@@ -33,7 +33,7 @@
 
 (def ^:private null-record
   {"type" nil "from" nil "stage" nil "needs" nil "route" nil "commit" nil "text" nil
-   "merged_into" nil "rejected" nil "audit_refusals" nil "verdict" nil})
+   "merged_into" nil "rejected" nil "audit_refusals" nil "spec_verdict" nil})
 
 (describe "line"
   (it "is one line of JSON"
@@ -66,12 +66,12 @@
                                   "merged_into" "main"})]
              (get (parsed task) "records")))
 
-  (it "gives a verdict record and an automatic send-back their verdict, an operator's send-back null"
+  (it "gives a spec-verdict record and an automatic send-back their spec verdict, an operator's send-back null"
     (should= ["stuck" "continue" nil]
-             (map #(get % "verdict")
+             (map #(get % "spec_verdict")
                   (get (parsed (assoc task :records
-                                      [{:record "verdict" :from "judge" :verdict "stuck" :text "cap"}
-                                       {:record "changes-requested" :from "judge" :verdict "continue" :text "r1"}
+                                      [{:record "spec-verdict" :from "spec-judge" :spec-verdict "stuck" :text "cap"}
+                                       {:record "changes-requested" :from "spec-judge" :spec-verdict "continue" :text "r1"}
                                        {:record "changes-requested" :from "operator" :text "no"}]))
                        "records"))))
 

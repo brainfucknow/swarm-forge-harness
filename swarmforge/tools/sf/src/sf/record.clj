@@ -87,7 +87,16 @@
   [["SwarmForge-Task" :task] ["SwarmForge-Record" :record] ["SwarmForge-From" :from]
    ["SwarmForge-Stage" :stage] ["SwarmForge-Route" :route] ["SwarmForge-Needs" :needs]
    ["SwarmForge-Merged-Into" :merged-into] ["SwarmForge-Reviewed" :reviewed]
-   ["SwarmForge-Audit-Refusals" :audit-refusals] ["SwarmForge-Verdict" :verdict]])
+   ["SwarmForge-Audit-Refusals" :audit-refusals] ["SwarmForge-Spec-Verdict" :spec-verdict]])
+
+(def ^:private old-trailers
+  "The trailers that records written before a rename hold, with the trailer
+  that took each one's place."
+  {"SwarmForge-Verdict" "SwarmForge-Spec-Verdict"})
+
+(def ^:private old-records
+  "The record types written before a rename, with the type that took each one's place."
+  {"verdict" "spec-verdict"})
 
 (defn rejected-refusal
   "Why value cannot be the value of a `Rejected: <finding> | <reason>` trailer,
@@ -139,14 +148,17 @@
   (the unfolded trailer lines). Its :commit is its own sha for a created
   record, else its first parent: the role's commit it was made on. An
   approval also has the values of its `Rejected:` trailers, in order, as
-  :rejected."
+  :rejected. A record in an old form reads as one in the new form."
   [{:keys [sha parents message] :as commit}]
   (let [pairs (for [line (:trailers commit)
                     :let [[_ k v] (re-matches #"([^:]+): ?(.*)" line)]
                     :when k]
                 [k v])
-        by-key (into {} pairs)
-        fields (into {} (for [[key field] trailers :when (by-key key)] [field (by-key key)]))
+        by-key (merge (into {} (for [[k v] pairs :when (old-trailers k)] [(old-trailers k) v]))
+                      (into {} pairs))
+        record-type (by-key "SwarmForge-Record")
+        fields (cond-> (into {} (for [[key field] trailers :when (by-key key)] [field (by-key key)]))
+                 record-type (assoc :record (get old-records record-type record-type)))
         text (message-text message)]
     (cond-> (assoc fields :sha sha
                    :commit (if (= "created" (:record fields)) sha (first parents)))
@@ -209,16 +221,16 @@
     {:records (keep-indexed #(when-not (dropped %1) %2) records)
      :omitted omitted}))
 
-(defn- fields [{:keys [task record from verdict text stage route commit files merged-into audit-refusals]}]
+(defn- fields [{:keys [task record from spec-verdict text stage route commit files merged-into audit-refusals]}]
   (concat
    [["type" record] ["from" from]]
-   (when verdict [["verdict" verdict]])
+   (when spec-verdict [["spec-verdict" spec-verdict]])
    (case record
      "created" [["branch" (branch task)] ["commit" commit] ["route" route]]
      "question" [["question" text]]
      "answer" [["answer" text]]
      "review" [["commit" commit] ["files" files] ["summary" text]]
-     ("changes-requested" "verdict") [["reason" text]]
+     ("changes-requested" "spec-verdict") [["reason" text]]
      "route" [["route" route]]
      "handoff" [["to" stage] ["branch" (branch task)] ["commit" commit] ["files" files] ["summary" text]]
      "finished" [["merged-into" merged-into]]

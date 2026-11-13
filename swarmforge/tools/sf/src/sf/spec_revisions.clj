@@ -1,11 +1,11 @@
-(ns sf.rounds
-  "The rounds of a specification gate: sizes, growth, limits on automatic
-  send-backs, and the lines sf rounds prints."
+(ns sf.spec-revisions
+  "The spec revisions of a specification gate: sizes, growth, limits on
+  automatic send-backs, and the lines sf spec-revisions prints."
   (:require [clojure.string :as str]
             [sf.lore :as lore]))
 
-(def verdicts
-  "The verdicts sf verdict records."
+(def spec-verdicts
+  "The spec verdicts sf spec-verdict records."
   ["converged" "continue" "needs-operator" "stuck"])
 
 (def cap
@@ -13,49 +13,49 @@
   2)
 
 (defn automatic?
-  "True for a send-back that sf verdict continue wrote."
-  [{:keys [record verdict]}]
-  (and (= "changes-requested" record) (= "continue" verdict)))
+  "True for a send-back that sf spec-verdict continue wrote."
+  [{:keys [record spec-verdict]}]
+  (and (= "changes-requested" record) (= "continue" spec-verdict)))
 
 (defn automatic-count [records]
   (count (filter automatic? records)))
 
-(defn- round-start? [{:keys [record stage]}]
+(defn- revision-start? [{:keys [record stage]}]
   (and (= "review" record) (= "specifier" stage)))
 
-(defn- operator-send-back? [{:keys [record from verdict]}]
-  (and (= "changes-requested" record) (= "operator" from) (nil? verdict)))
+(defn- operator-send-back? [{:keys [record from spec-verdict]}]
+  (and (= "changes-requested" record) (= "operator" from) (nil? spec-verdict)))
 
-(defn- round-record? [{:keys [record]}]
-  (contains? #{"verdict" "changes-requested"} record))
+(defn- revision-record? [{:keys [record]}]
+  (contains? #{"spec-verdict" "changes-requested"} record))
 
-(defn- open-round
-  "Starts round n at review. Its baseline is n after an operator send-back or
-  in round 1, else the previous baseline."
-  [{:keys [rounds reset?]} review]
-  (let [n (inc (count rounds))
-        baseline (if (or reset? (= 1 n)) n (:baseline (peek rounds)))]
-    {:rounds (conj rounds {:n n :reviewed (or (:reviewed review) (:commit review))
-                           :baseline baseline :records []})
+(defn- open-revision
+  "Starts spec revision n at review. Its baseline is n after an operator
+  send-back or in spec revision 1, else the previous baseline."
+  [{:keys [revisions reset?]} review]
+  (let [n (inc (count revisions))
+        baseline (if (or reset? (= 1 n)) n (:baseline (peek revisions)))]
+    {:revisions (conj revisions {:n n :reviewed (or (:reviewed review) (:commit review))
+                                 :baseline baseline :records []})
      :reset? false}))
 
-(defn- add-record [{:keys [rounds] :as acc} rec]
+(defn- add-record [{:keys [revisions] :as acc} rec]
   (cond-> acc
-    (and (seq rounds) (round-record? rec)) (update-in [:rounds (dec (count rounds)) :records] conj rec)
+    (and (seq revisions) (revision-record? rec)) (update-in [:revisions (dec (count revisions)) :records] conj rec)
     (operator-send-back? rec) (assoc :reset? true)))
 
-(defn rounds
-  "The rounds of records, oldest first, each with :n, :reviewed, :baseline and
-  the verdict and changes-requested :records after its review."
+(defn spec-revisions
+  "The spec revisions of records, oldest first, each with :n, :reviewed,
+  :baseline and the spec-verdict and changes-requested :records after its review."
   [records]
-  (:rounds (reduce (fn [acc rec] (if (round-start? rec) (open-round acc rec) (add-record acc rec)))
-                   {:rounds [] :reset? false}
-                   records)))
+  (:revisions (reduce (fn [acc rec] (if (revision-start? rec) (open-revision acc rec) (add-record acc rec)))
+                      {:revisions [] :reset? false}
+                      records)))
 
-(defn verdict-of
-  "The verdict of the round, or nil."
-  [round]
-  (some :verdict (:records round)))
+(defn spec-verdict-of
+  "The spec verdict of the spec revision, or nil."
+  [revision]
+  (some :spec-verdict (:records revision)))
 
 ;; size
 
@@ -86,7 +86,7 @@
                      (- (numstat-count added) (numstat-count removed))))))
 
 (defn size
-  "The size of a round: the message lines of the current counted commits
+  "The size of a spec revision: the message lines of the current counted commits
   (lore/current), plus the lines added minus removed over all of them, at least 0."
   [commits]
   (let [commits (counted commits)]
@@ -125,7 +125,7 @@
   (and (pos? base) (> (* 100 (- size base)) (* 50 base))))
 
 (defn limits
-  "The LIMIT lines that hold for the newest round, cap first."
+  "The LIMIT lines that hold for the newest spec revision, cap first."
   [automatic size base]
   (cond-> []
     (>= automatic cap) (conj (str "LIMIT: cap " cap " of " cap " automatic send-backs used"))
@@ -134,14 +134,14 @@
 ;; total growth
 
 (defn notes
-  "The NOTE line on the newest round's total growth over round 1: printed
-  when it is more than half over a round 1 that is not its baseline, where
-  the growth limit does not measure it. Not a limit."
-  [sized-rounds]
-  (let [{s1 :size} (first sized-rounds)
-        {:keys [size baseline]} (peek (vec sized-rounds))]
+  "The NOTE line on the newest spec revision's total growth over spec
+  revision 1: printed when it is more than half over a spec revision 1 that
+  is not its baseline, where the growth limit does not measure it. Not a limit."
+  [sized-revisions]
+  (let [{s1 :size} (first sized-revisions)
+        {:keys [size baseline]} (peek (vec sized-revisions))]
     (if (and size (not= 1 baseline) (over-limit? size s1))
-      [(str "NOTE: total growth " (growth size s1) " over round 1 (" s1 "); not a limit")]
+      [(str "NOTE: total growth " (growth size s1) " over spec revision 1 (" s1 "); not a limit")]
       [])))
 
 ;; output
@@ -154,30 +154,32 @@
           (for [line more] (if (str/blank? line) "" (str "    " line))))))
 
 (defn report
-  "The lines of sf rounds: NO_ROUNDS, or each round's line, with its records'
-  texts under it when full, then tail-lines."
-  [rounds tail-lines full]
-  (if (empty? rounds)
-    ["NO_ROUNDS"]
-    (vec (concat (for [{:keys [n short size growth total records] :as round} rounds
-                       line (cons (str "ROUND " n " " short " size:" size " growth:" growth
-                                       " total:" total " verdict:" (or (verdict-of round) "-"))
+  "The lines of sf spec-revisions: NO_SPEC_REVISIONS, or each spec revision's
+  line, with its records' texts under it when full, then tail-lines."
+  [revisions tail-lines full]
+  (if (empty? revisions)
+    ["NO_SPEC_REVISIONS"]
+    (vec (concat (for [{:keys [n short size growth total records] :as revision} revisions
+                       line (cons (str "SPEC-REVISION " n " " short " size:" size " growth:" growth
+                                       " total:" total " spec-verdict:" (or (spec-verdict-of revision) "-"))
                                   (when full (mapcat text-lines records)))]
                    line)
                  tail-lines))))
 
-;; sf verdict
+;; sf spec-verdict
 
-(defn verdict-refusal
-  "Why sf verdict cannot record verdict, or nil. Does not check the limits on continue."
-  [{:keys [state rounds verdict text judge]}]
-  (let [current (peek (vec rounds))]
+(defn spec-verdict-refusal
+  "Why sf spec-verdict cannot record spec-verdict, or nil. Does not check the
+  limits on continue."
+  [{:keys [state revisions spec-verdict text spec-judge]}]
+  (let [current (peek (vec revisions))]
     (cond
-      (not (some #{verdict} verdicts))
-      (str "verdict must be converged, continue, needs-operator or stuck, not '" verdict "'")
-      (str/blank? text) "verdict needs a reason"
-      (nil? judge) "roles.conf has no judge; add `<role> <tier> subagent judge` to record verdicts"
+      (not (some #{spec-verdict} spec-verdicts))
+      (str "spec verdict must be converged, continue, needs-operator or stuck, not '" spec-verdict "'")
+      (str/blank? text) "spec verdict needs a reason"
+      (nil? spec-judge) "roles.conf has no spec-judge; add `<role> <tier> subagent spec-judge` to record spec verdicts"
       (not= "specifier" (:stage state))
-      (str "task is at stage:" (:stage state) "; verdicts are recorded at stage:specifier")
+      (str "task is at stage:" (:stage state) "; spec verdicts are recorded at stage:specifier")
       (not= "approval" (:needs state)) "task is not waiting for approval"
-      (verdict-of current) (str "round " (:n current) " already has the verdict " (verdict-of current)))))
+      (spec-verdict-of current)
+      (str "spec revision " (:n current) " already has the spec verdict " (spec-verdict-of current)))))

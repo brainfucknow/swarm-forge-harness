@@ -111,19 +111,34 @@
                (record/parse {:sha "abc1234" :parents ["par1234"] :message message
                               :trailers (drop 2 (clojure.string/split-lines message))})))))
 
-(describe "a verdict record"
-  (it "carries its verdict in a trailer that parse reads back"
-    (let [rec {:task "t-1" :record "verdict" :from "judge" :verdict "stuck" :stage "specifier"
+(describe "a spec verdict record"
+  (it "carries its spec verdict in a trailer that parse reads back"
+    (let [rec {:task "t-1" :record "spec-verdict" :from "spec-judge" :spec-verdict "stuck" :stage "specifier"
                :route "specifier,coder" :needs "approval" :text "cap"}
           message (record/message rec)
           lines (clojure.string/split-lines message)]
-      (should= "SwarmForge-Verdict: stuck" (some #(when (clojure.string/starts-with? % "SwarmForge-Verdict") %) lines))
-      (should= ["verdict" "stuck" "cap"]
-               ((juxt :record :verdict :text)
-                (record/parse {:sha "s" :parents ["p"] :message message :trailers (drop 4 lines)}))))))
+      (should= ["SwarmForge-Spec-Verdict: stuck"] (filter #(re-find #"Verdict" %) lines))
+      (should= ["spec-verdict" "stuck" "cap"]
+               ((juxt :record :spec-verdict :text)
+                (record/parse {:sha "s" :parents ["p"] :message message :trailers (drop 4 lines)})))))
+
+  (it "is read from its old form: record verdict and the SwarmForge-Verdict trailer"
+    (let [trailers ["SwarmForge-Task: t-1" "SwarmForge-Record: verdict" "SwarmForge-From: judge"
+                    "SwarmForge-Stage: specifier" "SwarmForge-Needs: approval" "SwarmForge-Verdict: stuck"]
+          message (str "sf verdict: t-1\n\ncap\n\n" (clojure.string/join "\n" trailers) "\n")]
+      (should= ["spec-verdict" "judge" "stuck" "cap"]
+               ((juxt :record :from :spec-verdict :text)
+                (record/parse {:sha "s" :parents ["p"] :message message :trailers trailers})))))
+
+  (it "reads the old trailer on an automatic send-back, and leaves other record types as they are"
+    (let [trailers ["SwarmForge-Task: t-1" "SwarmForge-Record: changes-requested" "SwarmForge-From: judge"
+                    "SwarmForge-Verdict: continue"]]
+      (should= ["changes-requested" "continue"]
+               ((juxt :record :spec-verdict)
+                (record/parse {:sha "s" :parents ["p"] :message "sf changes-requested: t-1\n" :trailers trailers}))))))
 
 (describe "same-commit?"
-  (it "matches a full sha and its abbreviation either way round"
+  (it "matches a full sha and its abbreviation either way spec revision"
     (should (record/same-commit? "0123456789abcdef" "0123456"))
     (should (record/same-commit? "0123456" "0123456789abcdef"))
     (should (record/same-commit? "0123456" "0123456")))
@@ -204,12 +219,12 @@
     (should= (clojure.string/join "," (map str (range 40)))
              (record/files-value (map str (range 40))))))
 
-(describe "block of a record with a verdict"
-  (it "prints the verdict after from, and a verdict record's text as reason"
-    (should= "type: verdict\nfrom: judge\nverdict: stuck\nreason: cap\n  used"
-             (record/block {:record "verdict" :from "judge" :verdict "stuck" :text "cap\nused"}))
-    (should= "type: changes-requested\nfrom: judge\nverdict: continue\nreason: new findings"
-             (record/block {:record "changes-requested" :from "judge" :verdict "continue" :text "new findings"}))))
+(describe "block of a record with a spec verdict"
+  (it "prints the spec verdict after from, and a spec verdict record's text as reason"
+    (should= "type: spec-verdict\nfrom: spec-judge\nspec-verdict: stuck\nreason: cap\n  used"
+             (record/block {:record "spec-verdict" :from "spec-judge" :spec-verdict "stuck" :text "cap\nused"}))
+    (should= "type: changes-requested\nfrom: spec-judge\nspec-verdict: continue\nreason: new findings"
+             (record/block {:record "changes-requested" :from "spec-judge" :spec-verdict "continue" :text "new findings"}))))
 
 (describe "block"
   (it "renders the keys of the record type, later lines of a value indented"

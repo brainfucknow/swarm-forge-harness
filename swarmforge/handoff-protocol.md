@@ -67,13 +67,13 @@ Use `sf show <id>` when the brief omits needed history or evidence.
 | `sf new` | Creates a route and starts its first role. Route precedence: `--route`, `SWARMFORGE_ROUTE`, named `feature`, then all non-optional catalogue roles. |
 | `sf review` | Specifier requests operator approval of its committed specification. |
 | `sf approve` / `sf reject` | Approve advances the specifier; reject requests changes. Approval must match the reviewed role commit; a new specification needs review again. An answer or rejection is not approval. Each `--rejected "<finding> \| <reason>"` on approve records a gate finding the operator approved over as a `Rejected:` trailer of the approval record. |
-| `sf verdict <id> <verdict> <text>` | Records the judge's verdict on the newest round ([rules](#specification-rounds)). |
+| `sf spec-verdict <id> <spec-verdict> <text>` | Records the spec-judge's spec verdict on the newest spec revision ([rules](#spec-revisions)). |
 | `sf ask` / `sf answer` | Block for an operator decision, then resume the same role. |
 | `sf handoff` | Requires a clean task worktree and needs `none`; records HEAD and advances to the next route role, then `done`. Use `--to` only as the role prompt directs; it names the current stage or a later route role, and `done` only after the route's last role. |
 | `sf route <id> <route>` | Changes an open task's route, retaining the current stage. Roles must follow catalogue order. |
 | `sf next <role>` | Lists open tasks at that stage needing nothing; blocked tasks stay hidden. |
 
-`sf new`, `sf approve`, `sf reject`, `sf verdict`, `sf answer`, `sf finish`
+`sf new`, `sf approve`, `sf reject`, `sf spec-verdict`, `sf answer`, `sf finish`
 and a route change are the operator's. `sf dispatch` and `sf run` start each role and gate with
 `SWARMFORGE_DISPATCHED` set to its name, and those commands refuse to run
 under it. `sf run` also stops when a stage it dispatched added an operator
@@ -126,37 +126,38 @@ commits after it), `sf finish` commits the finished record on top of HEAD as
 a merge of the tip. It never rewrites a commit HEAD already has. Nobody
 writes the finished-record trailers manually.
 
-## Specification rounds
+## Spec revisions
 
-With a `judge` row in `roles.conf`, the specification gate loops. After the gates of each round, the judge gives a verdict and the orchestrator records it with `sf verdict`. Remove the judge line to turn the loop off. `sf verdict` then refuses.
+With a `spec-judge` row in `roles.conf`, the specification gate loops. After the gates of each spec revision, the spec-judge gives a spec verdict and the orchestrator records it with `sf spec-verdict`. Remove the spec-judge line to turn the loop off. `sf spec-verdict` then refuses.
 
-- A round is one `review` record made at stage specifier, numbered from 1. It includes the `verdict` and `changes-requested` records before the next review. A review of another stage is not a round.
-- `sf verdict <id> converged|needs-operator|stuck <text>` writes a `verdict` record from the judge. The task keeps stage, route and needs, and waits for approval.
-- `sf verdict <id> continue <text>` writes a `changes-requested` record from the judge, an automatic send-back. Like `sf reject`, it keeps the stage and clears needs.
-- A record with a verdict prints a `verdict:` line after `from:`.
-- sf records nothing and refuses a verdict when:
+- A spec revision is one `review` record made at stage specifier, numbered from 1. It includes the `spec-verdict` and `changes-requested` records before the next review. A review of another stage is not a spec revision.
+- `sf spec-verdict <id> converged|needs-operator|stuck <text>` writes a `spec-verdict` record from the spec-judge. The task keeps stage, route and needs, and waits for approval.
+- `sf spec-verdict <id> continue <text>` writes a `changes-requested` record from the spec-judge, an automatic send-back. Like `sf reject`, it keeps the stage and clears needs.
+- Both carry the `SwarmForge-Spec-Verdict` trailer. A record with a spec verdict prints a `spec-verdict:` line after `from:`.
+- sf reads a record of an older sf the same way: type `verdict` as `spec-verdict`, and the trailer `SwarmForge-Verdict` as `SwarmForge-Spec-Verdict`. Its `from:` stays as stored.
+- sf records nothing and refuses a spec verdict when:
   - `SWARMFORGE_DISPATCHED` is set;
-  - there is no judge;
+  - there is no spec-judge;
   - the stage is not specifier;
   - the task is not waiting for approval;
-  - the round already has a verdict.
+  - the spec revision already has a spec verdict.
 - sf refuses `continue` when a limit holds. It checks the cap first.
   - Cap: the task has 2 automatic send-backs. `sf reject` never counts.
-  - Growth: the round is over the growth limit.
-- Counted commits of a round: the first-parent commits after the created record, up to the round's reviewed commit, that are not records or merges.
+  - Growth: the spec revision is over the growth limit.
+- Counted commits of a spec revision: the first-parent commits after the created record, up to the spec revision's reviewed commit, that are not records or merges.
 - Size is the sum of:
   - the nonblank message lines, without the trailer block, of each counted commit that no counted commit supersedes (`Supersedes: <Lore-id>`);
   - the lines added minus removed over all counted commits (`git show --numstat`), at least 0 in total.
 - A merge of the base branch adds nothing.
-- The baseline of a round is the first round after the newest `sf reject` before it, else round 1. B is its size.
+- The baseline of a spec revision is the first spec revision after the newest `sf reject` before it, else spec revision 1. B is its size.
 - Growth is `(size - B) * 100 / B`, rounded down, or `-` when B is 0.
-- A round is over the growth limit when B is not 0 and `(size - B) * 100 > 50 * B`.
-- Total is the growth of a round's size over the size of round 1, S1, by the same formula: `-` when S1 is 0, `0%` in round 1.
-- `sf rounds <id> [--full]` only reads. It runs for any role on any task `sf show` reads, and refuses any other argument. It prints `NO_ROUNDS`, or:
-  - per round, `ROUND <n> <sha> size:<size> growth:<growth> total:<total> verdict:<verdict or ->`; with `--full`, the text of its verdict and changes-requested records under it;
-  - one line per limit that holds for the newest round: `LIMIT: cap 2 of 2 automatic send-backs used` and `LIMIT: growth size <size> is more than half over <B>`;
-  - `NOTE: total growth <total> over round 1 (<S1>); not a limit`, when the newest round's baseline is not round 1, S1 is not 0 and `(size - S1) * 100 > 50 * S1`. With baseline round 1, `LIMIT: growth` says it.
-- The NOTE is not a limit: `sf verdict continue` is not refused for it.
+- A spec revision is over the growth limit when B is not 0 and `(size - B) * 100 > 50 * B`.
+- Total is the growth of a spec revision's size over the size of spec revision 1, S1, by the same formula: `-` when S1 is 0, `0%` in spec revision 1.
+- `sf spec-revisions <id> [--full]` only reads. It runs for any role on any task `sf show` reads, and refuses any other argument. It prints `NO_SPEC_REVISIONS`, or:
+  - per spec revision, `SPEC-REVISION <n> <sha> size:<size> growth:<growth> total:<total> spec-verdict:<spec-verdict or ->`; with `--full`, the text of its spec-verdict and changes-requested records under it;
+  - one line per limit that holds for the newest spec revision: `LIMIT: cap 2 of 2 automatic send-backs used` and `LIMIT: growth size <size> is more than half over <B>`;
+  - `NOTE: total growth <total> over spec revision 1 (<S1>); not a limit`, when the newest spec revision's baseline is not spec revision 1, S1 is not 0 and `(size - S1) * 100 > 50 * S1`. With baseline spec revision 1, `LIMIT: growth` says it.
+- The NOTE is not a limit: `sf spec-verdict continue` is not refused for it.
 - `sf show <id>` prints the record texts with or without `--full`.
 
 ## Sharing
@@ -189,8 +190,8 @@ plus `records` and `lore`:
   `type`, `from`, `stage`, `needs`, `route`, `commit` (created, review and
   handoff only), `text` (the free text of any record but created),
   `merged_into` (finished), `rejected` (approval), `audit_refusals`
-  (review and handoff, a number) and `verdict` (a verdict record or an
-  automatic send-back), each null where it does not apply.
+  (review and handoff, a number) and `spec_verdict` (a spec-verdict record
+  or an automatic send-back), each null where it does not apply.
   `rejected` holds one `{finding, reason, kind, severity}` per `Rejected:`
   trailer, split at the last ` | `; `kind` and `severity` come from a
   `DEFECT|PREMISE, CRITICAL|HIGH|MEDIUM|LOW: ` prefix, else null. `files:`

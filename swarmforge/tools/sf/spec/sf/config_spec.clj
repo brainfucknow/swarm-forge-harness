@@ -145,43 +145,50 @@
         (should= 1 status)
         (should (some #(str/includes? % "routes.conf: feature: 'falsifier' in route 'specifier,falsifier,coder,qa' is a gate, not a stage") errors)))))
 
-  (context "judge role"
-    (it "keeps the judge off the pipeline, the gates and the routes, and names it"
-      (doseq [role ["falsifier" "judge"]] (spit (str (fs/path *dir* "swarmforge/roles" (str role ".md"))) "fixture"))
-      (conf "roles.conf" "specifier strong session\nfalsifier strong subagent gate\njudge strong subagent judge\ncoder strong subagent\nqa fast subagent\n")
+  (context "spec-judge role"
+    (it "keeps the spec-judge off the pipeline, the gates and the routes, and names it"
+      (doseq [role ["falsifier" "spec-judge"]] (spit (str (fs/path *dir* "swarmforge/roles" (str role ".md"))) "fixture"))
+      (conf "roles.conf" "specifier strong session\nfalsifier strong subagent gate\nspec-judge strong subagent spec-judge\ncoder strong subagent\nqa fast subagent\n")
       (should= ["specifier" "coder" "qa"] (config/pipeline))
       (should= ["falsifier"] (config/gates))
-      (should= "judge" (config/judge))
-      (should (config/judge? "judge"))
-      (should-not (config/judge? "falsifier"))
-      (should-not (config/gate? "judge"))
-      (should= nil (config/require-agent "judge"))
-      (should-throw clojure.lang.ExceptionInfo "'judge' in route 'specifier,judge,coder' is a judge, not a stage; it runs at the specification gate"
-                    (config/resolve-route "specifier,judge,coder"))
+      (should= "spec-judge" (config/spec-judge))
+      (should (config/spec-judge? "spec-judge"))
+      (should-not (config/spec-judge? "falsifier"))
+      (should-not (config/gate? "spec-judge"))
+      (should= nil (config/require-agent "spec-judge"))
+      (should-throw clojure.lang.ExceptionInfo "'spec-judge' in route 'specifier,spec-judge,coder' is a spec-judge, not a stage; it runs at the specification gate"
+                    (config/resolve-route "specifier,spec-judge,coder"))
       (should= [0 "CHECK: ok (3 roles, 2 routes)\n" [""]] (check)))
 
-    (it "has no judge when no role is flagged judge"
-      (should= nil (config/judge)))
+    (it "has no spec-judge when no role is flagged spec-judge"
+      (should= nil (config/spec-judge)))
 
-    (it "refuses a judge that is also audit, optional or gate, runs in session, or comes twice"
-      (doseq [role ["judge" "referee"]] (spit (str (fs/path *dir* "swarmforge/roles" (str role ".md"))) "fixture"))
-      (doseq [[rows problem] [["judge strong subagent judge audit" "'judge' is a judge and cannot also be audit, optional or gate"]
-                              ["judge strong subagent optional judge" "'judge' is a judge and cannot also be audit, optional or gate"]
-                              ["judge strong subagent gate judge" "'judge' is a judge and cannot also be audit, optional or gate"]
-                              ["judge strong session judge" "'judge' is a judge and must run as subagent"]
-                              ["judge strong subagent judge\nreferee strong subagent judge" "'referee' is a second judge; roles.conf has one"]]]
+    (it "refuses a spec-judge that is also audit, optional or gate, runs in session, or comes twice"
+      (doseq [role ["spec-judge" "referee"]] (spit (str (fs/path *dir* "swarmforge/roles" (str role ".md"))) "fixture"))
+      (doseq [[rows problem] [["spec-judge strong subagent spec-judge audit" "'spec-judge' is a spec-judge and cannot also be audit, optional or gate"]
+                              ["spec-judge strong subagent optional spec-judge" "'spec-judge' is a spec-judge and cannot also be audit, optional or gate"]
+                              ["spec-judge strong subagent gate spec-judge" "'spec-judge' is a spec-judge and cannot also be audit, optional or gate"]
+                              ["spec-judge strong session spec-judge" "'spec-judge' is a spec-judge and must run as subagent"]
+                              ["spec-judge strong subagent spec-judge\nreferee strong subagent spec-judge" "'referee' is a second spec-judge; roles.conf has one"]]]
         (conf "roles.conf" (str "specifier strong session\n" rows "\ncoder strong subagent\nqa fast subagent\n"))
         (let [[status _ errors] (check)]
           (should= 1 status)
           (should (some #(str/includes? % problem) errors)))))
 
-    (it "refuses a route that names the judge"
-      (spit (str (fs/path *dir* "swarmforge/roles/judge.md")) "fixture")
-      (conf "roles.conf" "specifier strong session\njudge strong subagent judge\ncoder strong subagent\nqa fast subagent\n")
-      (conf "routes.conf" "feature specifier,judge,coder,qa\n")
+    (it "refuses the old flag judge as an unknown flag that names spec-judge"
+      (spit (str (fs/path *dir* "swarmforge/roles/referee.md")) "fixture")
+      (conf "roles.conf" "specifier strong session\nreferee strong subagent judge\ncoder strong subagent\nqa fast subagent\n")
       (let [[status _ errors] (check)]
         (should= 1 status)
-        (should (some #(str/includes? % "routes.conf: feature: 'judge' in route 'specifier,judge,coder,qa' is a judge, not a stage") errors)))))
+        (should (some #(str/includes? % "roles.conf: 'referee' has unknown flag 'judge' (only audit, optional, gate, spec-judge)") errors))))
+
+    (it "refuses a route that names the spec-judge"
+      (spit (str (fs/path *dir* "swarmforge/roles/spec-judge.md")) "fixture")
+      (conf "roles.conf" "specifier strong session\nspec-judge strong subagent spec-judge\ncoder strong subagent\nqa fast subagent\n")
+      (conf "routes.conf" "feature specifier,spec-judge,coder,qa\n")
+      (let [[status _ errors] (check)]
+        (should= 1 status)
+        (should (some #(str/includes? % "routes.conf: feature: 'spec-judge' in route 'specifier,spec-judge,coder,qa' is a spec-judge, not a stage") errors)))))
 
   (context "check"
     (it "accepts a valid catalogue, the bbmain kind and the coverage rewrite"
@@ -210,7 +217,7 @@
                 "CHECK: roles.conf: role 'specifier' listed twice"
                 "CHECK: roles.conf: 'coder' uses unknown tier 'weak' (see tiers.conf)"
                 "CHECK: roles.conf: 'coder' runs-as must be subagent or session, not 'robot'"
-                "CHECK: roles.conf: 'qa' has unknown flag 'flag' (only audit, optional, gate, judge)"
+                "CHECK: roles.conf: 'qa' has unknown flag 'flag' (only audit, optional, gate, spec-judge)"
                 "CHECK: roles.conf: 'x' needs <role> <tier> <runs-as> [audit] [optional]"
                 "CHECK: routes.conf: route 'feature' listed twice"
                 "CHECK: routes.conf: feature: route 'qa,specifier' is out of order; follow swarmforge/roles.conf: specifier,Bad,done,specifier,coder,qa,x"
