@@ -47,8 +47,10 @@ Catalogue commands
   gates                           print the gate roles that audit a specification before approval
   routes                          print the named routes
   stage <id>                      print the task's current stage
-  rounds <id>                     print each round of the specification gate: size, growth,
-                                  verdict and what it sent back, then the LIMIT lines
+  rounds <id> [--full]            print each round of the specification gate: size, growth,
+                                  total growth over round 1 and verdict, then the LIMIT lines
+                                  and an informational NOTE; --full adds what each round
+                                  sent back
   harvest                         print every task's history as one JSON line each, finished
                                   tasks first (handoff-protocol.md describes the keys)
   dispatch <role> <id> [backend]  run a role or gate headlessly (claude, codex, copilot)

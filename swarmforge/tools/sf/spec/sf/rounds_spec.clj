@@ -113,30 +113,68 @@
     (should= ["LIMIT: growth size 16 is more than half over 10"] (rounds/limits 1 16 10))
     (should= [] (rounds/limits 1 15 10))))
 
+(defn- sized
+  "Rounds with the size and baseline of each pair, numbered from 1."
+  [& pairs]
+  (vec (map-indexed (fn [i [size baseline]] {:n (inc i) :size size :baseline baseline}) pairs)))
+
+(describe "notes"
+  (it "prints the total growth over round 1 when the newest round is more than half over it after a reset"
+    (should= ["NOTE: total growth 109% over round 1 (11); not a limit"]
+             (rounds/notes (sized [11 1] [16 2] [21 3] [23 3])))
+    (should= ["NOTE: total growth 128% over round 1 (38); not a limit"]
+             (rounds/notes (sized [38 1] [63 2] [87 3]))))
+
+  (it "prints nothing at half over round 1 or less"
+    (should= [] (rounds/notes (sized [10 1] [15 2])))
+    (should= [] (rounds/notes (sized [11 1] [16 2]))))
+
+  (it "prints nothing when the newest round's baseline is round 1, where LIMIT: growth says it"
+    (should= [] (rounds/notes (sized [10 1] [16 1] [30 1]))))
+
+  (it "prints nothing when round 1 has size 0"
+    (should= [] (rounds/notes (sized [0 1] [16 2]))))
+
+  (it "prints nothing without a round"
+    (should= [] (rounds/notes []))))
+
+(def ^:private found
+  [{:n 1 :short "abc1234" :size 10 :growth "0%" :total "0%"
+    :records [(continued "r1 first\nsecond\n\nfourth")]}
+   {:n 2 :short "def5678" :size 16 :growth "60%" :total "60%" :records []}])
+
+(def ^:private tail ["LIMIT: growth size 16 is more than half over 10" "NOTE: x"])
+
 (describe "report"
   (it "prints NO_ROUNDS without a round"
-    (should= ["NO_ROUNDS"] (rounds/report [] [])))
+    (should= ["NO_ROUNDS"] (rounds/report [] [] false))
+    (should= ["NO_ROUNDS"] (rounds/report [] [] true)))
 
-  (it "prints a ROUND line per round, its records' texts, then the limit lines"
-    (should= ["ROUND 1 abc1234 size:10 growth:0% verdict:continue"
+  (it "prints a ROUND line per round with its total, then the tail lines, and no record text"
+    (should= ["ROUND 1 abc1234 size:10 growth:0% total:0% verdict:continue"
+              "ROUND 2 def5678 size:16 growth:60% total:60% verdict:-"
+              "LIMIT: growth size 16 is more than half over 10"
+              "NOTE: x"]
+             (rounds/report found tail false)))
+
+  (it "prints each round's records' texts under its line when full"
+    (should= ["ROUND 1 abc1234 size:10 growth:0% total:0% verdict:continue"
               "  judge: r1 first"
               "    second"
               ""
               "    fourth"
-              "ROUND 2 def5678 size:16 growth:60% verdict:-"
-              "LIMIT: growth size 16 is more than half over 10"]
-             (rounds/report [{:n 1 :short "abc1234" :size 10 :growth "0%"
-                              :records [(continued "r1 first\nsecond\n\nfourth")]}
-                             {:n 2 :short "def5678" :size 16 :growth "60%" :records []}]
-                            ["LIMIT: growth size 16 is more than half over 10"])))
+              "ROUND 2 def5678 size:16 growth:60% total:60% verdict:-"
+              "LIMIT: growth size 16 is more than half over 10"
+              "NOTE: x"]
+             (rounds/report found tail true)))
 
-  (it "prints an undefined growth as - without %"
-    (should= ["ROUND 1 abc1234 size:0 growth:- verdict:stuck" "  judge: x"]
-             (rounds/report [{:n 1 :short "abc1234" :size 0 :growth "-" :records [(verdict "stuck" "x")]}] [])))
+  (it "prints an undefined growth and total as - without %"
+    (should= ["ROUND 1 abc1234 size:0 growth:- total:- verdict:stuck" "  judge: x"]
+             (rounds/report [{:n 1 :short "abc1234" :size 0 :growth "-" :total "-" :records [(verdict "stuck" "x")]}] [] true)))
 
-  (it "prints an operator's send-back under its round"
-    (should= ["ROUND 1 abc1234 size:1 growth:0% verdict:-" "  operator: no"]
-             (rounds/report [{:n 1 :short "abc1234" :size 1 :growth "0%" :records [(rejected "no")]}] []))))
+  (it "prints an operator's send-back under its round when full"
+    (should= ["ROUND 1 abc1234 size:1 growth:0% total:0% verdict:-" "  operator: no"]
+             (rounds/report [{:n 1 :short "abc1234" :size 1 :growth "0%" :total "0%" :records [(rejected "no")]}] [] true))))
 
 (def ^:private ok
   {:state {:stage "specifier" :needs "approval"} :rounds (rounds/rounds [created (review "a")])
