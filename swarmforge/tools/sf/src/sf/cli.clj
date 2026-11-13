@@ -26,8 +26,8 @@ Operator commands
                                   accept the specification and hand it to the next role;
                                   each --rejected records a finding approved over
   reject <id> <text>              send the specification back to the specifier
-  verdict <id> <converged|continue|needs-operator|stuck> <text>
-                                  record the judge's verdict on the newest round; continue
+  spec-verdict <id> <converged|continue|needs-operator|stuck> <text>
+                                  record the spec-judge's spec verdict on the newest spec revision; continue
                                   sends the specification back, refused after 2 automatic
                                   send-backs or growth of more than half over the baseline
   finish <id> [--into BRANCH]     refuse uncommitted work in the worktree, run swarmforge/verify.conf
@@ -47,8 +47,10 @@ Catalogue commands
   gates                           print the gate roles that audit a specification before approval
   routes                          print the named routes
   stage <id>                      print the task's current stage
-  rounds <id>                     print each round of the specification gate: size, growth,
-                                  verdict and what it sent back, then the LIMIT lines
+  spec-revisions <id> [--full]    print each spec revision of the specification gate: size,
+                                  growth, total growth over spec revision 1 and spec verdict,
+                                  then the LIMIT lines and an informational NOTE; --full adds
+                                  what each spec revision sent back
   harvest                         print every task's history as one JSON line each, finished
                                   tasks first (handoff-protocol.md describes the keys)
   dispatch <role> <id> [backend]  run a role or gate headlessly (claude, codex, copilot)
@@ -66,7 +68,7 @@ Environment
   SWARMFORGE_ROLE      role name used for `from:` (default: the task's stage)
   SWARMFORGE_DISPATCHED
                        set by dispatch and run to the role or gate they start;
-                       new, approve, reject, verdict, answer, route changes and finish
+                       new, approve, reject, spec-verdict, answer, route changes and finish
                        refuse to run under it
   SWARMFORGE_BACKEND   default backend for dispatch/run
   SWARMFORGE_USER, SWARMFORGE_EMAIL
@@ -95,8 +97,8 @@ Environment
    "review" task/review
    "approve" task/approve
    "reject" task/reject
-   "verdict" task/verdict
-   "rounds" task/rounds
+   "spec-verdict" task/spec-verdict
+   "spec-revisions" task/spec-revisions
    "finish" task/finish
    "roles" (config/in-checkout print-roles)
    "pipeline" (config/in-checkout print-roles)

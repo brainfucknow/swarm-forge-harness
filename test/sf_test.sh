@@ -688,11 +688,14 @@ cd "$hv"
 assert_match "help lists harvest" "$(sf --help)" "^  harvest  "
 cd "$repo"
 
-# judge loop: sf verdict and sf rounds through the CLI
+# spec-judge loop: sf spec-verdict and sf spec-revisions through the CLI
 copy_swarmforge .
-assert_match "help lists verdict" "$(sf help)" "^  verdict <id> <converged\|continue\|needs-operator\|stuck> <text>$"
-assert_match "help lists rounds" "$(sf help)" "^  rounds <id>  "
-assert_match "a route that names the judge is refused" "$(sf new "Judge route" -m x --route specifier,judge,coder 2>&1 || true)" "'judge' in route 'specifier,judge,coder' is a judge, not a stage"
+assert_match "help lists spec-verdict" "$(sf help)" "^  spec-verdict <id> <converged\|continue\|needs-operator\|stuck> <text>$"
+assert_match "help lists spec-revisions" "$(sf help)" "^  spec-revisions <id> \\[--full\\]  "
+assert_eq "help lists no old gate command" "$(sf help | grep -cE '^  (rounds|verdict) ' || true)" "0"
+assert_eq "the old rounds command is unknown" "$(sf rounds x 2>&1; echo "rc=$?")" "$(printf "sf: unknown command 'rounds' (try sf --help)\nrc=1")"
+assert_eq "the old verdict command is unknown" "$(sf verdict x continue y 2>&1; echo "rc=$?")" "$(printf "sf: unknown command 'verdict' (try sf --help)\nrc=1")"
+assert_match "a route that names the spec-judge is refused" "$(sf new "Spec-judge route" -m x --route specifier,spec-judge,coder 2>&1 || true)" "'spec-judge' in route 'specifier,spec-judge,coder' is a spec-judge, not a stage"
 jq_spec() {
   local t; t="$(sf new "$1" -m x --route specifier,coder)"
   sf start "$t" >/dev/null
@@ -700,41 +703,99 @@ jq_spec() {
   sf review "$t" >/dev/null
   echo "$t"
 }
-jl="$(jq_spec "Judge loop")"
-assert_match "dispatch refuses the judge" "$(sf dispatch judge "$jl" claude 2>&1 || true)" "^sf: 'judge' is the judge"
-assert_eq "verdict continue prints its line" "$(sf verdict "$jl" continue "r1")" "VERDICT: $jl continue"
-assert_eq "start shows the send-back with its verdict" "$(sf start "$jl" | grep -A2 '^from: judge$')" "$(printf 'from: judge\nverdict: continue\nreason: r1')"
+jl="$(jq_spec "Spec-judge loop")"
+assert_match "dispatch refuses the spec-judge" "$(sf dispatch spec-judge "$jl" claude 2>&1 || true)" "^sf: 'spec-judge' is the spec-judge: it needs the spec revision's gate reports"
+assert_eq "spec-verdict continue prints its line" "$(sf spec-verdict "$jl" continue "r1")" "SPEC-VERDICT: $jl continue"
+assert_eq "start shows the send-back with its spec verdict" "$(sf start "$jl" | grep -A2 '^from: spec-judge$')" "$(printf 'from: spec-judge\nspec-verdict: continue\nreason: r1')"
+assert_match "the send-back has the new trailer" "$(git log -1 --format=%B "swarm/$jl")" "^SwarmForge-Spec-Verdict: continue$"
+assert_eq "the send-back has no old trailer" "$(git log -1 --format=%B "swarm/$jl" | grep -c '^SwarmForge-Verdict:' || true)" "0"
 git -C ".worktrees/$jl" commit -q --allow-empty -m "Rework"
 sf review "$jl" >/dev/null
-sf verdict "$jl" continue "r2" >/dev/null
+sf spec-verdict "$jl" continue "r2" >/dev/null
 git -C ".worktrees/$jl" commit -q --allow-empty -m "Rework again"
 sf review "$jl" >/dev/null
-rounds="$(sf rounds "$jl")"
-assert_eq "rounds prints three rounds, the first two continued" "$(echo "$rounds" | grep '^ROUND' | sed 's/ [0-9a-f]* size:/ size:/')" \
-  "$(printf 'ROUND 1 size:11 growth:0%% verdict:continue\nROUND 2 size:13 growth:18%% verdict:continue\nROUND 3 size:15 growth:36%% verdict:-')"
-assert_match "rounds prints each send-back" "$rounds" "^  judge: r2$"
-assert_match "rounds prints the cap" "$rounds" "^LIMIT: cap 2 of 2 automatic send-backs used$"
+revisions="$(sf spec-revisions "$jl")"
+loop_lines='SPEC-REVISION 1 size:11 growth:0% total:0% spec-verdict:continue
+SPEC-REVISION 2 size:13 growth:18% total:18% spec-verdict:continue
+SPEC-REVISION 3 size:15 growth:36% total:36% spec-verdict:-'
+assert_eq "spec-revisions prints three spec revisions, the first two continued" "$(echo "$revisions" | grep '^SPEC-REVISION' | sed 's/ [0-9a-f]* size:/ size:/')" "$loop_lines"
+assert_eq "spec-revisions prints no send-back text" "$(echo "$revisions" | grep -c '^  ' || true)" "0"
+assert_match "spec-revisions --full prints each send-back" "$(sf spec-revisions "$jl" --full)" "^  spec-judge: r2$"
+assert_fails "spec-revisions refuses another argument" sf spec-revisions "$jl" --fuller
+assert_match "spec-revisions names itself in its usage" "$(sf spec-revisions "$jl" --fuller 2>&1 || true)" "spec-revisions takes <id> \[--full\]"
+assert_match "spec-revisions prints the cap" "$revisions" "^LIMIT: cap 2 of 2 automatic send-backs used$"
 tip="$(git rev-parse "swarm/$jl")"
-assert_match "continue past the cap is refused with the limit" "$(sf verdict "$jl" continue x 2>&1 || true)" "^sf: LIMIT: cap 2 of 2 automatic send-backs used$"
+assert_match "continue past the cap is refused with the limit" "$(sf spec-verdict "$jl" continue x 2>&1 || true)" "^sf: LIMIT: cap 2 of 2 automatic send-backs used$"
 assert_eq "the refused continue records nothing" "$(git rev-parse "swarm/$jl")" "$tip"
-assert_eq "stuck is recorded" "$(sf verdict "$jl" stuck "cap")" "VERDICT: $jl stuck"
-assert_fails "a second verdict in the round" sf verdict "$jl" converged "x"
-assert_fails "a dispatched role cannot record a verdict" env SWARMFORGE_DISPATCHED=judge sf verdict "$jl" converged "x"
-assert_eq "a dispatched role can read the rounds" "$(SWARMFORGE_DISPATCHED=judge sf rounds "$jl" | grep -c '^ROUND')" "3"
-assert_eq "harvest gives the verdicts" "$(sf harvest | jq -c --arg id "$jl" 'select(.id == $id) | [.records[] | .verdict]')" \
+assert_match "a bad spec verdict is refused" "$(sf spec-verdict "$jl" maybe x 2>&1 || true)" "spec verdict must be converged, continue, needs-operator or stuck, not 'maybe'"
+assert_match "a spec verdict needs a reason" "$(sf spec-verdict "$jl" stuck 2>&1 || true)" "spec verdict needs a reason"
+assert_eq "stuck is recorded" "$(sf spec-verdict "$jl" stuck "cap")" "SPEC-VERDICT: $jl stuck"
+assert_match "show prints the spec-verdict record" "$(sf show "$jl")" "^type: spec-verdict$"
+assert_match "the spec-verdict record has the new trailer" "$(git log -1 --format=%B "swarm/$jl")" "^SwarmForge-Record: spec-verdict$"
+assert_match "a second spec verdict in the spec revision is refused" "$(sf spec-verdict "$jl" converged "x" 2>&1 || true)" "spec revision 3 already has the spec verdict stuck"
+assert_match "a dispatched role cannot record a spec verdict" "$(SWARMFORGE_DISPATCHED=spec-judge sf spec-verdict "$jl" converged "x" 2>&1 || true)" "^sf: spec-verdict is the operator's; the dispatched spec-judge cannot run it$"
+assert_fails "a dispatched role's spec verdict fails" env SWARMFORGE_DISPATCHED=spec-judge sf spec-verdict "$jl" converged "x"
+assert_eq "a dispatched role can read the spec revisions" "$(SWARMFORGE_DISPATCHED=spec-judge sf spec-revisions "$jl" | grep -c '^SPEC-REVISION')" "3"
+assert_eq "harvest gives the spec verdicts" "$(sf harvest | jq -c --arg id "$jl" 'select(.id == $id) | [.records[] | .spec_verdict]')" \
   '[null,null,"continue",null,"continue",null,"stuck"]'
-assert_match "approve hands off after a verdict" "$(sf approve "$jl")" "specifier -> coder"
-assert_fails "verdict at the next stage" sf verdict "$jl" converged "x"
-jg="$(jq_spec "Judge growth")"
-sf verdict "$jg" continue "r1" >/dev/null
+assert_eq "harvest gives the new record type" "$(sf harvest | jq -r --arg id "$jl" 'select(.id == $id) | .records[-1].type')" "spec-verdict"
+assert_eq "harvest has no verdict key" "$(sf harvest | jq --arg id "$jl" 'select(.id == $id) | [.records[] | select(has("verdict"))] | length')" "0"
+assert_match "approve hands off after a spec verdict" "$(sf approve "$jl")" "specifier -> coder"
+assert_match "spec-verdict at the next stage is refused" "$(sf spec-verdict "$jl" converged "x" 2>&1 || true)" "spec verdicts are recorded at stage:specifier"
+jg="$(jq_spec "Spec-judge growth")"
+sf spec-verdict "$jg" continue "r1" >/dev/null
 git -C ".worktrees/$jg" commit -q --allow-empty -m "$(printf 'Rework\n1\n2\n3\n4\n5')"
 sf review "$jg" >/dev/null
-assert_match "growth over half the baseline is a limit" "$(sf rounds "$jg")" "^LIMIT: growth size 18 is more than half over 11$"
-assert_match "continue over the growth limit is refused" "$(sf verdict "$jg" continue x 2>&1 || true)" "^sf: LIMIT: growth"
-assert_eq "a task without a review has no rounds" "$(sf rounds "$(sf new "Unreviewed" -m x)")" "NO_ROUNDS"
-sed -i '/^judge /d' swarmforge/roles.conf
-assert_match "check passes without the judge" "$(sf check)" "^CHECK: ok"
-assert_match "verdict fails without the judge" "$(sf verdict "$jg" stuck x 2>&1 || true)" "roles.conf has no judge"
+assert_match "growth over half the baseline is a limit" "$(sf spec-revisions "$jg")" "^LIMIT: growth size 18 is more than half over 11$"
+assert_match "continue over the growth limit is refused" "$(sf spec-verdict "$jg" continue x 2>&1 || true)" "^sf: LIMIT: growth"
+jn="$(jq_spec "Spec-judge note")"
+sf spec-verdict "$jn" needs-operator "decide" >/dev/null
+sf reject "$jn" "more" >/dev/null
+git -C ".worktrees/$jn" commit -q --allow-empty -m "$(printf 'Rework\n1\n2\n3\n4\n5')"
+sf review "$jn" >/dev/null
+assert_eq "spec-revisions totals growth over spec revision 1 across a send-back and notes it" "$(sf spec-revisions "$jn" | sed 's/ [0-9a-f]* size:/ size:/')" \
+  "$(printf 'SPEC-REVISION 1 size:11 growth:0%% total:0%% spec-verdict:needs-operator\nSPEC-REVISION 2 size:18 growth:0%% total:63%% spec-verdict:-\nNOTE: total growth 63%% over spec revision 1 (11); not a limit')"
+assert_eq "the NOTE does not refuse continue" "$(sf spec-verdict "$jn" continue "again")" "SPEC-VERDICT: $jn continue"
+assert_eq "a task without a review has no spec revisions" "$(sf spec-revisions "$(sf new "Unreviewed" -m x)")" "NO_SPEC_REVISIONS"
+
+# old records: type verdict and SwarmForge-Verdict read as the new ones
+old_record() { # <id> <record> <verdict> <text> <needs>: an old-form record on the task branch
+  local branch="swarm/$1" head tree commit
+  head="$(git rev-parse "$branch")"; tree="$(git rev-parse "$head^{tree}")"
+  commit="$(printf 'sf %s: %s\n\n%s\n\nSwarmForge-Task: %s\nSwarmForge-Record: %s\nSwarmForge-From: judge\nSwarmForge-Stage: specifier\nSwarmForge-Route: specifier,coder\nSwarmForge-Needs: %s\nSwarmForge-Verdict: %s\n' \
+    "$2" "$1" "$4" "$1" "$2" "$5" "$3" | git commit-tree "$tree" -p "$head")"
+  git update-ref "refs/heads/$branch" "$commit"
+}
+jo="$(jq_spec "Old loop")"
+old_record "$jo" changes-requested continue "o1" none
+git -C ".worktrees/$jo" merge -q --ff-only "swarm/$jo"
+git -C ".worktrees/$jo" commit -q --allow-empty -m "Rework"
+sf review "$jo" >/dev/null
+old_record "$jo" changes-requested continue "o2" none
+git -C ".worktrees/$jo" merge -q --ff-only "swarm/$jo"
+git -C ".worktrees/$jo" commit -q --allow-empty -m "Rework again"
+sf review "$jo" >/dev/null
+old_revisions="$(sf spec-revisions "$jo")"
+assert_eq "old send-backs give the same spec revision lines" "$(echo "$old_revisions" | grep '^SPEC-REVISION' | sed 's/ [0-9a-f]* size:/ size:/')" "$loop_lines"
+assert_match "old send-backs count toward the cap" "$old_revisions" "^LIMIT: cap 2 of 2 automatic send-backs used$"
+assert_match "continue past the cap of old send-backs is refused" "$(sf spec-verdict "$jo" continue x 2>&1 || true)" "^sf: LIMIT: cap 2 of 2"
+old_record "$jo" verdict stuck "o3" approval
+assert_match "an old verdict record shows as a spec-verdict" "$(sf show "$jo")" "$(printf '^type: spec-verdict$')"
+assert_eq "an old verdict record shows its spec verdict" "$(sf show "$jo" | grep -A3 '^type: spec-verdict$' | tail -n 3)" "$(printf 'from: judge\nspec-verdict: stuck\nreason: o3')"
+assert_match "an old send-back shows its spec verdict" "$(sf start "$jo")" "$(printf '^spec-verdict: continue$')"
+assert_match "an old verdict closes its spec revision" "$(sf spec-revisions "$jo")" "^SPEC-REVISION 3 [0-9a-f]+ size:15 growth:36% total:36% spec-verdict:stuck$"
+assert_match "an old verdict refuses a second one" "$(sf spec-verdict "$jo" converged x 2>&1 || true)" "spec revision 3 already has the spec verdict stuck"
+assert_eq "harvest reads old records as new ones" "$(sf harvest | jq -c --arg id "$jo" 'select(.id == $id) | [.records[] | select(.spec_verdict) | [.type, .spec_verdict]]')" \
+  '[["changes-requested","continue"],["changes-requested","continue"],["spec-verdict","stuck"]]'
+assert_eq "sf does not rewrite old records" "$(git log -1 --format=%B "swarm/$jo" | grep -c '^SwarmForge-Verdict: stuck$')" "1"
+
+sed -i 's/^spec-judge \(.*\) spec-judge$/spec-judge \1 judge/' swarmforge/roles.conf
+assert_eq "check refuses the old judge flag" "$(sf check 2>&1 | grep -c "roles.conf: 'spec-judge' has unknown flag 'judge' (only audit, optional, gate, spec-judge)")" "1"
+assert_fails "check fails on the old judge flag" sf check
+copy_swarmforge .
+sed -i '/^spec-judge /d' swarmforge/roles.conf
+assert_match "check passes without the spec-judge" "$(sf check)" "^CHECK: ok"
+assert_match "spec-verdict fails without the spec-judge" "$(sf spec-verdict "$jg" stuck x 2>&1 || true)" "roles.conf has no spec-judge"
 copy_swarmforge .
 
 for pair in ".claude/skills/swarm/SKILL.md .agents/skills/swarm/SKILL.md"; do

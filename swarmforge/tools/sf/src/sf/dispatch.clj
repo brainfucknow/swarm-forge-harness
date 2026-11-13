@@ -51,8 +51,8 @@
 (defn dispatch [[role id-arg backend]]
   (when (str/blank? role) (shell/die "dispatch needs a role"))
   (config/require-agent role)
-  (when (config/judge? role)
-    (shell/die "'" role "' is the judge: it needs the round's gate reports and runs only as a subagent of the session"))
+  (when (config/spec-judge? role)
+    (shell/die "'" role "' is the spec-judge: it needs the spec revision's gate reports and runs only as a subagent of the session"))
   (let [id (store/resolve-id id-arg)
         backend (or (not-empty backend) (detect-backend))
         command (vec (command-for backend role (role-prompt role id)))
