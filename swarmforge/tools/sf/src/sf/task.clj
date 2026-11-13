@@ -272,11 +272,14 @@
     (println (str "VERDICT: " id " " verdict))))
 
 (defn rounds
-  "Prints the rounds of the task's specification gate. Reads only."
-  [[id-arg]]
+  "Prints the rounds of the task's specification gate, with the record texts
+  under --full. Reads only."
+  [[id-arg & flags]]
+  (when-not (contains? #{[] ["--full"]} (vec flags))
+    (shell/die "rounds takes <id> [--full]"))
   (let [{:keys [records]} (history/view (store/resolve-id id-arg))
         {found :rounds limits :limits} (history/gate-rounds records)]
-    (run! println (rounds/report found limits))))
+    (run! println (rounds/report found (concat limits (rounds/notes found)) (= ["--full"] flags)))))
 
 (defn- finished-message [id state target]
   (record/message (assoc (flow/finished state target) :task id)))

@@ -26,14 +26,14 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 ## Specification Gate
 - When the specifier returns after `sf review`, run the gates first: for each role `sf gates` prints, delegate to the agent named after it with the prompt `Task <id>. Run: swarmforge/bin/sf show <id>` and wait for its report. Without subagents, run `sf dispatch <gate> <id>`. A gate records nothing; if it committed or recorded anything, tell the operator. Skip the gates for a task or the session when the operator says so.
 - The judge loop runs when `swarmforge/roles.conf` has a judge (a row flagged `judge`), the harness runs subagents, and the operator has not said to skip the gates. Otherwise skip the judge: the gate has no automatic send-back and no verdict. After the gates of each round:
-  - Delegate to the judge with the prompt `Task <id>. Run: swarmforge/bin/sf rounds <id>` followed by this round's gate reports verbatim. Wait for its `VERDICT:` and `REASON:`.
+  - Delegate to the judge with the prompt `Task <id>. Run: swarmforge/bin/sf rounds <id> --full` followed by this round's gate reports verbatim. Wait for its `VERDICT:` and `REASON:`.
   - Record it: `sf verdict <id> <verdict> "<the judge's reason, then every finding of this round's gate reports verbatim>"`. For continue, end the text with `Sent back: the CRITICAL and HIGH findings.`
-  - On continue, tell the operator in one line and resume the specifier. When it returns after `sf review`, run the gates and the judge again.
+  - On continue, after `sf verdict` records it, tell the operator in one line, show the output of `sf rounds <id>`, verbatim, and resume the specifier without stopping. When it returns after `sf review`, run the gates and the judge again.
   - When sf refuses continue, record `stuck` instead. Put sf's message before that same text.
-  - On converged, needs-operator and stuck, stop for the operator. Show the verdict with its reason and the output of `sf rounds <id>` (each round's size and what each earlier round sent back). Recommend approval only on converged. On needs-operator, put the decision to the operator.
+  - On converged, needs-operator and stuck, stop for the operator. Show the verdict with its reason. Recommend approval only on converged. On needs-operator, put the decision to the operator.
   - After the operator's own `sf reject`, the next round runs the gates and the judge again. The loop continues while sf allows it.
   - The judge records nothing. If it recorded anything, tell the operator.
-- Show the committed criteria and QA, from the specification commit body or durable contract files, each gate's report verbatim, the task's route and any recommended change. Recommend as follows, and list every remaining finding:
+- Show the committed criteria and QA, from the specification commit body or durable contract files, each gate's report verbatim, the task's route, any recommended change and the output of `sf rounds <id>`, verbatim. Recommend as follows, and list every remaining finding:
   - The judge gave this round's verdict: recommend approval only on converged.
   - Otherwise at least one gate ran this round: recommend approval if this round's reports have no CRITICAL or HIGH finding.
   - No gate ran this round: make no recommendation.

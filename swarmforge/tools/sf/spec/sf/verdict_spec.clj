@@ -48,8 +48,8 @@
     (should= before (tip id))
     (:err result)))
 
-(defn- rounds-of [id]
-  (out task/rounds [id]))
+(defn- rounds-of [id & flags]
+  (out task/rounds (vec (cons id flags))))
 
 (describe "sf verdict"
   (around [it] (with-repo judged it))
@@ -111,15 +111,16 @@
     (let [id (reviewed-task)]
       (out task/verdict [id "continue" "r1"])
       (rework! id 4)
-      (should-contain "size:15 growth:50% verdict:-" (rounds-of id))
+      (should-contain "size:15 growth:50% total:50% verdict:-" (rounds-of id))
       (should-contain "VERDICT:" (out task/verdict [id "continue" "r2"]))
       (rework! id 0)
       (should-contain "LIMIT: growth size 16 is more than half over 10" (rounds-of id))
       (out task/verdict [id "stuck" "x"])
       (out task/reject [id "operator"])
       (rework! id 0)
-      (should-contain "size:17 growth:0% verdict:-" (rounds-of id))
-      (should-not-contain "LIMIT: growth" (rounds-of id))))
+      (should-contain "size:17 growth:0% total:70% verdict:-" (rounds-of id))
+      (should-not-contain "LIMIT: growth" (rounds-of id))
+      (should-contain "NOTE: total growth 70% over round 1 (10); not a limit" (rounds-of id))))
 
   (it "refuses continue with the growth line when the round is over the limit"
     (let [id (reviewed-task)]
@@ -139,22 +140,52 @@
     (let [id (out task/new-task ["Fresh" "-m" "x" "--route" "specifier,coder"])]
       (should= "NO_ROUNDS" (rounds-of id))))
 
-  (it "prints each round with its size, growth, verdict and records, then the limits"
+  (it "prints each round with its size, growth, total, verdict and, with --full, records, then the limits"
     (let [id (reviewed-task)
           first-sha (git *dir* "rev-parse" "--short" (str "swarm/" id "^"))]
       (out task/verdict [id "continue" "r1 first\nsecond"])
       (rework! id 0)
       (out task/verdict [id "continue" "r2"])
       (rework! id 6)
-      (let [lines (str/split-lines (rounds-of id))]
-        (should= (str "ROUND 1 " first-sha " size:10 growth:0% verdict:continue") (first lines))
+      (let [lines (str/split-lines (rounds-of id "--full"))]
+        (should= (str "ROUND 1 " first-sha " size:10 growth:0% total:0% verdict:continue") (first lines))
         (should= ["  judge: r1 first" "    second"] (subvec lines 1 3))
         (should= "  judge: r2" (nth lines 4))
-        (should-contain "size:11 growth:10% verdict:continue" (nth lines 3))
+        (should-contain "size:11 growth:10% total:10% verdict:continue" (nth lines 3))
         (should-contain "ROUND 3 " (nth lines 5))
-        (should-contain "size:18 growth:80% verdict:-" (nth lines 5))
+        (should-contain "size:18 growth:80% total:80% verdict:-" (nth lines 5))
         (should= ["LIMIT: cap 2 of 2 automatic send-backs used" "LIMIT: growth size 18 is more than half over 10"]
-                 (subvec lines 6)))))
+                 (subvec lines 6)))
+      (should= ["ROUND 1" "ROUND 2" "ROUND 3"
+                "LIMIT: cap 2 of 2 automatic send-backs used" "LIMIT: growth size 18 is more than half over 10"]
+               (map #(str/replace % #"^(ROUND \d+) .*" "$1") (str/split-lines (rounds-of id))))))
+
+  (it "prints the total over round 1 and a NOTE that is not a limit after an operator send-back"
+    (let [id (reviewed-task)]
+      (out task/verdict [id "needs-operator" "decide"])
+      (out task/reject [id "more"])
+      (rework! id 5)
+      (let [lines (str/split-lines (rounds-of id))]
+        (should-contain "size:10 growth:0% total:0% verdict:needs-operator" (first lines))
+        (should-contain "size:16 growth:0% total:60% verdict:-" (second lines))
+        (should= ["NOTE: total growth 60% over round 1 (10); not a limit"] (subvec lines 2)))
+      (should= (str "VERDICT: " id " continue") (out task/verdict [id "continue" "again"]))
+      (should-contain "size:16 growth:0% total:60% verdict:continue" (rounds-of id))))
+
+  (it "prints the verdict and send-back texts only with --full"
+    (let [id (reviewed-task)]
+      (out task/verdict [id "needs-operator" "decide"])
+      (out task/reject [id "more"])
+      (should-not-contain "  judge: decide" (rounds-of id))
+      (should-not-contain "  operator: more" (rounds-of id))
+      (should-contain "  judge: decide\n  operator: more" (rounds-of id "--full"))))
+
+  (it "refuses any argument after the id but --full"
+    (let [id (reviewed-task)]
+      (doseq [args [[id "--fuller"] [id "--full" "x"] ["--full" id]]]
+        (let [result (captured #(task/rounds args))]
+          (should= 1 (:status result))
+          (should-contain "rounds takes <id> [--full]" (:err result))))))
 
   (it "counts a superseded message only by its tracked lines, and trailers and blank lines not at all"
     (let [id (out task/new-task ["Superseded" "-m" "x" "--route" "specifier,coder"])]

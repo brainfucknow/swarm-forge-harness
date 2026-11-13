@@ -131,6 +131,19 @@
     (>= automatic cap) (conj (str "LIMIT: cap " cap " of " cap " automatic send-backs used"))
     (over-limit? size base) (conj (str "LIMIT: growth size " size " is more than half over " base))))
 
+;; total growth
+
+(defn notes
+  "The NOTE line on the newest round's total growth over round 1: printed
+  when it is more than half over a round 1 that is not its baseline, where
+  the growth limit does not measure it. Not a limit."
+  [sized-rounds]
+  (let [{s1 :size} (first sized-rounds)
+        {:keys [size baseline]} (peek (vec sized-rounds))]
+    (if (and size (not= 1 baseline) (over-limit? size s1))
+      [(str "NOTE: total growth " (growth size s1) " over round 1 (" s1 "); not a limit")]
+      [])))
+
 ;; output
 
 (defn- text-lines
@@ -141,16 +154,17 @@
           (for [line more] (if (str/blank? line) "" (str "    " line))))))
 
 (defn report
-  "The lines of sf rounds: NO_ROUNDS, or each round's line and records, then limit-lines."
-  [rounds limit-lines]
+  "The lines of sf rounds: NO_ROUNDS, or each round's line, with its records'
+  texts under it when full, then tail-lines."
+  [rounds tail-lines full]
   (if (empty? rounds)
     ["NO_ROUNDS"]
-    (vec (concat (for [{:keys [n short size growth records] :as round} rounds
+    (vec (concat (for [{:keys [n short size growth total records] :as round} rounds
                        line (cons (str "ROUND " n " " short " size:" size " growth:" growth
-                                       " verdict:" (or (verdict-of round) "-"))
-                                  (mapcat text-lines records))]
+                                       " total:" total " verdict:" (or (verdict-of round) "-"))
+                                  (when full (mapcat text-lines records)))]
                    line)
-                 limit-lines))))
+                 tail-lines))))
 
 ;; sf verdict
 

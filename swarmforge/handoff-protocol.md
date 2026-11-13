@@ -151,9 +151,13 @@ With a `judge` row in `roles.conf`, the specification gate loops. After the gate
 - The baseline of a round is the first round after the newest `sf reject` before it, else round 1. B is its size.
 - Growth is `(size - B) * 100 / B`, rounded down, or `-` when B is 0.
 - A round is over the growth limit when B is not 0 and `(size - B) * 100 > 50 * B`.
-- `sf rounds <id>` only reads. It runs for any role on any task `sf show` reads. It prints `NO_ROUNDS`, or:
-  - per round, `ROUND <n> <sha> size:<size> growth:<growth>% verdict:<verdict or ->` and the text of its verdict and changes-requested records;
-  - one line per limit that holds for the newest round: `LIMIT: cap 2 of 2 automatic send-backs used` and `LIMIT: growth size <size> is more than half over <B>`.
+- Total is the growth of a round's size over the size of round 1, S1, by the same formula: `-` when S1 is 0, `0%` in round 1.
+- `sf rounds <id> [--full]` only reads. It runs for any role on any task `sf show` reads, and refuses any other argument. It prints `NO_ROUNDS`, or:
+  - per round, `ROUND <n> <sha> size:<size> growth:<growth> total:<total> verdict:<verdict or ->`; with `--full`, the text of its verdict and changes-requested records under it;
+  - one line per limit that holds for the newest round: `LIMIT: cap 2 of 2 automatic send-backs used` and `LIMIT: growth size <size> is more than half over <B>`;
+  - `NOTE: total growth <total> over round 1 (<S1>); not a limit`, when the newest round's baseline is not round 1, S1 is not 0 and `(size - S1) * 100 > 50 * S1`. With baseline round 1, `LIMIT: growth` says it.
+- The NOTE is not a limit: `sf verdict continue` is not refused for it.
+- `sf show <id>` prints the record texts with or without `--full`.
 
 ## Sharing
 

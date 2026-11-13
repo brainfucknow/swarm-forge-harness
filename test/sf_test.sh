@@ -691,7 +691,7 @@ cd "$repo"
 # judge loop: sf verdict and sf rounds through the CLI
 copy_swarmforge .
 assert_match "help lists verdict" "$(sf help)" "^  verdict <id> <converged\|continue\|needs-operator\|stuck> <text>$"
-assert_match "help lists rounds" "$(sf help)" "^  rounds <id>  "
+assert_match "help lists rounds" "$(sf help)" "^  rounds <id> \\[--full\\]  "
 assert_match "a route that names the judge is refused" "$(sf new "Judge route" -m x --route specifier,judge,coder 2>&1 || true)" "'judge' in route 'specifier,judge,coder' is a judge, not a stage"
 jq_spec() {
   local t; t="$(sf new "$1" -m x --route specifier,coder)"
@@ -711,8 +711,10 @@ git -C ".worktrees/$jl" commit -q --allow-empty -m "Rework again"
 sf review "$jl" >/dev/null
 rounds="$(sf rounds "$jl")"
 assert_eq "rounds prints three rounds, the first two continued" "$(echo "$rounds" | grep '^ROUND' | sed 's/ [0-9a-f]* size:/ size:/')" \
-  "$(printf 'ROUND 1 size:11 growth:0%% verdict:continue\nROUND 2 size:13 growth:18%% verdict:continue\nROUND 3 size:15 growth:36%% verdict:-')"
-assert_match "rounds prints each send-back" "$rounds" "^  judge: r2$"
+  "$(printf 'ROUND 1 size:11 growth:0%% total:0%% verdict:continue\nROUND 2 size:13 growth:18%% total:18%% verdict:continue\nROUND 3 size:15 growth:36%% total:36%% verdict:-')"
+assert_eq "rounds prints no send-back text" "$(echo "$rounds" | grep -c '^  ' || true)" "0"
+assert_match "rounds --full prints each send-back" "$(sf rounds "$jl" --full)" "^  judge: r2$"
+assert_fails "rounds refuses another argument" sf rounds "$jl" --fuller
 assert_match "rounds prints the cap" "$rounds" "^LIMIT: cap 2 of 2 automatic send-backs used$"
 tip="$(git rev-parse "swarm/$jl")"
 assert_match "continue past the cap is refused with the limit" "$(sf verdict "$jl" continue x 2>&1 || true)" "^sf: LIMIT: cap 2 of 2 automatic send-backs used$"
@@ -731,6 +733,14 @@ git -C ".worktrees/$jg" commit -q --allow-empty -m "$(printf 'Rework\n1\n2\n3\n4
 sf review "$jg" >/dev/null
 assert_match "growth over half the baseline is a limit" "$(sf rounds "$jg")" "^LIMIT: growth size 18 is more than half over 11$"
 assert_match "continue over the growth limit is refused" "$(sf verdict "$jg" continue x 2>&1 || true)" "^sf: LIMIT: growth"
+jn="$(jq_spec "Judge note")"
+sf verdict "$jn" needs-operator "decide" >/dev/null
+sf reject "$jn" "more" >/dev/null
+git -C ".worktrees/$jn" commit -q --allow-empty -m "$(printf 'Rework\n1\n2\n3\n4\n5')"
+sf review "$jn" >/dev/null
+assert_eq "rounds totals growth over round 1 across a send-back and notes it" "$(sf rounds "$jn" | sed 's/ [0-9a-f]* size:/ size:/')" \
+  "$(printf 'ROUND 1 size:11 growth:0%% total:0%% verdict:needs-operator\nROUND 2 size:18 growth:0%% total:63%% verdict:-\nNOTE: total growth 63%% over round 1 (11); not a limit')"
+assert_eq "the NOTE does not refuse continue" "$(sf verdict "$jn" continue "again")" "VERDICT: $jn continue"
 assert_eq "a task without a review has no rounds" "$(sf rounds "$(sf new "Unreviewed" -m x)")" "NO_ROUNDS"
 sed -i '/^judge /d' swarmforge/roles.conf
 assert_match "check passes without the judge" "$(sf check)" "^CHECK: ok"
