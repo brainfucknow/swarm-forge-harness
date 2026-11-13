@@ -84,18 +84,9 @@ JavaScript has no mutation scan/count mode.
 
 ## Security scanners
 
-- Code scanner, on the changed files defined under "Changed code" (needs uv):
-  Semgrep with rules from a pinned semgrep-rules commit in `tmp/` (never
-  commit them: Semgrep Rules License). The fetch and the first uvx run reach
-  github.com and pypi.org; the scan runs offline. Exit 0 is clean, 1 is
-  findings, any other exit leaves the scan Not-tested:
-
-  ```sh
-  git init -q tmp/semgrep-rules
-  git -C tmp/semgrep-rules fetch -q --depth 1 https://github.com/semgrep/semgrep-rules.git 16b9e6d45f10649f6a531ec4838ed9924372c3bc
-  git -C tmp/semgrep-rules checkout -q FETCH_HEAD
-  uvx semgrep@1.183.0 scan --config tmp/semgrep-rules/javascript --config tmp/semgrep-rules/typescript --metrics=off --disable-version-check --error <changed files>
-  ```
+- Code scanner: Semgrep on the changed files defined under "Changed code".
+  Read and follow the [shared Semgrep setup](semgrep.md) with
+  `--config tmp/semgrep-rules/javascript --config tmp/semgrep-rules/typescript`.
 
 - Dependency audit, when the task changes `package.json` or a lockfile listed
   under "Package manager and runner": the detected manager's `npm audit`,
@@ -104,6 +95,9 @@ JavaScript has no mutation scan/count mode.
   package registry.
 
 ## Mutation and output
+
+Mutation must be differential: use `sf-js mutate` without `--all`, so StrykerJS
+mutates only the changed source files, incrementally.
 
 Stryker uses four workers unless overridden, its project config when present,
 and the selected runner; TypeScript projects also use its checker. Reports

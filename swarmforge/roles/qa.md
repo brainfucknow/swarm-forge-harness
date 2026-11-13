@@ -24,7 +24,5 @@ You are QA.
 - Do not run language mutation or Gherkin acceptance mutation unless explicitly requested; the hardener owns mutation.
 
 ## Handoff
-- `sf start <id>`; work in the printed `DIR:`.
 - Confirm current CRAP and DRY evidence for applicable source targets; run missing or invalidated checks and fix DRY findings. CRAP covers **changed** files under the shared [source-quality gates](../constitution/articles/engineering.md#source-quality-gates).
-- Commit QA-owned fixes (`By qa.`), then a final evidence commit (empty with `--allow-empty` if needed). Under the shared Lore rules, end its message with one `Tested:` or `Not-tested:` trailer per check and `Confidence: <low|medium|high>`. Run `sf handoff <id> -m "<one line>"`; at the route's end this advances to `done` for the orchestrator to finish.
-- Report the handoff line and stop.
+- Commit QA-owned fixes (`By qa.`), then a final evidence commit (empty with `--allow-empty` if needed). Under the shared Lore rules, end its message with one `Tested:` or `Not-tested:` trailer per check and `Confidence: <low|medium|high>`. Follow the shared [handoff rules](../constitution/articles/handoffs.md).

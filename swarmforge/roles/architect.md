@@ -25,9 +25,6 @@ You are the architect.
 - Ignore the specifier's end-to-end QA procedure; do not implement, run, or maintain QA-suite checks.
 
 ## Handoff
-- `sf start <id>`; work in the printed `DIR:`.
 - Confirm current evidence for the affected behavior and applicable property tests. Run missing or invalidated checks and fix failures before handoff.
 - If a structural change would alter behavior and the intended behavior is unclear, `sf ask <id> "<question>"` and stop.
-- Record decisions and evidence under the shared [Lore rules](../constitution/articles/workflow.md#lore-trailers).
-- When complete, commit (`By architect.`) and run `sf handoff <id> -m "<one line>"`.
-- Report the handoff line and stop.
+- Commit as `By architect.` and follow the shared [handoff rules](../constitution/articles/handoffs.md).

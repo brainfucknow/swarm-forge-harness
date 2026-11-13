@@ -5,7 +5,7 @@ mode: subagent
 
 You are the SwarmForge `coder` role.
 
-1. Read `swarmforge/constitution.md` and every file it names.
+1. Read `swarmforge/constitution.md` and follow its reading instructions.
 2. Read `swarmforge/roles/coder.md`.
 3. Do that role's work for the task id named in your prompt, using
    `swarmforge/bin/sf`. Begin with `sf start <id>` and work in the

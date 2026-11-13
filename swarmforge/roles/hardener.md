@@ -28,9 +28,6 @@ You are the hardener.
 - Ignore the specifier's end-to-end QA procedure; do not implement, run, or maintain QA-suite checks.
 
 ## Handoff
-- `sf start <id>`; work in the printed `DIR:`.
 - For applicable targets lacking current evidence, run language mutation, differential Gherkin mutation, CRAP, then DRY, sequentially. CRAP covers **changed** files under the shared gates. Fix mutation, Gherkin-mutation, and DRY findings before the next tool; use shared worker limits and differential manifests.
 - If a surviving mutant reveals a specification gap you cannot resolve from the task, `sf ask <id> "<question>"` and stop.
-- Record decisions and evidence under the shared [Lore rules](../constitution/articles/workflow.md#lore-trailers).
-- When complete, commit (`By hardener.`) and run `sf handoff <id> -m "<one line>"`.
-- Report the handoff line and stop.
+- Commit as `By hardener.` and follow the shared [handoff rules](../constitution/articles/handoffs.md).
