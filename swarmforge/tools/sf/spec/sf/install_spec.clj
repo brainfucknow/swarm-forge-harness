@@ -45,8 +45,8 @@
     (doseq [path (rest protected)]
       (write-file! *dir* path (str (slurp (str (fs/path *dir* path))) "# consumer setting\n")))
     (write-file! *dir* "swarmforge/constitution/articles/project.md" "project language and policy chosen here\n")
-    (let [before (into {} (map (fn [path] [path (slurp (str (fs/path *dir* path)))]) protected))
-          {:keys [exit err]} (install!)]
+    (let [before (contents protected)
+          {:keys [exit]} (install!)]
       (should= 0 exit)
       (doseq [[path content] before]
         (should= content (slurp (str (fs/path *dir* path)))))))
