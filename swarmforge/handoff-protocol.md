@@ -103,6 +103,27 @@ always refused, 1 means a clean audited record and n - 1 counts the extra
 audit rounds. Records of unaudited roles, the handoff that `sf approve`
 performs, and records written before the count existed carry none.
 
+Before the audit gate, `sf handoff` and `sf review` read every `Not-tested`
+trailer (key in any case) of the role's commits since the newest created,
+review or handoff record. A trailer names a tool when the name of a non-local
+`tools.conf` row appears in it, ignoring case, with no letter, digit, `-` or
+`_` next to it. When `sf tool require` would exit 1 for a named tool, the
+command exits 4 and records nothing. It prints a `MISSING_TOOL` line and a
+`Run: sf tool ensure <tool>` line per missing tool, then what to do. The check
+catches tool names only; the
+[engineering rule](constitution/articles/engineering.md#startup-tools) is the
+main control.
+
+`--allow-missing-tool`, anywhere in the arguments and left out of the summary,
+lets the command record over a missing tool only when a question record since
+that milestone names the tool and an operator answer follows the question.
+Otherwise the command exits 4 with an `ALLOW_REFUSED` line for each tool not
+accepted. A record made over missing tools carries the sf-only
+`SwarmForge-Missing-Tools` trailer, which `sf show` and `sf start` print as
+`missing-tools: <tools>`. `sf approve` does not run the check; its review did.
+`sf answer` refuses a role only under `sf dispatch`, so sf enforces the
+operator's part only there.
+
 ### Finishing and recovery
 
 `sf finish` refuses staged, unstaged, or untracked worktree changes without
