@@ -1,6 +1,6 @@
 Feature: install.sh checks Babashka before it changes the project
 
-  install.sh needs Babashka 1.12.200 or newer to run sf. After its
+  install.sh needs Babashka 1.12.215 or newer to run sf. After its
   argument and git-repository checks, and before it copies, creates or
   edits anything in the target project, it runs sf help from its own
   checkout with the bb on PATH, so the guard in swarmforge/bin/sf decides.
@@ -23,7 +23,7 @@ Feature: install.sh checks Babashka before it changes the project
     Given no directory on PATH holds bb
     When I run install.sh into it 1 times
     Then the exit status is not 0
-    And the error output has a line containing "Babashka" and "1.12.200 or newer"
+    And the error output has a line containing "Babashka" and "1.12.215 or newer"
     And the repository has the same files with the same contents as before install.sh ran
     And the repository has no file "swarmforge/bin/sf"
     And the repository has no file ".git/hooks/commit-msg"

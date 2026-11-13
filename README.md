@@ -7,7 +7,7 @@ through Git task branches; the operator handles questions and approvals in chat.
 ## Prerequisites
 
 - `git`, and `bash` for `install.sh`, the commit-msg hook, and the tool wrappers
-- [Babashka](https://babashka.org) (`bb`) for `sf`, which needs 1.12.200 or newer
+- [Babashka](https://babashka.org) (`bb`) for `sf`, which needs 1.12.215 or newer
   and refuses an older `bb`, and for the C#, F#, VB.NET and JavaScript tool
   wrappers and the Clojure constitution tools. `install.sh` checks `bb` before
   it changes the project.
