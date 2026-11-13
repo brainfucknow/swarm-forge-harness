@@ -7,7 +7,7 @@
             [sf.shell :as shell]))
 
 (def ^:private targets
-  [".claude/agents" ".github/agents" ".codex/agents" ".kilo/agent"])
+  [".claude/agents" ".github/agents" ".codex/agents" ".kilo/agent" ".vibe/agents"])
 
 (defn- role-summary
   "The first non-blank line after the title of the role prompt."
@@ -16,17 +16,37 @@
     (when-not (fs/exists? file) (shell/die "missing role prompt " file))
     (first (remove str/blank? (rest (str/split-lines (slurp (str file))))))))
 
+(defn- toml-escape
+  "Escapes s for use inside a TOML basic string."
+  [s]
+  (apply str (map (fn [c]
+                    (cond
+                      (= c \\) "\\\\"
+                      (= c \") "\\\""
+                      (or (< (int c) 0x20) (= (int c) 0x7f)) (format "\\u%04x" (int c))
+                      :else (str c)))
+                  s)))
+
 (defn- kilo-model [tier]
   (let [model (config/tier-field tier 5)]
     (when (and model (not= "inherit" model))
       (str "model: " model "\n"))))
+
+(defn- vibe-model [tier]
+  (let [model (config/tier-field tier 6)]
+    (when (and model (not= "inherit" model))
+      (str "active_model = \"" (toml-escape model) "\"\n"))))
+
+(defn- display-name [role]
+  (str/join " " (map str/capitalize (str/split role #"-"))))
 
 (def ^:private gate-tools
   "The tools of a gate's and the spec-judge's agent, by harness: reading,
   searching and the shell for sf show, sf spec-revisions and git, without the
   editing tools."
   {:claude "Read, Grep, Glob, Bash"
-   :copilot "[\"read\", \"search\", \"shell\"]"})
+   :copilot "[\"read\", \"search\", \"shell\"]"
+   :vibe "enabled_tools = [\"read_file\", \"grep\", \"glob\", \"bash\"]\n"})
 
 (def ^:private kinds
   "The kinds of subagent, each with its adapter template and when to use it."
@@ -55,12 +75,20 @@
           "\ntools: " (if read-only? (:copilot gate-tools) "[\"*\"]") "\ninclude-custom-instructions: true\n---\n\n" body)
 
      (str ".codex/agents/" role ".toml")
-     (str "name = \"" role "\"\ndescription = \"" description "\"\nmodel_reasoning_effort = \""
+     (str "name = \"" role "\"\ndescription = \"" (toml-escape description) "\"\nmodel_reasoning_effort = \""
           (config/tier-field tier 3) "\"\ndeveloper_instructions = \"\"\"\n" body "\"\"\"\n")
 
      (str ".kilo/agent/" role ".md")
      (str "---\ndescription: " description "\nmode: subagent\n" (kilo-model tier)
-          "---\n\n" body)}))
+          "---\n\n" body)
+
+     (str ".vibe/agents/" role ".toml")
+     (str "agent_type = \"subagent\"\n"
+          "display_name = \"" (display-name role) "\"\n"
+          "description = \"" (toml-escape description) "\"\n"
+          (vibe-model tier)
+          (when read-only? (:vibe gate-tools))
+          "instructions = \"\"\"\n" body "\"\"\"\n")}))
 
 (defn- digest [text]
   (let [bytes (.digest (java.security.MessageDigest/getInstance "SHA-256")
@@ -69,7 +97,7 @@
 
 (defn- adapter-path? [path]
   (boolean (and (string? path)
-                (re-matches #"\.(?:claude/agents/[a-z][a-z0-9-]*\.md|github/agents/[a-z][a-z0-9-]*\.agent\.md|codex/agents/[a-z][a-z0-9-]*\.toml|kilo/agent/[a-z][a-z0-9-]*\.md)" path))))
+                (re-matches #"\.(?:claude/agents/[a-z][a-z0-9-]*\.md|github/agents/[a-z][a-z0-9-]*\.agent\.md|codex/agents/[a-z][a-z0-9-]*\.toml|kilo/agent/[a-z][a-z0-9-]*\.md|vibe/agents/[a-z][a-z0-9-]*\.toml)" path))))
 
 (defn- read-ownership [file]
   (when (or (fs/sym-link? file) (fs/sym-link? (fs/parent file)))
@@ -88,9 +116,16 @@
 
 (defn- legacy-shape [path text]
   (str/replace text
-               (if (str/ends-with? path ".toml")
+               (cond
+                 (str/starts-with? path ".vibe/")
+                 #"(?m)^(?:active_model = \"[^\"\r\n]*\"|enabled_tools = \[[^\r\n]*\])\n"
+
+                 (str/ends-with? path ".toml")
                  #"(?m)^model_reasoning_effort = \"[^\r\n]*\"\n"
-                 #"(?m)^(?:model|tools): [^\r\n]*\n") ""))
+
+                 :else
+                 #"(?m)^(?:model|tools): [^\r\n]*\n")
+               ""))
 
 (defn- legacy-ownership
   "The adapters on disk that sf adapters wrote for a role prompt, as a stage,

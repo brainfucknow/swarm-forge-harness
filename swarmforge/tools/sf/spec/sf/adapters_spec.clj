@@ -6,14 +6,14 @@
             [clojure.string :as str]
             [sf.repo-support :refer [*dir* with-repo write-conf! captured git]]))
 
-(def paths [".claude/agents/coder.md" ".github/agents/coder.agent.md" ".codex/agents/coder.toml" ".kilo/agent/coder.md"])
+(def paths [".claude/agents/coder.md" ".github/agents/coder.agent.md" ".codex/agents/coder.toml" ".kilo/agent/coder.md" ".vibe/agents/coder.toml"])
 
 (defn write-agent [path text]
   (let [file (fs/path *dir* path)]
     (fs/create-dirs (fs/parent file))
     (spit (str file) text)))
 
-(def gate-paths [".claude/agents/falsifier.md" ".github/agents/falsifier.agent.md" ".codex/agents/falsifier.toml" ".kilo/agent/falsifier.md"])
+(def gate-paths [".claude/agents/falsifier.md" ".github/agents/falsifier.agent.md" ".codex/agents/falsifier.toml" ".kilo/agent/falsifier.md" ".vibe/agents/falsifier.toml"])
 
 (defn write-gate!
   "A catalogue with the falsifier gate and its role prompt."
@@ -22,7 +22,7 @@
   (write-agent "swarmforge/roles/falsifier.md" "# falsifier\n\nAudits a specification.\n"))
 
 (defn snapshot []
-  (into {} (for [dir [".claude/agents" ".github/agents" ".codex/agents" ".kilo/agent"]
+  (into {} (for [dir [".claude/agents" ".github/agents" ".codex/agents" ".kilo/agent" ".vibe/agents"]
                  file (fs/glob (fs/path *dir* dir) "*")]
              [(str file) (slurp (str file))])))
 
@@ -42,12 +42,12 @@
   (around [it] (with-repo (fn [] (it))))
 
   (it "preserves unrelated agents in every shared directory"
-    (doseq [path [".claude/agents/specialist.md" ".github/agents/specialist.agent.md" ".codex/agents/specialist.toml" ".kilo/agent/specialist.md"]]
+    (doseq [path [".claude/agents/specialist.md" ".github/agents/specialist.agent.md" ".codex/agents/specialist.toml" ".kilo/agent/specialist.md" ".vibe/agents/specialist.toml"]]
       (write-agent path "project-owned bytes\n"))
     (adapters/adapters [])
     (doseq [file (filter #(re-find #"specialist" (str %)) (keys (snapshot)))]
       (should= "project-owned bytes\n" (slurp file)))
-    (should= 16 (count (snapshot))))
+    (should= 20 (count (snapshot))))
 
   (it "generates optional reviewers through the same provider tier mappings"
     (write-conf! *dir* "roles.conf" "coder strong subagent\nsecurity-reviewer strong subagent optional\n")
@@ -57,7 +57,8 @@
     (doseq [[path model] [[".claude/agents/security-reviewer.md" "model: opus"]
                           [".github/agents/security-reviewer.agent.md" "model: gpt-5"]
                           [".codex/agents/security-reviewer.toml" "model_reasoning_effort = \"medium\""]
-                          [".kilo/agent/security-reviewer.md" "model: kilo/strong-model"]]]
+                          [".kilo/agent/security-reviewer.md" "model: kilo/strong-model"]
+                          [".vibe/agents/security-reviewer.toml" "active_model = \"vibe/strong-model\""]]]
       (should-contain model (slurp (str (fs/path *dir* path)))))
     (let [before (snapshot)]
       (adapters/adapters [])
@@ -73,6 +74,7 @@
         (should-contain "Audits a specification." text))
       (should-contain (body "adapter.md" "coder") (slurp (str (fs/path *dir* (first paths))))))
     (should-contain "model: opus" (slurp (str (fs/path *dir* (first gate-paths)))))
+    (should-contain "active_model = \"vibe/strong-model\"" (slurp (str (fs/path *dir* (last gate-paths)))))
     (let [before (snapshot)]
       (fs/delete (fs/path *dir* ".swarmforge/adapters.edn"))
       (should= 0 (:status (captured #(adapters/adapters []))))
@@ -84,8 +86,21 @@
     (let [read #(slurp (str (fs/path *dir* %)))]
       (should-contain "\ntools: Read, Grep, Glob, Bash\n" (read ".claude/agents/falsifier.md"))
       (should-contain "\ntools: [\"read\", \"search\", \"shell\"]\n" (read ".github/agents/falsifier.agent.md"))
+      (should-contain "enabled_tools = [\"read_file\", \"grep\", \"glob\", \"bash\"]" (read ".vibe/agents/falsifier.toml"))
       (should-not-contain "tools:" (read ".claude/agents/coder.md"))
+      (should-not-contain "enabled_tools" (read ".vibe/agents/coder.toml"))
       (should-contain "\ntools: [\"*\"]\n" (read ".github/agents/coder.agent.md"))))
+
+  (it "escapes TOML special characters in the Codex and Vibe descriptions"
+    (write-agent "swarmforge/roles/coder.md" "# coder\n\nReviews the \"safe\" mode and C:\\ paths.\n")
+    (adapters/adapters [])
+    (let [vibe (slurp (str (fs/path *dir* ".vibe/agents/coder.toml")))
+          codex (slurp (str (fs/path *dir* ".codex/agents/coder.toml")))]
+      (should-contain "\\\"safe\\\"" vibe)
+      (should-contain "C:\\\\ paths" vibe)
+      (should-contain "\\\"safe\\\"" codex)
+      (should-not-contain "Reviews the \"safe\"" vibe)
+      (should-not-contain "Reviews the \"safe\"" codex)))
 
   (it "generates the spec-judge's adapters from the spec-judge template with a gate's read-only tools"
     (write-conf! *dir* "roles.conf" "specifier frontier subagent\nfalsifier strong subagent gate\nspec-judge strong subagent spec-judge\ncoder strong subagent\ncleaner fast subagent\n")
@@ -94,12 +109,14 @@
     (should= 0 (:status (captured #(adapters/adapters []))))
     (let [read #(slurp (str (fs/path *dir* %)))
           body (str/replace (shell/template "spec-judge-adapter.md") "{{role}}" "spec-judge")]
-      (doseq [path [".claude/agents/spec-judge.md" ".github/agents/spec-judge.agent.md" ".codex/agents/spec-judge.toml" ".kilo/agent/spec-judge.md"]]
+      (doseq [path [".claude/agents/spec-judge.md" ".github/agents/spec-judge.agent.md" ".codex/agents/spec-judge.toml" ".kilo/agent/spec-judge.md" ".vibe/agents/spec-judge.toml"]]
         (should-contain body (read path))
         (should-contain "Rules on a spec revision." (read path)))
       (should-contain "\ntools: Read, Grep, Glob, Bash\n" (read ".claude/agents/spec-judge.md"))
       (should-contain "\ntools: [\"read\", \"search\", \"shell\"]\n" (read ".github/agents/spec-judge.agent.md"))
+      (should-contain "enabled_tools = [\"read_file\", \"grep\", \"glob\", \"bash\"]" (read ".vibe/agents/spec-judge.toml"))
       (should-contain "model: opus" (read ".claude/agents/spec-judge.md"))
+      (should-contain "active_model = \"vibe/strong-model\"" (read ".vibe/agents/spec-judge.toml"))
       (should-contain "\ndescription: SwarmForge spec-judge spec-judge. " (read ".claude/agents/spec-judge.md"))))
 
   (it "replaces gate adapters that an older sf wrote with all tools, without ownership state"
@@ -124,13 +141,16 @@
       (should-not (fs/exists? (fs/path *dir* path))))
     (should (fs/exists? (fs/path *dir* (first paths)))))
 
-  (it "omits the Kilo model when the tier inherits the session model"
+  (it "omits the Kilo and Vibe models when the tier inherits the session model"
     (write-conf! *dir* "tiers.conf" "frontier inherit high gpt inherit\nstrong opus medium gpt-5 inherit\nfast sonnet low gpt-mini inherit\n")
     (adapters/adapters [])
     (doseq [role ["specifier" "coder" "cleaner"]]
       (let [text (slurp (str (fs/path *dir* ".kilo/agent" (str role ".md"))))]
         (should-contain "mode: subagent" text)
-        (should-not-contain "model:" text))))
+        (should-not-contain "model:" text))
+      (let [text (slurp (str (fs/path *dir* ".vibe/agents" (str role ".toml"))))]
+        (should-contain "agent_type = \"subagent\"" text)
+        (should-not-contain "active_model" text))))
 
   (it "refuses an unowned collision before writing any harness"
     (write-agent ".codex/agents/coder.toml" "project-owned")
@@ -166,7 +186,8 @@
     (write-conf! *dir* "roles.conf" "specifier frontier session\ncoder fast subagent\ncleaner fast subagent\n")
     (should= 0 (:status (captured #(adapters/adapters []))))
     (should-not (fs/exists? (fs/path *dir* ".codex/agents/specifier.toml")))
-    (should-contain "model_reasoning_effort = \"low\"" (slurp (str (fs/path *dir* (nth paths 2))))))
+    (should-contain "model_reasoning_effort = \"low\"" (slurp (str (fs/path *dir* (nth paths 2)))))
+    (should-contain "agent_type = \"subagent\"" (slurp (str (fs/path *dir* (nth paths 4))))))
 
   (it "refuses a Kilo adapter whose mode was edited when ownership state is absent"
     (adapters/adapters [])

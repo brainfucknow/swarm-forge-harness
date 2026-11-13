@@ -156,6 +156,6 @@ Installed SwarmForge into $target.
   swarmforge/roles.conf       role catalogue (edit, then: swarmforge/bin/sf adapters)
   swarmforge/routes.conf      named routes a task can take
   swarmforge/tiers.conf       model per tier per harness
-  .claude/agents, .codex/agents, .github/agents, .kilo/agent   generated role agents
-  /swarm <request>            start a task from Kilo, Claude Code, Codex, or Copilot
+  .claude/agents, .codex/agents, .github/agents, .kilo/agent, .vibe/agents   generated role agents
+  /swarm <request>            start a task from Kilo, Claude Code, Codex, Copilot, or Vibe
 EOF

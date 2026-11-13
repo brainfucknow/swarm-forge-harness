@@ -1,7 +1,7 @@
 # swarm-forge-harness
 
 A harness-integrated [SwarmForge](https://github.com/brainfucknow/swarm-forge).
-Run its roles in Kilo, Claude Code, Codex, or Copilot CLI. Roles pass work
+Run its roles in Kilo, Claude Code, Codex, Copilot CLI, or Mistral Vibe. Roles pass work
 through Git task branches; the operator handles questions and approvals in chat.
 
 ## Prerequisites
@@ -11,7 +11,7 @@ through Git task branches; the operator handles questions and approvals in chat.
   and refuses an older `bb`, and for the C#, F#, VB.NET and JavaScript tool
   wrappers and the Clojure constitution tools. `install.sh` checks `bb` before
   it changes the project.
-- One of Kilo, Claude Code, Codex CLI, or Copilot CLI
+- One of Kilo, Claude Code, Codex CLI, Copilot CLI, or Mistral Vibe
 
 ## Install into a project
 
@@ -71,13 +71,17 @@ and sharing rules.
 | Harness | Session entry | Subagent roles | Model tier |
 |---|---|---|---|
 | Kilo | `/swarm` from `.kilo/command/` | `.kilo/agent/<role>.md` | `model:` `provider/model`, or the session model when `inherit` |
+| Mistral Vibe | `/swarm` from `.agents/skills/swarm/` | `.vibe/agents/<role>.toml` | `active_model` alias, or the session model when `inherit` |
 | Claude Code | `/swarm` from `.claude/skills/swarm/` | `.claude/agents/<role>.md` | `model: opus` or `sonnet` |
 | Codex CLI | `$swarm` from `.agents/skills/swarm/` | `.codex/agents/<role>.toml` | `model_reasoning_effort` high / medium / low |
 | Copilot CLI | `/swarm` from `.agents/skills/swarm/` | `.github/agents/<role>.agent.md` | `model: gpt-6.1-sol` or `gpt-6.1-terra` |
 
 `sf adapters` generates agent files from `swarmforge/roles.conf` and
 `swarmforge/tiers.conf`. Each agent reads the shared constitution and its role
-prompt under `swarmforge/roles/`.
+prompt under `swarmforge/roles/`. Vibe loads `./.vibe/agents/` subagents and
+the `./.agents/skills/` skill only when the project folder is trusted, and it
+spawns the role subagents itself; its subagents cannot use MCP tools, which the
+roles do not need.
 
 Codex: custom agent roles need the multi-agent feature. If `codex` does not
 offer the roles, enable it in `~/.codex/config.toml` per the Codex subagents
