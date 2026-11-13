@@ -3,7 +3,8 @@
  {:init (def here (str (babashka.fs/parent (babashka.fs/absolutize (System/getProperty "babashka.config")))))
   spec {:doc "Run the .NET wrapper regression specs"
         :task (shell "bb" "--config" (str (babashka.fs/path here "spec" "bb.edn")) "spec")}
-  test {:doc "Run the sf-cs tests and the shared core tests"
+  test {:doc "Run the .NET regression specs, sf-cs tests and shared core tests"
+        :depends [spec]
         :task (let [namespaces '[sfcore.core-test sfcs.core-test]]
                 (apply require 'clojure.test namespaces)
                 (let [{:keys [fail error]} (apply clojure.test/run-tests namespaces)]

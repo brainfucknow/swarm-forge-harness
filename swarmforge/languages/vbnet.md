@@ -13,8 +13,8 @@ no coverage package, on VSTest or Microsoft.Testing.Platform.
 | `tools` | Check prerequisites, `dotnet tool restore` (it installs nothing), and prepare jscpd. |
 | `test [dotnet test args]` | `dotnet test --filter Category!=Property`. |
 | `property [dotnet test args]` | `dotnet test --filter Category=Property`. Mark property tests with `<Trait("Category", "Property")>`. |
-| `coverage [dotnet test args]` | The C# `coverage` (see [C#](csharp.md)): each run of `test` under `dotnet dotnet-coverage collect`, each walked project restored and evaluated, a fresh Cobertura report per run in `tmp/coverage/`, test projects' assemblies left out; exit 2 when no project or only test projects are under the current directory. |
-| `crap [--all] [--base REF] [--report DIR]` | Compiled `.vb` methods using dotnet-coverage's complexity, line coverage and coverable source span. CRAP = complexity² × (1 − coverage)³ + complexity; fail above 10. Missing or unusable method data is an input error. |
+| `coverage [--include-test-assemblies] [dotnet test args]` | The C# `coverage` (see [C#](csharp.md)): each run of `test` under `dotnet dotnet-coverage collect`, each walked project restored and evaluated, a fresh Cobertura report per run in `tmp/coverage/`, test assemblies excluded by default; `--include-test-assemblies` includes helpers/test methods and permits test-only roots. Exit 2 for an empty root. |
+| `crap [--all] [--base REF] [--report DIR] [--no-executable-code PATH ...]` | Compiled `.vb` methods using dotnet-coverage's complexity, line coverage and coverable source span. CRAP = complexity² × (1 − coverage)³ + complexity; fail above 10. Missing or unusable method data is an input error. |
 | `dry [--all] [--base REF] [--min-tokens N] [--report-only]` | `jscpd@4 --format visual-basic --formats-exts visual-basic:vb`; report clones touching changed `.vb` lines in `tmp/jscpd/`. Generated `*.Designer.vb` files are ignored. `--report-only` reuses the last report; new runs discard it first. |
 | `mutate` | Unsupported: exit 2. Stryker.NET loads only C# and F# projects; there is no VB.NET mutation or scan/count mode. |
 
@@ -37,6 +37,14 @@ treats text after `!` as a comment and is not used.
 Checks exit 0 when clean, 1 on findings, and 2 on usage/input errors; test and
 external-tool failures retain their exit status. Acceptance tests use the shared
 Acceptance Pipeline Specification tools and the project's runtime/handlers.
+
+CRAP also lists in-scope source files absent from usable method data and exits 2.
+Repeat `--no-executable-code PATH` to explicitly declare non-executable-only
+files; paths must exist inside the repository and be in scope. Exemptions are
+visible and never hide measured methods. See the [shared C# behavior](csharp.md)
+for file-level limits, `--all` scope, and opt-in test-assembly coverage. The
+coverage flag goes before an optional `--`; it preserves `obj/` exclusion and
+cannot measure a project the run never loads.
 
 ## Security scanners
 

@@ -272,7 +272,7 @@
             "namespace Bank\n{\n    public class Audit<T> { public void Record(T item) { if (item == null) return; } }\n}\n")
       (try (f) (finally (fs/delete-tree repo))))))
 
-(use-fixtures :once seed-repo)
+(use-fixtures :each seed-repo)
 
 (deftest crap-gate
   (testing "only changed methods, failing over the limit"
@@ -283,7 +283,7 @@
               "2 changed method(s), 1 over CRAP 10"]
              lines))))
   (testing "--all reports every method"
-    (let [{:keys [status lines err]} (sfcs {} "crap" "--all" "--report" (str (fs/path fixtures "coverage")))]
+    (let [{:keys [status lines err]} (sfcs {} "crap" "--all" "--no-executable-code" "Bank/Legacy.cs" "--report" (str (fs/path fixtures "coverage")))]
       (is (= 1 status) err)
       (is (= "4 method(s), 1 over CRAP 10" (last lines))))))
 
@@ -555,9 +555,9 @@
                          (str "filename=\"" (fs/path *repo* "Bank" "Ledger.cs") "\""))]
     (fs/create-dirs dir)
     (spit (str (fs/path dir "coverage.cobertura.xml")) xml)
-    (doseq [flags [["--all"] ["--base" "main"]]]
+    (doseq [flags [["--all" "--no-executable-code" "Bank/Legacy.cs"] ["--base" "main"]]]
       (let [{:keys [lines err]} (apply sfcs {} "crap" "--report" (str dir) flags)]
-        (is (= "OVER crap   10.8  cc   4  cov  25%  Bank/Ledger.cs:10 Ledger.Withdraw" (first lines)) err)))))
+        (is (= "OVER crap   10.8  cc   4  cov  25%  Bank/Ledger.cs:10 Ledger.Withdraw" (first (filter #(str/starts-with? % "OVER") lines))) err)))))
 
 (deftest the-newest-coverage-run-wins-a-tie
   (let [dir (fs/path *repo* "tie-coverage")
@@ -570,7 +570,7 @@
                   (fs/set-last-modified-time f (java.nio.file.attribute.FileTime/fromMillis millis))))]
     (write "old" 7 1000000)
     (write "new" 5 2000000)
-    (let [{:keys [lines]} (sfcs {} "crap" "--all" "--report" (str dir))]
+    (let [{:keys [lines]} (sfcs {} "crap" "--all" "--no-executable-code" "Bank/Legacy.cs" "--report" (str dir))]
       (is (some #(str/includes? % "cc   5") lines))
       (is (not-any? #(str/includes? % "cc   7") lines)))))
 
