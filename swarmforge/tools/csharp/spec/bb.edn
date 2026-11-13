@@ -1,0 +1,5 @@
+{:paths ["." "../src" "../test" "../../core/src"]
+ :deps {speclj/speclj {:mvn/version "3.12.2"}}
+ :tasks
+ {:init (def here (str (babashka.fs/parent (babashka.fs/absolutize (System/getProperty "babashka.config")))))
+  spec {:task (System/exit ((requiring-resolve 'speclj.cli/run) "-c" here))}}}
