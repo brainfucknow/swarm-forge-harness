@@ -109,9 +109,11 @@
 
    [#"an unrelated project agent occupies the new role target \"([^\"]+)\" containing \"([^\"]*)\""
     (fn [world path text]
-      (when (str/includes? path "/specialist.")
-        (spit (str (fs/path (:repo world) "swarmforge/roles.conf")) "specialist fast subagent\n" :append true)
-        (write-file! world "swarmforge/roles/specialist.md" "# specialist\n\nProject specialist.\n"))
+      (if (str/includes? path "/specialist.")
+        (do
+          (spit (str (fs/path (:repo world) "swarmforge/roles.conf")) "specialist fast subagent\n" :append true)
+          (write-file! world "swarmforge/roles/specialist.md" "# specialist\n\nProject specialist.\n"))
+        (change-role! world "specifier" 2 "subagent"))
       (assoc (write-file! world path text) :conflict path))]
 
    [#"the error output identifies \"([^\"]+)\" as a conflicting project agent"
