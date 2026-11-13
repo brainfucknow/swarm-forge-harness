@@ -13,6 +13,7 @@ hand. `sf start` and `sf show` print the records;
 - If you were given a task id in your prompt, start that task. Do not take another.
 
 ## Sending Work
+- Record decisions and verification evidence under the shared [Lore rules](workflow.md#lore-trailers).
 - Commit first. `sf handoff` refuses an uncommitted worktree.
 - `sf handoff <id> -m "<one line>"` records your HEAD and moves the task to the next role on its route (`ROUTE:` from `sf start`). After the last role on the route it moves the task to `stage:done`. A role not on the route is not consulted; do not do its work for it.
 - Always hand off after completing a task, regardless of what changed. Formatting-only, manifest-only, audit-only, and other non-functional churn still move forward.
