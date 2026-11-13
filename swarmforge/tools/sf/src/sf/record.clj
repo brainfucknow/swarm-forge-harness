@@ -222,7 +222,14 @@
     {:records (keep-indexed #(when-not (dropped %1) %2) records)
      :omitted omitted}))
 
-(defn- fields [{:keys [task record from spec-verdict text stage route commit files merged-into audit-refusals missing-tools]}]
+(defn- gate-fields
+  "The audit-refusals and missing-tools lines of a review or handoff record."
+  [{:keys [record audit-refusals missing-tools]}]
+  (when (#{"review" "handoff"} record)
+    (concat (when audit-refusals [["audit-refusals" audit-refusals]])
+            (when missing-tools [["missing-tools" missing-tools]]))))
+
+(defn- fields [{:keys [task record from spec-verdict text stage route commit files merged-into] :as rec}]
   (concat
    [["type" record] ["from" from]]
    (when spec-verdict [["spec-verdict" spec-verdict]])
@@ -237,10 +244,7 @@
      "finished" [["merged-into" merged-into]]
      "moved" [["path" text]]
      [])
-   (when (and audit-refusals (#{"review" "handoff"} record))
-     [["audit-refusals" audit-refusals]])
-   (when (and missing-tools (#{"review" "handoff"} record))
-     [["missing-tools" missing-tools]])))
+   (gate-fields rec)))
 
 (defn block
   "The record as key: value lines; later lines of a value are indented by two spaces."
