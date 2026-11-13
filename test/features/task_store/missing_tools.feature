@@ -168,7 +168,7 @@ Feature: sf missing tools
     Given role "coder" committed "Code" in the worktree of task "A" as C1
     When I run "sf handoff $A --allow-missing-tool"
     Then the exit status is 0
-    And the tip commit of task "A" has the message "sf handoff: $A\n\nSwarmForge-Task: $A\nSwarmForge-Record: handoff\nSwarmForge-From: coder\nSwarmForge-Stage: qa\nSwarmForge-Route: coder,qa\nSwarmForge-Needs: none"
+    And the tip commit of task "A" has the message "sf handoff: $A\n\ncoder work complete\n\nSwarmForge-Task: $A\nSwarmForge-Record: handoff\nSwarmForge-From: coder\nSwarmForge-Stage: qa\nSwarmForge-Route: coder,qa\nSwarmForge-Needs: none"
 
   # sf missing tools 12
   Scenario: sf missing tools 12: sf review refuses the same way
