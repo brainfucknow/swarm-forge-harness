@@ -12,6 +12,7 @@
             [sfcore.stryker :as stryker]
             [sfcs.cobertura :as cob]
             [sfcs.coverage :as coverage]
+            [sfcs.measurement :as measurement]
             [sfcs.pin :as pin]
             [sfcs.project :as project]))
 
@@ -38,10 +39,14 @@
   tools                       restore local dotnet tools and check node, npx, dotnet
   test [dotnet test args]     unit and acceptance tests (Category!=Property" (when (:expecto? *language*) "; Expecto: outside the SwarmForgePropertyTestList list") ")
   property                    property tests only (Category=Property" (when (:expecto? *language*) "; Expecto: the SwarmForgePropertyTestList list") ")
-  coverage [dotnet test args] tests under dotnet-coverage; cobertura files under " coverage-dir "/;
+  coverage [--include-test-assemblies] [dotnet test args]
+                              tests under dotnet-coverage; include test helpers/methods only when opted in;
+                              cobertura files under " coverage-dir "/;
                               needs dotnet-coverage pinned in a committed tool manifest
                               at the repository root
   crap [--all] [--base REF]   CRAP per changed method from " coverage-dir "/; exit 1 over " crap/crap-limit "
+       [--no-executable-code PATH ...]
+                              exit 2 for unmeasured source files; explicitly declare no-code files
   dry [--all] [--base REF] [--min-tokens N]
                               jscpd clones touching changed lines; exit 1 if any
   mutate [--base REF] [--all] [--report-only] [-- stryker args]
@@ -54,7 +59,8 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
 
 (def option-spec
   {:coerce {:all :boolean :report-only :boolean :help :boolean :min-tokens :long
-            :base :string :report :string}
+            :base :string :report :string :no-executable-code [:string]
+            :include-test-assemblies :boolean}
    :alias {:h :help}})
 
 (defn- changed-for [opts]
@@ -202,14 +208,13 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
        (mapv #(shell/capture "dotnet" (coverage/evaluate-args %)))))
 
 (defn- measured-test-assemblies
-  "The test assemblies of the projects under `root`; stops when there is no project
-  to measure: none at all, or only test projects among those restored."
-  [root]
+  "Test assemblies to exclude; rejects roots with no collectible project under the selected mode."
+  [root include-test-assemblies?]
   (let [projects (walked-projects root)
         evaluated (evaluations projects)]
-    (when (or (empty? projects) (and (seq evaluated) (every? coverage/test-project? evaluated)))
+    (when (or (empty? projects) (and (not include-test-assemblies?) (seq evaluated) (every? coverage/test-project? evaluated)))
       (throw (nothing-to-measure root)))
-    (keep coverage/test-assembly evaluated)))
+    (when-not include-test-assemblies? (keep coverage/test-assembly evaluated))))
 
 (defn- collect-run
   "Runs one `dotnet` run under dotnet-coverage into tmp/coverage/run-<i>/; returns its status."
@@ -229,13 +234,23 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
     (println (count files) "coverage file(s) under" coverage-dir)
     outcome/exit-ok))
 
-(defn- cmd-coverage [{:keys [args]}]
+(defn- coverage-args [args]
+  (let [[before after] (split-with #(not= "--" %) args)]
+    (loop [[arg & more] before result []]
+      (cond
+        (nil? arg) (into result after)
+        (= arg "--include-test-assemblies")
+        (recur (if (#{"true" "false"} (first more)) (rest more) more) result)
+        (str/starts-with? arg "--include-test-assemblies=") (recur more result)
+        :else (recur more (conj result arg))))))
+
+(defn- cmd-coverage [{:keys [args opts]}]
   (require-pinned-tool pin/dotnet-coverage)
   (let [runs (test-runs false)
         root (str (fs/real-path (shell/in-dir ".")))]
     (remove-stale-coverage)
-    (shell/write-file coverage-settings (coverage/settings-xml root (measured-test-assemblies root)))
-    (let [statuses (doall (map-indexed (fn [i run] (collect-run (inc i) run args)) runs))]
+    (shell/write-file coverage-settings (coverage/settings-xml root (measured-test-assemblies root (:include-test-assemblies opts))))
+    (let [statuses (doall (map-indexed (fn [i run] (collect-run (inc i) run (coverage-args args))) runs))]
       (if (every? coverage/run-passed? statuses)
         (report-coverage-files)
         outcome/exit-findings))))
@@ -275,6 +290,32 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
         (when (or (nil? changed) (changes/overlaps? file signature-line (:last-line method) changed))
           (assoc method :file file :signature-line signature-line))))))
 
+(defn- source-candidates
+  "Existing selected-language sources in the changed scope, or all Git-listed sources."
+  [root changed extension]
+  (let [paths (if changed
+                (keys changed)
+                (str/split (git/git ["ls-files" "-z" "--cached" "--others" "--exclude-standard"
+                                    "--full-name" "--" (str "*" extension)] :dir root) #"\u0000"))]
+    (into (sorted-set)
+          (filter #(and (str/ends-with? % extension) (fs/regular-file? (fs/path root %))))
+          paths)))
+
+(defn- declaration-path [root scope declared]
+  (let [file (fs/normalize (fs/absolutize (shell/in-dir declared)))
+        relative (str/replace (str (fs/relativize root file)) "\\" "/")]
+    (when-not (and (fs/regular-file? file)
+                   (.startsWith (fs/real-path file) (fs/real-path root))
+                   (contains? scope relative))
+      (throw (outcome/usage-error
+               (str "--no-executable-code " declared ": expected an existing in-scope source file inside " root))))
+    relative))
+
+(defn- no-code-exemptions
+  "Validated caller assertions, normalized and unique; they never remove scored methods."
+  [root scope declarations]
+  (into (sorted-set) (map (partial declaration-path root scope)) declarations))
+
 (defn- cmd-crap [{:keys [opts]}]
   (let [dir (or (:report opts) coverage-dir)
         files (cob/find-cobertura-files (shell/in-dir dir))]
@@ -282,14 +323,19 @@ Every command runs from the task worktree. --base defaults to SWARMFORGE_BASE, m
       (throw (outcome/usage-error (str "no coverage.cobertura.xml under " dir "; run " (:name *language*) " coverage first"))))
     (let [root (git/repo-root)
           changed (changed-for opts)
+          scope (source-candidates root changed (:extension *language*))
+          exempt (no-code-exemptions root scope (:no-executable-code opts))
           read-source (memoize (partial source-lines root))
           methods (merge-methods files)
-          _ (when (and (:compiled-methods? *language*) (empty? methods))
-              (throw (outcome/usage-error (str "no usable compiled " (:extension *language*) " method data in coverage report"))))
+          missing (measurement/missing-files root scope exempt methods)
           selected (->> methods
                         (keep (partial select-method root changed read-source))
                         (sort-by (juxt (comp - :crap) :file :first-line)))]
-      (shell/emit (crap/review crap/crap-limit selected cob/format-method "method" changed)))))
+      (doseq [file exempt] (println "EXEMPT no executable code:" file))
+      (doseq [file missing] (println "UNMEASURED source:" file))
+      (if (seq missing)
+        outcome/exit-usage
+        (shell/emit (crap/review crap/crap-limit selected cob/format-method "method" changed))))))
 
 (defn- cmd-dry [{:keys [opts]}]
   (let [report-path (str (fs/path jscpd-dir "jscpd-report.json"))

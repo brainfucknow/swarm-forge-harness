@@ -13,8 +13,8 @@ no coverage package, on VSTest or Microsoft.Testing.Platform.
 | `tools` | Check prerequisites, `dotnet tool restore` (it installs nothing), and prepare jscpd. |
 | `test [dotnet test args]` | `dotnet test --filter Category!=Property`; with Expecto, one run per test project (below). |
 | `property [dotnet test args]` | `dotnet test --filter Category=Property`. Mark FsCheck/xUnit properties with `[<Trait("Category", "Property")>]`. With Expecto, one run per test project (below). |
-| `coverage [dotnet test args]` | The C# `coverage` (see [C#](csharp.md)): each run of `test` under `dotnet dotnet-coverage collect`, each walked project restored and evaluated, a fresh Cobertura report per run in `tmp/coverage/`, test projects' assemblies left out; exit 2 when no project or only test projects are under the current directory. |
-| `crap [--all] [--base REF] [--report DIR]` | Compiled `.fs` methods using dotnet-coverage's complexity, line coverage and coverable source span. CRAP = complexity² × (1 − coverage)³ + complexity; fail above 10. Missing or unusable method data is an input error. |
+| `coverage [--include-test-assemblies] [dotnet test args]` | The C# `coverage` (see [C#](csharp.md)): each run of `test` under `dotnet dotnet-coverage collect`, each walked project restored and evaluated, a fresh Cobertura report per run in `tmp/coverage/`, test assemblies excluded by default; `--include-test-assemblies` includes helpers/test methods and permits test-only roots. Exit 2 for an empty root. |
+| `crap [--all] [--base REF] [--report DIR] [--no-executable-code PATH ...]` | Compiled `.fs` methods using dotnet-coverage's complexity, line coverage and coverable source span. CRAP = complexity² × (1 − coverage)³ + complexity; fail above 10. Missing or unusable method data is an input error. |
 | `dry [--all] [--base REF] [--min-tokens N] [--report-only]` | `jscpd@4 --format fsharp`; report clones touching changed `.fs` lines in `tmp/jscpd/`. `--report-only` reuses the last report; new runs discard it first. |
 | `mutate` | Unsupported: exit 2. Stryker.NET supports C#; there is no F# mutation or scan/count mode. |
 
@@ -54,6 +54,10 @@ Use the CRAP `cc` column as a complexity hint when reviewing module boundaries.
 Checks exit 0 when clean, 1 on findings, and 2 on usage/input errors; test and
 external-tool failures retain their exit status. Acceptance tests use the shared
 Acceptance Pipeline Specification tools and the project's runtime/handlers.
+
+CRAP lists unmeasured in-scope `.fs` files and exits 2. For explicit
+`--no-executable-code PATH` declarations, file-level limits and opt-in test
+coverage, follow the [shared .NET coverage rules](csharp.md#coverage-completeness).
 
 ## Security scanners
 

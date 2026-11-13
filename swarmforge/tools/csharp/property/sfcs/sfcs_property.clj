@@ -1,12 +1,14 @@
 (ns sfcs.sfcs-property
-  "Properties of what sf-cs coverage asks MSBuild and writes for dotnet-coverage."
+  "Properties of .NET coverage settings and file-level CRAP evidence."
   (:require [cheshire.core :as json]
             [clojure.data.xml :as xml]
+            [clojure.set :as set]
             [clojure.string :as str]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [property-support :refer [defspec]]
-            [sfcs.coverage :as coverage]))
+            [sfcs.coverage :as coverage]
+            [sfcs.measurement :as measurement]))
 
 (def trials 200)
 
@@ -99,3 +101,42 @@
 (defspec only-zero-and-zero-tests-ran-pass trials
   (prop/for-all [status (gen/choose -2 300)]
     (= (contains? #{0 8} status) (coverage/run-passed? status))))
+
+(def source-id (gen/choose 0 40))
+(def source-ids (gen/set source-id))
+
+(defn- source-name [id] (str "File" id ".cs"))
+
+(defn- measured-method [file]
+  {:file file :first-line 1 :last-line 3 :complexity 2 :coverage 0.5})
+
+(defspec missing-files-match-unmeasured-undeclared-scope trials
+  (prop/for-all [scope-ids source-ids
+                 measured-ids source-ids
+                 exempt-ids source-ids
+                 absolute? gen/boolean]
+    (let [scope (into (sorted-set) (map source-name) scope-ids)
+          exempt (set (map source-name exempt-ids))
+          measured (set (map source-name measured-ids))
+          methods (map #(measured-method (str (when absolute? "/repo/") %)) measured)
+          expected (sort (set/difference scope measured exempt))]
+      (= expected (measurement/missing-files "/repo" scope exempt methods)))))
+
+(defspec duplicate-and-reordered-evidence-keeps-the-same-gaps trials
+  (prop/for-all [scope-ids source-ids
+                 exempt-ids source-ids
+                 method-ids (gen/vector source-id)]
+    (let [scope (into (sorted-set) (map source-name) scope-ids)
+          exempt (set (map source-name exempt-ids))
+          methods (map (comp measured-method source-name) method-ids)]
+      (= (measurement/missing-files "/repo" scope exempt methods)
+         (measurement/missing-files "/repo" scope exempt (concat (reverse methods) methods))))))
+
+(defspec unusable-method-data-leaves-the-source-unmeasured trials
+  (prop/for-all [id source-id
+                 invalid (gen/elements [{:first-line 0} {:last-line nil}
+                                        {:complexity -1} {:complexity Double/POSITIVE_INFINITY}
+                                        {:complexity Double/NaN} {:coverage -0.1} {:coverage 1.1}])]
+    (let [file (source-name id)]
+      (= [file] (measurement/missing-files "/repo" (sorted-set file) #{}
+                                          [(merge (measured-method file) invalid)])))))
