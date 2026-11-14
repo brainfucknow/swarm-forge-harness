@@ -135,7 +135,18 @@
                                   "GIT_AUTHOR_EMAIL" "c@x" "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@x"}}
                 "git" "commit" "-q" "--allow-empty" "-m" "sf created: t-1\n\nT\n\nSwarmForge-Task: t-1\nSwarmForge-Record: created\n")
     (should= [["2026-03-01T08:00:00Z" "Codex"]]
-             (map (juxt :time :recorded-by) (store/records-at "HEAD" "t-1")))))
+             (map (juxt :time :recorded-by) (store/records-at "HEAD" "t-1"))))
+
+  (it "reads an author name that holds 0x1f and a message that holds 0x1e whole"
+    (shell/must {:dir *dir* :env {"GIT_AUTHOR_NAME" "Co\u001fdex" "GIT_AUTHOR_EMAIL" "c@x"
+                                  "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@x"}}
+                "git" "commit" "-q" "--allow-empty" "-m" "sf created: t-1\n\nT\n\nSwarmForge-Task: t-1\nSwarmForge-Record: created\n")
+    (shell/must {:dir *dir* :env {"GIT_AUTHOR_NAME" "Codex" "GIT_AUTHOR_EMAIL" "c@x"
+                                  "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@x"}}
+                "git" "commit" "-q" "--allow-empty" "-m"
+                "sf handoff: t-1\n\nwork\u001edone\n\nSwarmForge-Task: t-1\nSwarmForge-Record: handoff\nSwarmForge-From: coder\n")
+    (should= [["created" "Co\u001fdex" "T"] ["handoff" "Codex" "work\u001edone"]]
+             (map (juxt :record :recorded-by :text) (store/records-at "HEAD" "t-1")))))
 
 (describe "title-and-request"
   (around [it] (with-repo it))
