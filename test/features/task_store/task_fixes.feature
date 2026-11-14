@@ -13,24 +13,18 @@ Feature: sf task fixes
   them in the created block as "fixes:" and "found-by:" after "route:". A
   task created without the options has neither trailer and neither line.
 
-  sf harvest prints three keys on every line, after "route" and before
-  "records": "fixes" and "found_by", the stored values or null, and
-  "fixes_tasks", an array of full task ids. For a task target it holds that
-  id. For a pull request #N it holds, sorted, each task that has a record on
-  a commit reachable from the second parent and not from the first parent of
-  a two-parent commit whose subject starts with "Merge pull request #N ",
-  in the history of the HEAD of the directory where sf harvest runs. Two
-  such commits give the tasks of both. From those it leaves out the task of
-  the line, every task whose SwarmForge-Fixes is #N, and every task whose
-  SwarmForge-Fixes names another of those tasks. It is empty when there is
-  no target or no such task.
+  sf harvest prints two keys on every line, after "route" and before
+  "records": "fixes" and "found_by", the stored values or null. A reader of
+  the harvest maps a pull request to its tasks.
 
-  sf new checks in this order and prints the first refusal: the options
-  left to right (an unknown option, then a missing value, then --fixes or
-  --found-by given twice), the route, the detector value, --found-by without --fixes,
-  the target form (an empty target fails it), the task named. The word after an option is its value,
-  also when it starts with "--". -m, -F and --route given twice keep the
-  last value. A refused sf new prints no id and makes no branch.
+  sf new checks in this order and prints the first refusal: the operator
+  check, the title, the options left to right (an unknown option, then a
+  missing value, then --fixes or --found-by given twice; a -F file that
+  cannot be read fails here), the route, the detector value, --found-by
+  without --fixes, the target form (an empty target fails it), the task
+  named. The word after an option is its value, also when it starts with
+  "--". -m, -F and --route given twice keep the last value. A refused sf
+  new prints no id and makes no branch.
 
   Background:
     Given a project with swarmforge initialized
@@ -90,49 +84,21 @@ Feature: sf task fixes
     Then the output ends with the lines "route: coder\nfixes: #7"
 
   # sf task fixes 6
-  Scenario Outline: sf task fixes 6: sf harvest prints the target, its tasks and the detector of every task
-    Given I ran "git merge -q --no-ff swarm/$A -m" with the text "Merge pull request #<merged> from o/login"
-    And I ran "sf new Fix -m x --route coder --fixes <target> --found-by <detector>"
+  Scenario Outline: sf task fixes 6: sf harvest prints the target and the detector of every task
+    Given I ran "sf new Fix -m x --route coder --fixes <target> --found-by <detector>"
     And task "B" is the task that command created
     When I run "sf harvest"
     Then the exit status is 0
-    And the output matches "\"id\":\"$B\"[^\n]*\"route\":\[\"coder\"\],\"fixes\":\"<stored>\",\"found_by\":\"<detector>\",\"fixes_tasks\":<tasks>,\"records\":"
-    And the output matches "\"id\":\"$A\"[^\n]*\"route\":\[\"coder\"\],\"fixes\":null,\"found_by\":null,\"fixes_tasks\":\[\],\"records\":"
+    And the output matches "\"id\":\"$B\"[^\n]*\"route\":\[\"coder\"\],\"fixes\":\"<stored>\",\"found_by\":\"<detector>\",\"records\":"
+    And the output matches "\"id\":\"$A\"[^\n]*\"route\":\[\"coder\"\],\"fixes\":null,\"found_by\":null,\"records\":"
 
     Examples:
-      | merged | target | detector  | stored | tasks        |
-      | 7      | $A:hex | pr-review | $A     | \[\"$A\"\]   |
-      | 7      | #7     | ci        | #7     | \[\"$A\"\]   |
-      | 70     | #7     | operator  | #7     | \[\]         |
-      | 7      | #70    | operator  | #70    | \[\]         |
+      | target | detector  | stored |
+      | $A:hex | pr-review | $A     |
+      | #115   | operator  | #115   |
 
   # sf task fixes 7
-  Scenario: sf task fixes 7: fixes_tasks leaves out the task itself and the other fix tasks of the same defects
-    Given task "C" titled "Add logout" was created on route "coder"
-    And I ran "sf new Fix -m x --route coder --fixes #7 --found-by pr-review"
-    And task "B" is the task that command created
-    And I ran "sf new Mend -m x --route coder --fixes #9"
-    And task "D" is the task that command created
-    And I ran "sf new Patch -m x --route coder --fixes $A"
-    And task "E" is the task that command created
-    And I ran "sf new Repair -m x --route coder --fixes #7"
-    And task "F" is the task that command created
-    And I ran "git checkout -q -b pr"
-    And I ran "git merge -q --no-ff swarm/$C -m one"
-    And I ran "git merge -q --no-ff swarm/$A -m two"
-    And I ran "git merge -q --no-ff swarm/$B -m three"
-    And I ran "git merge -q --no-ff swarm/$D -m four"
-    And I ran "git merge -q --no-ff swarm/$E -m five"
-    And I ran "git merge -q --no-ff swarm/$F -m six"
-    And I ran "git checkout -q main"
-    And I ran "git merge -q --no-ff pr -m" with the text "Merge pull request #7 from o/pr"
-    When I run "sf harvest"
-    Then the exit status is 0
-    And the output matches "\"id\":\"$B\"[^\n]*\"fixes\":\"#7\",\"found_by\":\"pr-review\",\"fixes_tasks\":\[\"$A\",\"$C\",\"$D\"\],\"records\":"
-    And the output matches "\"id\":\"$E\"[^\n]*\"fixes\":\"$A\",\"found_by\":null,\"fixes_tasks\":\[\"$A\"\],\"records\":"
-
-  # sf task fixes 8
-  Scenario Outline: sf task fixes 8: sf new prints the first refusal in the check order
+  Scenario Outline: sf task fixes 7: sf new prints the first refusal in the check order
     When I run "sf new Fix -m x --route coder <options>"
     Then the exit status is 1
     And the output is ""
@@ -140,6 +106,7 @@ Feature: sf task fixes
 
     Examples:
       | options                                     | refusal                                                    |
+      | --fixes #0 -F nosuch-file --found-by lint   | sf: nosuch-file (No such file or directory)                |
       | --fixes                                     | sf: --fixes needs a value                                  |
       | --fixes #7 --found-by ci --found-by         | sf: --found-by needs a value                               |
       | --fixes  --found-by ci                      | sf: --fixes needs a task id or '#<number>', got ''         |
@@ -156,8 +123,8 @@ Feature: sf task fixes
       | --fixes #                                   | sf: --fixes needs a task id or '#<number>', got '#'        |
       | --fixes nosuch                              | sf: no task 'nosuch'                                       |
 
-  # sf task fixes 9
-  Scenario: sf task fixes 9: sf new refuses a target that names two tasks
+  # sf task fixes 8
+  Scenario: sf task fixes 8: sf new refuses a target that names two tasks
     Given task "B" titled "Add logout" was created on route "coder"
     When I run "sf new Fix -m x --route coder --fixes add-log"
     Then the exit status is 1
