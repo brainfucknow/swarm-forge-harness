@@ -574,4 +574,13 @@
     (let [a (new-id "Add login")
           b (new-id "Add logout")]
       (should= (sort [a b]) (map #(second (re-find #"\"id\":\"([^\"]+)\"" %))
-                                 (str/split-lines (out task/harvest [])))))))
+                                 (str/split-lines (out task/harvest []))))))
+
+  (it "warns first, after the argument check, in a shallow repository, and only there"
+    (new-id "Add login")
+    (let [full (captured #(task/harvest []))
+          shallow-line "sf: shallow repository: older tasks are truncated or missing; run git fetch --unshallow"]
+      (should= "" (:err full))
+      (spit (str *dir* "/.git/shallow") (str (git *dir* "rev-list" "--max-parents=0" "HEAD") "\n"))
+      (should= (assoc full :err shallow-line) (captured #(task/harvest [])))
+      (should= "harvest takes no arguments" (:err (captured #(task/harvest ["x"])))))))

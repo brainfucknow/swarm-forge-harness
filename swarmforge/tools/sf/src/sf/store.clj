@@ -15,13 +15,14 @@
 (defn branch-ids []
   (shell/lines (git/git "for-each-ref" "--format=%(refname:lstrip=3)" "refs/heads/swarm/")))
 
-(def ^:private log-format "%h%x1f%p%x1f%B%x1f%(trailers:only,unfold)%x1e")
+(def ^:private log-format "%h%x1f%p%x1f%at%x1f%an%x1f%B%x1f%(trailers:only,unfold)%x1e")
 
 (defn- read-commits [output]
   (for [entry (str/split output #"\x1e")
-        :let [[sha parents message trailers] (str/split (str/replace entry #"^\n" "") #"\x1f" -1)]
+        :let [[sha parents author-time author-name message trailers] (str/split (str/replace entry #"^\n" "") #"\x1f" -1)]
         :when (not (str/blank? sha))]
-    {:sha sha :parents (str/split parents #" ") :message message :trailers (shell/lines trailers)}))
+    {:sha sha :parents (str/split parents #" ") :author-time author-time :author-name author-name
+     :message message :trailers (shell/lines trailers)}))
 
 (defn- finished-records
   "The finished records in the history of the main checkout's HEAD, any parent

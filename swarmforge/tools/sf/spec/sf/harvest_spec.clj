@@ -33,7 +33,7 @@
 
 (def ^:private null-record
   {"type" nil "from" nil "stage" nil "needs" nil "route" nil "commit" nil "text" nil
-   "merged_into" nil "rejected" nil "audit_refusals" nil "spec_verdict" nil})
+   "merged_into" nil "rejected" nil "audit_refusals" nil "spec_verdict" nil "time" nil "recorded_by" nil})
 
 (describe "line"
   (it "is one line of JSON"
@@ -74,6 +74,15 @@
                                        {:record "changes-requested" :from "spec-judge" :spec-verdict "continue" :text "r1"}
                                        {:record "changes-requested" :from "operator" :text "no"}]))
                        "records"))))
+
+  (it "ends each record with its time and the name that recorded it"
+    (let [line (harvest/line (assoc task :records [(assoc (records 4) :time "2026-03-01T08:00:00Z" :recorded-by "Codex")]))
+          entry (get-in (json/parse-string line) ["records" 0])
+          raw (second (re-find #"\"records\":\[\{([^}]*)\}" line))]
+      (should= ["type" "from" "stage" "needs" "route" "commit" "text" "merged_into" "rejected" "audit_refusals"
+                "spec_verdict" "time" "recorded_by"]
+               (map second (re-seq #"\"(\w+)\":" raw)))
+      (should= ["2026-03-01T08:00:00Z" "Codex"] [(get entry "time") (get entry "recorded_by")])))
 
   (it "gives an approval without findings an empty rejected list"
     (should= [] (get-in (parsed (assoc task :records [(assoc (records 3) :rejected [])])) ["records" 0 "rejected"])))

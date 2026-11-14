@@ -375,8 +375,10 @@
     (println (str "FINISHED: " id " merged into " target))))
 
 (defn harvest
-  "Prints each task sf knows as one JSON line: the finished ones first. Reads
-  only; writes nothing."
+  "Prints each task sf knows as one JSON line: the finished ones first, after
+  a warning on stderr in a shallow repository. Reads only; writes nothing."
   [args]
   (when (seq args) (shell/die "harvest takes no arguments"))
+  (when (plumbing/shallow?)
+    (shell/warn "shallow repository: older tasks are truncated or missing; run git fetch --unshallow"))
   (run! (comp println harvest/line) (history/harvest)))
