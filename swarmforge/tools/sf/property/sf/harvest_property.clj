@@ -66,6 +66,16 @@
 
 (def ^:private route (gen/fmap #(str/join "," %) (gen/not-empty (gen/vector role 1 4))))
 
+(def ^:private record-time
+  "A commit author time as record/parse gives it: epoch seconds in UTC text."
+  (gen/fmap #(record/utc-time (str %)) (gen/choose 0 4102444800)))
+
+(def ^:private carried-backend
+  "The :backend and :dispatched a parsed record carries: both or neither."
+  (gen/one-of [(gen/return nil)
+               (gen/hash-map :backend (gen/elements record/backends)
+                             :dispatched (gen/elements ["dispatched" "session"]))]))
+
 (def ^:private rec
   (gen/let [type record-type
             from role
@@ -76,10 +86,16 @@
             commit (gen/one-of [(gen/return "") hex7])
             text (gen/one-of [(gen/return nil) sentence])
             refusals (gen/one-of [(gen/return nil) (gen/fmap str gen/nat) word])
-            rejected (gen/vector (gen/fmap :text finding) 0 3)]
-    (cond-> {:record type :from from :stage stage :needs needs :route route :sha sha :commit commit
-             :merged-into "main"}
+            rejected (gen/vector (gen/fmap :text finding) 0 3)
+            time (gen/one-of [(gen/return nil) record-time])
+            recorded-by (gen/one-of [(gen/return nil) sentence])
+            backend carried-backend]
+    (cond-> (merge {:record type :from from :stage stage :needs needs :route route :sha sha :commit commit
+                    :merged-into "main"}
+                   backend)
       text (assoc :text text)
+      time (assoc :time time)
+      recorded-by (assoc :recorded-by recorded-by)
       refusals (assoc :audit-refusals refusals)
       (= "approval" type) (assoc :rejected rejected))))
 
@@ -94,7 +110,8 @@
      :records records :commits commits}))
 
 (def ^:private record-keys
-  #{"type" "from" "stage" "needs" "route" "commit" "text" "merged_into" "rejected" "audit_refusals" "spec_verdict"})
+  #{"type" "from" "stage" "needs" "route" "commit" "text" "merged_into" "rejected" "audit_refusals" "spec_verdict"
+    "time" "recorded_by" "backend" "dispatched"})
 
 (describe "line"
   (it "is one line of JSON that reads back the task's id, status and newest state"
@@ -133,6 +150,13 @@
                                      (nil? c))))
                                (map vector (:records t)
                                     (get (json/parse-string (harvest/line t)) "records")))))))
+
+  (it "gives each record its time, recorder and backend, dispatched true or false, null where absent"
+    (should (passes? (prop/for-all [t task]
+                       (= (for [r (:records t)]
+                            [(:time r) (:recorded-by r) (:backend r) (some->> (:dispatched r) (= "dispatched"))])
+                          (for [out (get (json/parse-string (harvest/line t)) "records")]
+                            (mapv out ["time" "recorded_by" "backend" "dispatched"])))))))
 
   (it "exports one lore element per Lore trailer but Lore-id"
     (should (passes? (prop/for-all [t task]
