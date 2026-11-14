@@ -144,3 +144,39 @@
       (should= ["t-2" "open" true "" ""] ((juxt :id :status :truncated :title :request) task))
       (should= ["handoff"] (map :record (:records task)))
       (should= [["Tested: it"]] (map :trailers (:commits task))))))
+
+(defn- merge-without-finish! []
+  (store/create! "t-3" (record/message (assoc (flow/created "Hosted merge" "Keep history." "coder") :task "t-3")))
+  (git *dir* "checkout" "-q" "swarm/t-3")
+  (git *dir* "commit" "-q" "--allow-empty" "-m" "Implementation\n\nBy coder.\n\nTested: real check")
+  (store/write! "t-3" (fn [_] {:record "handoff" :from "coder" :stage "done" :route "coder" :needs "none"}))
+  (git *dir* "checkout" "-q" "main")
+  (git *dir* "merge" "-q" "--no-ff" "-m" "Hosted merge" "swarm/t-3")
+  (git *dir* "branch" "-q" "-D" "swarm/t-3"))
+
+(describe "reachable history without lifecycle closure"
+  (around [it] (with-repo it))
+
+  (it "exports a hosted merge without falsely marking it finished or open"
+    (merge-without-finish!)
+    (let [[task] (:tasks (harvested))]
+      (should= ["t-3" "unclosed" "Hosted merge" "Keep history."]
+               ((juxt :id :status :title :request) task))
+      (should= ["created" "handoff"] (map :record (:records task)))
+      (should= [["Tested: real check"]] (map :trailers (:commits task)))
+      (should= [] (store/open-ids))
+      (should= [] (store/finished-ids))))
+
+  (it "resolves its id and shows its last recorded stage and full history"
+    (merge-without-finish!)
+    (should= "t-3" (store/resolve-id "3"))
+    (let [{:keys [status state records]} (history/view "t-3")]
+      (should= "unclosed" status)
+      (should= "done" (:stage state))
+      (should= ["created" "handoff"] (map :record records))))
+
+  (it "does not export records reachable only from another branch"
+    (store/create! "t-4" (record/message (assoc (flow/created "Unmerged" "Not on HEAD." "coder") :task "t-4")))
+    (git *dir* "branch" "archive" "swarm/t-4")
+    (git *dir* "branch" "-q" "-D" "swarm/t-4")
+    (should= [] (:tasks (harvested)))))
