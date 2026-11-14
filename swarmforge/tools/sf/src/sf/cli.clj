@@ -53,9 +53,11 @@ Catalogue commands
                                   what each spec revision sent back
   harvest                         print every task's history as one JSON line each, finished
                                   tasks first (handoff-protocol.md describes the keys)
-  dispatch <role> <id> [backend]  run a role or gate headlessly (claude, codex, copilot)
+  dispatch <role> <id> [backend]  run a role or gate headlessly (claude, codex, copilot, mistral)
   run <id> [backend]              dispatch stage after stage until done or blocked; runs the
-                                  gates when the specification it dispatched waits for approval
+                                  gates when the specification it dispatched waits for approval;
+                                  with mistral one swarmforge-pipeline workflow execution per
+                                  call runs the loop on the Mistral platform (swarmforge/workflows/)
   adapters                        regenerate .claude/.codex/.github/.vibe agent files
   tool require|ensure|list|bin    install constitution tools project-locally (sf tool --help)
   check                           validate roles.conf, tiers.conf, routes.conf, tools.conf, role prompts
@@ -72,13 +74,24 @@ Environment
                        refuse to run under it
   SWARMFORGE_BACKEND   default backend for dispatch/run; set by dispatch and run to the
                        backend they start; under dispatch, records carry it
-                       (handoff-protocol.md, Backend)
+                       (handoff-protocol.md, Backend). With no CLI backend on PATH,
+                       mistral is detected when MISTRAL_API_KEY is set, and needs a
+                       git remote to share the task branch with the workflow worker
+                       (swarmforge/workflows/)
   SWARMFORGE_USER, SWARMFORGE_EMAIL
                        author of record commits when git has no identity
                        (default: operator, <user>@swarmforge.local)
   SWARMFORGE_CLAUDE_ARGS, SWARMFORGE_CODEX_ARGS, SWARMFORGE_COPILOT_ARGS
                        extra arguments for the headless backend, for example
-                       the permission flags an unattended run needs")
+                       the permission flags an unattended run needs
+  MISTRAL_API_KEY, MISTRAL_API_URL
+                       credentials and API root for the mistral backend
+  SWARMFORGE_MISTRAL_ROLE_WORKFLOW, SWARMFORGE_MISTRAL_PIPELINE_WORKFLOW
+                       workflow names the mistral backend starts (defaults
+                       swarmforge-role and swarmforge-pipeline)
+  SWARMFORGE_REMOTE, SWARMFORGE_MISTRAL_TIMEOUT_SECONDS
+                       remote the task branch is pushed to (default origin) and
+                       how long sf-mistral waits for the execution (default 3600s)")
 
 (defn- print-roles [_]
   (run! println (config/pipeline)))

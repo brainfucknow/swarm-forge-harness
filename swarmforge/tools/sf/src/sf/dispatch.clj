@@ -1,5 +1,6 @@
 (ns sf.dispatch
-  "Headless role runs on the claude, codex, or copilot CLI."
+  "Headless role runs on a backend CLI, or on a Mistral Workflow when no CLI is
+  on PATH and MISTRAL_API_KEY is set."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [clojure.string :as str]
@@ -10,7 +11,28 @@
             [sf.store :as store]
             [sf.task :as task]))
 
-(def backends record/backends)
+(def backends
+  "The backends dispatch runs: the CLI backends a record can name, plus the
+  Mistral Workflow backend."
+  (conj record/backends "mistral"))
+
+(def cli-backends
+  "The backends that need their CLI on PATH; mistral is detected by
+  MISTRAL_API_KEY instead."
+  (vec record/backends))
+
+(defn- sf-mistral-path []
+  (str (fs/path (shell/repo-root) "swarmforge" "bin" "sf-mistral")))
+
+(defn- bb-bin []
+  (or (fs/which "bb") "bb"))
+
+(defn- mistral-command
+  "The command that runs role on task id as one Mistral Workflow execution:
+  sf-mistral pushes the task branch, starts a swarmforge-role execution, waits
+  for it, and fetches the branch back."
+  [role id]
+  [(bb-bin) (sf-mistral-path) "dispatch" role id])
 
 (defn- role-prompt [role short]
   (if (config/gate? role)
@@ -19,8 +41,9 @@
 
 (defn- detect-backend []
   (or (shell/env "SWARMFORGE_BACKEND" nil)
-      (some #(when (fs/which %) %) backends)
-      (shell/die "no backend found (claude, codex, copilot); set SWARMFORGE_BACKEND")))
+      (some #(when (fs/which %) %) cli-backends)
+      (when (shell/env "MISTRAL_API_KEY" nil) "mistral")
+      (shell/die "no backend found (claude, codex, copilot, mistral); set SWARMFORGE_BACKEND or MISTRAL_API_KEY")))
 
 (defn- extra-args [variable]
   (some-> (shell/env variable nil) str/trim (str/split #"\s+")))
@@ -49,6 +72,11 @@
                         (extra-args "SWARMFORGE_COPILOT_ARGS"))
       (shell/die "unknown backend '" backend "'"))))
 
+(defn- pipeline-command
+  "The command that runs the whole task as one swarmforge-pipeline execution."
+  [id]
+  [(bb-bin) (sf-mistral-path) "run" id])
+
 (defn dispatch [[role id-arg backend]]
   (when (str/blank? role) (shell/die "dispatch needs a role"))
   (config/require-agent role)
@@ -57,7 +85,9 @@
   (let [id (store/resolve-id id-arg)
         _ (store/refuse-unclosed! id)
         backend (or (not-empty backend) (detect-backend))
-        command (vec (command-for backend role (role-prompt role id)))
+        command (vec (if (= "mistral" backend)
+                       (mistral-command role id)
+                       (command-for backend role (role-prompt role id))))
         dir (task/worktree! id)
         _ (flush)
         {:keys [exit]} (try (p/shell {:cmd command :dir dir :continue true
@@ -85,32 +115,57 @@
       (when (not= before (gate-snapshot id))
         (shell/die "gate " gate " changed task " id "; a gate only reports")))))
 
-(defn run
+(defn- run-mistral
+  "One swarmforge-pipeline execution drives the task as far as it can without
+  the operator: sf-mistral run polls it, then fetches the task branch back.
+  Exit 0 means done, 2 means the task waits on the operator."
+  [id]
+  (let [dir (task/worktree! id)
+        _ (flush)
+        {:keys [exit]} (try (p/shell {:cmd (pipeline-command id) :dir dir :continue true})
+                            (catch java.io.IOException e
+                              (shell/die "mistral: " (ex-message e))))]
+    (cond
+      (zero? exit) (println (str "DONE: " id "; run: sf finish " id))
+      (= 2 exit) (do (println (str "BLOCKED: " id " needs:" (:needs (store/state id))))
+                     (shell/fail 2 nil))
+      :else (shell/fail (if (pos? exit) exit 1) nil))))
+
+(defn- run-stages
   "Dispatches stage after stage until the task is done (exit 0) or waits on the
   operator (exit 2). When a stage it dispatched asked for approval, it first
   runs the gates on that specification. It stops when a stage it dispatched
   added a record of the operator's."
+  [id backend]
+  (loop [dispatched? false]
+    (let [{:keys [stage needs] :as state} (store/state id)]
+      (cond
+        (= "done" stage)
+        (println (str "DONE: " id "; run: sf finish " id))
+
+        (flow/waiting? state)
+        (do (when (and dispatched? (= "approval" needs))
+              (run-gates id backend))
+            (println (str "BLOCKED: " id " needs:" needs))
+            (shell/fail 2 nil))
+
+        :else
+        (let [before (count (store/open-records id))]
+          (dispatch [stage id backend])
+          (when-let [{:keys [record]} (flow/operator-record (drop before (store/open-records id)))]
+            (shell/die "stage:" stage " added the operator's " record " record; only the operator approves, rejects, answers and routes"))
+          (when (let [after (store/state id)]
+                  (and (= stage (:stage after)) (not (flow/waiting? after))))
+            (shell/die "stage:" stage " made no progress"))
+          (recur true))))))
+
+(defn run
+  "Dispatches stage after stage until the task is done (exit 0) or waits on the
+  operator (exit 2). With the mistral backend one pipeline execution runs the
+  loop on the Mistral platform instead."
   [[id-arg backend]]
   (let [id (store/resolve-id id-arg)
         _ (store/refuse-unclosed! id)]
-    (loop [dispatched? false]
-      (let [{:keys [stage needs] :as state} (store/state id)]
-        (cond
-          (= "done" stage)
-          (println (str "DONE: " id "; run: sf finish " id))
-
-          (flow/waiting? state)
-          (do (when (and dispatched? (= "approval" needs))
-                (run-gates id backend))
-              (println (str "BLOCKED: " id " needs:" needs))
-              (shell/fail 2 nil))
-
-          :else
-          (let [before (count (store/open-records id))]
-            (dispatch [stage id backend])
-            (when-let [{:keys [record]} (flow/operator-record (drop before (store/open-records id)))]
-              (shell/die "stage:" stage " added the operator's " record " record; only the operator approves, rejects, answers and routes"))
-            (when (let [after (store/state id)]
-                    (and (= stage (:stage after)) (not (flow/waiting? after))))
-              (shell/die "stage:" stage " made no progress"))
-            (recur true)))))))
+    (if (= "mistral" backend)
+      (run-mistral id)
+      (run-stages id backend))))

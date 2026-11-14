@@ -14,6 +14,7 @@ this repository.
 | `constitution/existing-code.md` | Refactoring policy read only when the project opts into `Existing code: ask before refactoring`. |
 | `roles/*.md` | What each role owns, verifies, and hands off. `orchestrator.md` is the session's own role. |
 | `bin/sf`, `tools/sf/` | The only writer of task state. `sf --help` lists the commands. |
+| `bin/sf-mistral`, `workflows/` | The mistral backend: runs tasks and roles on Mistral Workflows when no backend CLI is on PATH. See [workflows/README.md](workflows/README.md). |
 | `bin/sf-cs`, `languages/csharp.md` | C# tool wrapper: tests, coverage, CRAP, DRY, mutation, each scoped to the task's changes. |
 | `bin/sf-fs`, `languages/fsharp.md` | F# .NET tests, coverage, compiled-method CRAP and DRY; mutation unsupported. |
 | `bin/sf-vb`, `languages/vbnet.md` | VB.NET tests, coverage, compiled-method CRAP and DRY; mutation unsupported. |
@@ -47,7 +48,14 @@ sf finish <id>     # at stage done: verify the merge, merge, remove the branch
 
 Without harness subagents, `sf run <id>` dispatches each stage to a headless
 `claude`, `codex`, or `copilot` process until the task is done or needs the
-operator.
+operator. When none of those CLIs is on PATH but `MISTRAL_API_KEY` is set, the
+`mistral` backend serves the same role instead: one Mistral Workflow
+execution per task or role (see [workflows/](workflows/README.md)), with one
+agent per role on its tier's model, all `sf` bookkeeping on the task branch,
+and the gate and spec-judge roles running as workflow steps that record
+nothing. A session with neither a harness, a backend CLI, nor a Mistral API
+key runs single-session by design: the operator plays every role and the
+gates and spec-judge are skipped.
 
 ## Configuration
 

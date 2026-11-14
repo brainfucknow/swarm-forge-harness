@@ -1,0 +1,155 @@
+#!/usr/bin/env bb
+;; sf-mistral: run a SwarmForge task or role on a Mistral Workflow.
+;;
+;; dispatch <role> <id>  start one swarmforge-role execution for role on task id
+;; run <id>              start one swarmforge-pipeline execution for task id
+;;
+;; Both push the local task branch first, poll the execution until it ends,
+;; then fetch the branch back, so the local checkout sees the records the
+;; worker wrote. Exit 0 on done/advanced, 2 on blocked, 1 on failure.
+;;
+;; Environment:
+;;   MISTRAL_API_KEY                     required
+;;   MISTRAL_API_URL                     default https://api.mistral.ai
+;;   SWARMFORGE_REMOTE                   default origin
+;;   SWARMFORGE_MISTRAL_ROLE_WORKFLOW    default swarmforge-role
+;;   SWARMFORGE_MISTRAL_PIPELINE_WORKFLOW default swarmforge-pipeline
+;;   SWARMFORGE_MISTRAL_TIMEOUT_SECONDS  default 3600
+(require '[babashka.fs :as fs]
+         '[babashka.process :as p]
+         '[cheshire.core :as json]
+         '[clojure.string :as str]
+         '[org.httpkit.client :as http])
+
+(defn- die [& parts]
+  (binding [*out* *err*] (println "sf-mistral:" (apply str parts)))
+  (System/exit 1))
+
+(defn- env* [name default]
+  (let [v (System/getenv name)] (if (str/blank? v) default v)))
+
+(defn- git* [dir & args]
+  (p/shell (cond-> {:cmd (into ["git"] args) :out :string :err :string :continue true}
+             dir (assoc :dir (str dir)))))
+
+(defn- chomp [s] (str/trim (str s)))
+
+(defn- main-checkout []
+  (-> (git* nil "rev-parse" "--path-format=absolute" "--git-common-dir")
+      :out chomp fs/path fs/parent str))
+
+(defn- remote-url [main remote]
+  (let [{:keys [exit out]} (git* main "remote" "get-url" remote)]
+    (if (zero? exit) (chomp out)
+        (die "the mistral backend needs a git remote '" remote "' to share the task branch"))))
+
+(defn- base-branch [main]
+  (chomp (:out (git* main "rev-parse" "--abbrev-ref" "HEAD"))))
+
+(defn- push-task [main remote id]
+  (let [branch (str "swarm/" id)
+        wt (fs/path main ".worktrees" id)
+        {:keys [exit]} (git* main "push" remote (str branch ":" branch))]
+    (when-not (zero? exit)
+      (if (fs/exists? wt)
+        (do (git* (str wt) "fetch" remote branch)
+            (git* (str wt) "merge" "--ff-only" "FETCH_HEAD"))
+        (git* main "fetch" remote branch))
+      (let [{:keys [exit]} (git* main "push" remote (str branch ":" branch))]
+        (when-not (zero? exit) (die "could not push " branch " to " remote))))))
+
+(defn- pull-task [main remote id]
+  (let [branch (str "swarm/" id)
+        wt (fs/path main ".worktrees" id)]
+    (if (fs/exists? wt)
+      (do (git* (str wt) "fetch" remote branch)
+          (let [{:keys [exit err]} (git* (str wt) "merge" "--ff-only" "FETCH_HEAD")]
+            (when-not (zero? exit) (die "task branch diverged locally: " (chomp err)))))
+      (git* main "fetch" remote (str "+" branch ":refs/heads/" branch)))))
+
+(defn- execute [api key workflow input execution-id]
+  (let [resp @(http/post (str api "/v1/workflows/" workflow "/execute")
+                         {:headers {"Authorization" (str "Bearer " key)
+                                    "Content-Type" "application/json"}
+                          :body (json/generate-string {:input input :execution_id execution-id})})]
+    (when-not (= 200 (:status resp))
+      (die "starting " workflow " failed: " (:status resp) " " (:body resp))))
+  execution-id)
+
+(defn- read-execution [api key execution-id]
+  (let [resp @(http/get (str api "/v1/workflows/executions/" execution-id)
+                        {:headers {"Authorization" (str "Bearer " key)}})]
+    (when-not (= 200 (:status resp))
+      (die "reading execution " execution-id " failed: " (:status resp) " " (:body resp)))
+    (json/parse-string (:body resp) true)))
+
+(def terminal #{:COMPLETED :FAILED :CANCELED :TERMINATED :TIMED_OUT :CONTINUED_AS_NEW})
+
+(defn- wait-execution [api key execution-id timeout-seconds]
+  (let [deadline (+ (System/currentTimeMillis) (* timeout-seconds 1000))]
+    (loop []
+      (let [execution (read-execution api key execution-id)
+            status (keyword (:status execution))]
+        (if (contains? terminal status)
+          execution
+          (if (> (System/currentTimeMillis) deadline)
+            (die "execution " execution-id " did not finish within " timeout-seconds "s")
+            (do (Thread/sleep 5000) (recur))))))))
+
+(defn -main [[mode & [a b :as args]]]
+  (let [api (env* "MISTRAL_API_URL" "https://api.mistral.ai")
+        key (env* "MISTRAL_API_KEY" nil)
+        remote (env* "SWARMFORGE_REMOTE" "origin")
+        timeout (try (Long/parseLong (env* "SWARMFORGE_MISTRAL_TIMEOUT_SECONDS" "3600"))
+                     (catch Exception _ 3600))]
+    (when (str/blank? key) (die "MISTRAL_API_KEY is not set; the mistral backend runs the pipeline on Mistral Workflows"))
+    (case mode
+      "dispatch" (let [[role id] args]
+                   (when (or (str/blank? role) (str/blank? id)) (die "usage: sf-mistral dispatch <role> <id>"))
+                   (let [main (main-checkout)
+                         repository (remote-url main remote)
+                         wf (env* "SWARMFORGE_MISTRAL_ROLE_WORKFLOW" "swarmforge-role")
+                         execution-id (str "sf-" id "-role-" (subs (str (java.util.UUID/randomUUID)) 0 8))]
+                     (push-task main remote id)
+                     (execute api key wf {:repository repository
+                                          :task_id id
+                                          :role role
+                                          :remote remote
+                                          :base_branch (base-branch main)}
+                              execution-id)
+                     (let [execution (wait-execution api key execution-id timeout)
+                           result (:result execution)]
+                       (pull-task main remote id)
+                       (println (json/generate-string result {:pretty true}))
+                       (case (keyword (:status execution))
+                         :COMPLETED (case (keyword (:status result))
+                                      :advanced (System/exit 0)
+                                      :done (System/exit 0)
+                                      :blocked (System/exit 2)
+                                      (System/exit 1))
+                         (System/exit 1)))))
+      "run" (let [[id] args]
+              (when (str/blank? id) (die "usage: sf-mistral run <id>"))
+              (let [main (main-checkout)
+                    repository (remote-url main remote)
+                    wf (env* "SWARMFORGE_MISTRAL_PIPELINE_WORKFLOW" "swarmforge-pipeline")
+                    execution-id (str "sf-" id "-run-" (subs (str (java.util.UUID/randomUUID)) 0 8))]
+                (push-task main remote id)
+                (execute api key wf {:repository repository
+                                     :task_id id
+                                     :remote remote
+                                     :base_branch (base-branch main)}
+                         execution-id)
+                (let [execution (wait-execution api key execution-id timeout)
+                      result (:result execution)]
+                  (pull-task main remote id)
+                  (println (json/generate-string result {:pretty true}))
+                  (case (keyword (:status execution))
+                    :COMPLETED (case (keyword (:status result))
+                                 :done (System/exit 0)
+                                 :blocked (System/exit 2)
+                                 (System/exit 1))
+                    (System/exit 1)))))
+      (die "usage: sf-mistral dispatch <role> <id> | run <id>"))))
+
+(-main *command-line-args*)

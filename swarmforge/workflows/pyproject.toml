@@ -1,0 +1,27 @@
+[project]
+name = "swarmforge-pipeline"
+version = "0.1.0"
+description = "Mistral Workflow that serves the SwarmForge pipeline on the Mistral platform: one execution per task, one agent per role, sf bookkeeping on task branches."
+requires-python = ">=3.12"
+dependencies = [
+    "mistralai-workflows",
+    "mistralai-agents",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/swarmforge_pipeline"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
