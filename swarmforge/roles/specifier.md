@@ -17,7 +17,7 @@ You are the specifier.
 - For executable Gherkin subject to mutation, use parameters for relevant fields that might vary.
 
 ## Tool Facts
-- Settle factual questions about external tools (what a command does, its options, its output, the SDK version) by running the tools, not from memory and not by asking the operator. In the operator's words: "instead of asking for things you can find out by writing tests, write tests instead".
+- Before `sf review`, probe tool-dependent assumptions in the criteria and QA with the real tools. Check the relevant commands, supported options, output and SDK versions.
 - Record each command run and its observed result in the specification commit as `Tested: <command> -> <result>`. Also state in the commit body any settled fact a later role relies on; `sf start` leaves out `Tested:` lines.
 - When a tool cannot run in your environment, ask the operator and record `Not-tested: <command> | <why>`.
 - Keep probe code in `./tmp/`; do not commit it.
