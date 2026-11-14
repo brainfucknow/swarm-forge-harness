@@ -28,3 +28,9 @@ branches, each task on its own route through the role catalogue. Read
   code comments, commit messages, Lore trailers, or `sf` records.
 - Keep that text dry and to the point. Say each rule once, where it
   belongs. Give no rationale or history that an agent cannot act on.
+
+## Local files
+
+- Keep local session files (downloaded tools, scratch binaries, caches) in
+  the gitignored `.swarmforge/` directory. Do not create other untracked
+  top-level directories in the repo.
