@@ -202,12 +202,17 @@ plus `records` and `lore`:
   the trailer; it equals a `records[].commit` only when a review or handoff
   recorded that commit, so it is not a join key.
 
-An `unclosed` history has records reachable from HEAD but no local task branch
-or `sf finish` record. `sf show` reads it too. Its last reachable record anchors
-the history; later unrecorded commits cannot be attributed to it. Its stage is
-the last recorded stage, not proof that verification or lifecycle closure ran.
-It does not appear in `sf ls` and is not a finished task. Discovery cannot
-recover records removed by a squash or rebase.
+An `unclosed` history has recognized records reachable from HEAD but no local
+task branch or `sf finish` record. Recognition requires a nonblank task id and
+a known record type; incidental or unknown-type trailers do not establish a
+record. Its newest recognized record anchors the history; later unrecorded
+commits cannot be attributed to it. `sf show` and `sf harvest` expose that
+history. `sf stage` and `sf route <id>` return its last recorded values, or fail
+explicitly if the requested value is absent. These values do not prove that
+verification or lifecycle closure ran. Execution and lifecycle commands,
+including `run`, `dispatch` and `finish`, refuse this read-only history without
+recreating its branch. It does not appear in `sf ls` and is not a finished task.
+Discovery cannot recover records removed by a squash or rebase.
 
 A task whose readable history lacks its `created` record (a shallow clone)
 is `truncated`: `title` and `request` are empty, its readable records are

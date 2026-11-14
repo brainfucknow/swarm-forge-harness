@@ -77,7 +77,7 @@
                              (str "--format=" log-format) "HEAD" "--")
                      read-commits
                      (map record/parse)
-                     (filter :task))]
+                     (filter record/recognized?))]
     (->> records
          (remove #(known (:task %)))
          (group-by :task)
@@ -86,6 +86,12 @@
 
 (defn unclosed-record [id]
   (first (filter #(= id (:task %)) (unclosed-tasks))))
+
+(defn refuse-unclosed!
+  "Refuses execution of branchless histories; callers retain finished-task behavior."
+  [id]
+  (when (and (not (has-branch? id)) (not (finished? id)))
+    (shell/die "task " id " has no local branch; history is unclosed")))
 
 (defn resolve-id
   "The task that arg names, among branches, finished tasks and reachable unclosed histories."
@@ -112,6 +118,7 @@
   (->> (git/git "log" "--first-parent" (str "--grep=^SwarmForge-Task: " id "$") (str "--format=" log-format) rev "--")
        read-commits
        (map record/parse)
+       (filter record/recognized?)
        (filter #(= id (:task %)))
        reverse
        record/role-commits))
@@ -152,12 +159,11 @@
   (or (not-empty (records-at (ref-of id) id)) (shell/die "swarm/" id " has no records")))
 
 (defn state
-  "The newest record of the task branch, or the finished record when the
-  branch is gone."
+  "The newest branch record, finished record, or reachable unclosed record."
   [id]
   (if (has-branch? id)
     (last (open-records id))
-    (finished-record id)))
+    (or (finished-record id) (unclosed-record id))))
 
 (defn create!
   "Makes swarm/<id> at HEAD with one commit that changes no file."
