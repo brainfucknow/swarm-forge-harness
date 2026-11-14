@@ -9,6 +9,8 @@
 
 (def ^:private command-for @#'sf.dispatch/command-for)
 (def ^:private detect-backend @#'sf.dispatch/detect-backend)
+(def ^:private mistral-command @#'sf.dispatch/mistral-command)
+(def ^:private pipeline-command @#'sf.dispatch/pipeline-command)
 
 (defn- env-of [variables]
   (fn [name default] (get variables name default)))
@@ -106,16 +108,21 @@
     (doseq [backend dispatch/backends]
       (let [id (new-id (str "Design " backend) "--route" "architecture-design-reviewer,coder")
             [{:keys [cmd dir]}] (dispatched "architecture-design-reviewer" id backend)
-            prompt (case backend "copilot" (nth cmd 2) (last cmd))]
+            prompt (case backend "copilot" (nth cmd 2) (last cmd))
+            expected (if (= "mistral" backend)
+                       (vec (mistral-command "architecture-design-reviewer" id))
+                       (vec (command-for backend "coder" prompt)))]
         (should= (str *dir* "/.worktrees/" id) dir)
-        (should= (vec (command-for backend "coder" prompt)) cmd))))
+        (should= expected cmd))))
 
   (it "dispatches an explicitly selected optional reviewer with the existing strong tier on every backend"
     (support/write-conf! *dir* "roles.conf" "coder strong subagent\nsecurity-reviewer strong subagent optional\ncleaner fast subagent\n")
     (doseq [backend dispatch/backends]
       (let [id (new-id (str "Review " backend) "--route" "coder,security-reviewer,cleaner")
             [{:keys [cmd dir]}] (dispatched "security-reviewer" id backend)
-            expected (vec (command-for backend "coder" (if (= "copilot" backend) (nth cmd 2) (last cmd))))]
+            expected (if (= "mistral" backend)
+                       (vec (mistral-command "security-reviewer" id))
+                       (vec (command-for backend "coder" (if (= "copilot" backend) (nth cmd 2) (last cmd)))))]
         (should= expected cmd)
         (should= (str *dir* "/.worktrees/" id) dir))))
 
@@ -271,3 +278,53 @@
     (let [id (new-id "Add login")]
       (with-redefs [dispatch/dispatch (fn [_])]
         (should-contain "made no progress" (:err (support/captured #(dispatch/run [id]))))))))
+
+(describe "the mistral backend"
+  (around [it] (with-repo it))
+
+  (it "is detected when no CLI backend is on PATH and MISTRAL_API_KEY is set"
+    (with-redefs [fs/which (constantly nil)
+                  shell/env (env-of {"MISTRAL_API_KEY" "dummy"})]
+      (should= "mistral" (detect-backend))))
+
+  (it "is not detected without MISTRAL_API_KEY"
+    (with-redefs [fs/which (constantly nil)
+                  shell/env (env-of {})]
+      (should-contain "no backend found (claude, codex, copilot, mistral)" (:err (support/captured detect-backend)))))
+
+  (it "stays behind the CLI backends when both are available"
+    (with-redefs [fs/which (fn [name] (when (= "codex" name) "/bin/codex"))
+                  shell/env (env-of {"MISTRAL_API_KEY" "dummy"})]
+      (should= "codex" (detect-backend))))
+
+  (it "builds the sf-mistral dispatch command for role and id"
+    (let [cmd (vec (mistral-command "coder" "add-login-3f9a2c1"))]
+      (should= ["dispatch" "coder" "add-login-3f9a2c1"] (drop 2 cmd))
+      (should-contain "sf-mistral" (nth cmd 1))))
+
+  (it "builds the sf-mistral run command for id"
+    (let [cmd (vec (pipeline-command "add-login-3f9a2c1"))]
+      (should= ["run" "add-login-3f9a2c1"] (drop 2 cmd))
+      (should-contain "sf-mistral" (nth cmd 1))))
+
+  (it "dispatches a role as one workflow execution in the task worktree"
+    (let [id (new-id "Add login")
+          [{:keys [cmd dir extra-env]}] (dispatched "coder" id "mistral")]
+      (should= (str *dir* "/.worktrees/" id) dir)
+      (should= ["dispatch" "coder" id] (drop 2 cmd))
+      (should= {"SWARMFORGE_DISPATCHED" "coder"} extra-env)))
+
+  (it "runs one pipeline execution with sf run <id> mistral"
+    (let [id (new-id "Add login" "--route" "coder,cleaner")
+          ran (atom [])]
+      (with-redefs [p/shell (backend-shell (fn [opts] (swap! ran conj opts) {:exit 0}))]
+        (should-contain (str "DONE: " id) (:out (support/captured #(dispatch/run [id "mistral"])))))
+      (should= [["run" id]] (map #(drop 2 (:cmd %)) @ran))))
+
+  (it "reports BLOCKED with status 2 when the pipeline execution waits on the operator"
+    (let [id (new-id "Add login")
+          _ (task/ask [id "Which?"])]
+      (with-redefs [p/shell (backend-shell (constantly {:exit 2}))]
+        (let [result (support/captured #(dispatch/run [id "mistral"]))]
+          (should= 2 (:status result))
+          (should-contain (str "BLOCKED: " id " needs:operator") (:out result)))))))

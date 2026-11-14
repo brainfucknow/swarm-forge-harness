@@ -709,6 +709,11 @@ jq_spec() {
 }
 jl="$(jq_spec "Spec-judge loop")"
 assert_match "dispatch refuses the spec-judge" "$(sf dispatch spec-judge "$jl" claude 2>&1 || true)" "^sf: 'spec-judge' is the spec-judge: it needs the spec revision's gate reports"
+assert_match "dispatch refuses the spec-judge on the mistral backend too" "$(sf dispatch spec-judge "$jl" mistral 2>&1 || true)" "^sf: 'spec-judge' is the spec-judge"
+assert_match "no backend without a CLI or an API key" "$(env -u MISTRAL_API_KEY sf dispatch coder "$jl" 2>&1 || true)" "^sf: no backend found \(claude, codex, copilot, mistral\)"
+assert_match "an explicit mistral backend without a key refuses" "$(env -u MISTRAL_API_KEY sf dispatch coder "$jl" mistral 2>&1 || true)" "^sf-mistral: MISTRAL_API_KEY is not set"
+assert_match "mistral is detected with an API key and no CLI, and refuses without a remote" "$(MISTRAL_API_KEY=dummy sf dispatch coder "$jl" 2>&1 || true)" "^sf-mistral: the mistral backend needs a git remote 'origin'"
+assert_match "sf run with the mistral backend starts one pipeline execution" "$(MISTRAL_API_KEY=dummy sf run "$jl" mistral 2>&1 || true)" "^sf-mistral: the mistral backend needs a git remote 'origin'"
 assert_eq "spec-verdict continue prints its line" "$(sf spec-verdict "$jl" continue "r1")" "SPEC-VERDICT: $jl continue"
 assert_eq "start shows the send-back with its spec verdict" "$(sf start "$jl" | grep -A2 '^from: spec-judge$')" "$(printf 'from: spec-judge\nspec-verdict: continue\nreason: r1')"
 assert_match "the send-back has the new trailer" "$(git log -1 --format=%B "swarm/$jl")" "^SwarmForge-Spec-Verdict: continue$"
