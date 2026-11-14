@@ -1,6 +1,8 @@
 import os
 import subprocess
 
+import pytest
+
 from swarmforge_pipeline import sfkit
 from swarmforge_pipeline.models import TaskState
 
@@ -66,3 +68,24 @@ def test_read_state_parses_sf_ls(tmp_path, monkeypatch):
 
     monkeypatch.setattr(sfkit, "sf", fake_sf_approval)
     assert sfkit.read_state(str(tmp_path), "add-login-3f9a2c1").needs == "approval"
+
+
+def test_git_env_carries_token_via_config_env_only(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    env = sfkit._git_env()
+    assert env["GIT_CONFIG_KEY_0"] == "http.https://github.com/.extraHeader"
+    assert env["GIT_CONFIG_VALUE_0"] == "Authorization: Bearer secret-token"
+    assert env["GIT_CONFIG_COUNT"] == "1"
+    monkeypatch.delenv("GITHUB_TOKEN")
+    monkeypatch.setenv("SWARMFORGE_GITHUB_TOKEN", "alt-token")
+    assert sfkit._git_env()["GIT_CONFIG_VALUE_0"] == "Authorization: Bearer alt-token"
+    monkeypatch.delenv("SWARMFORGE_GITHUB_TOKEN")
+    assert "GIT_CONFIG_COUNT" not in sfkit._git_env()
+
+
+def test_run_does_not_leak_token_into_error(monkeypatch, tmp_path):
+    monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    with pytest.raises(sfkit.CommandError) as err:
+        sfkit.run(["git", "push", "https://github.com/x/y.git", "main"], cwd=str(tmp_path))
+    assert "secret-token" not in str(err.value)
+    assert "secret-token" not in err.value.cmd.__str__()

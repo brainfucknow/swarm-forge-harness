@@ -57,7 +57,12 @@ worker (see the Mistral Workflows documentation). The `Dockerfile` builds the
 worker image: Python, git, and Babashka, which `sf` needs. A managed worker has
 no `MISTRAL_API_KEY`; `worker.py` copies the deployment service-account token
 from `MISTRAL_SA_TOKEN_PATH` into `MISTRAL_API_KEY` at startup, which is what
-the Agents SDK runtime reads.
+the Agents SDK runtime reads. Pushing the task branch back needs GitHub write
+access: bind a workspace secret holding a token with `repo` scope as the
+`GITHUB_TOKEN` env var of the deployment (for example secret `github_token`).
+`sfkit` passes it to git through a `GIT_CONFIG_*` env pair, never through argv,
+so it stays out of logs and error messages. Cloning and fetching public
+repositories works without it.
 
 ## Tests
 

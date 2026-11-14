@@ -18,9 +18,23 @@ class CommandError(RuntimeError):
         super().__init__(f"{' '.join(cmd)} exited {exit}: {err.strip() or out.strip()}")
 
 
+def _git_env() -> dict[str, str]:
+    """The environment for git commands. When GITHUB_TOKEN (or
+    SWARMFORGE_GITHUB_TOKEN) is set, it authenticates github.com through a git
+    config env pair, so the token never appears in argv or error messages."""
+    env = {**os.environ}
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("SWARMFORGE_GITHUB_TOKEN")
+    if token:
+        env["GIT_CONFIG_COUNT"] = "1"
+        env["GIT_CONFIG_KEY_0"] = "http.https://github.com/.extraHeader"
+        env["GIT_CONFIG_VALUE_0"] = f"Authorization: Bearer {token}"
+    return env
+
+
 def run(cmd: list[str], cwd: str | None = None, check: bool = True) -> subprocess.CompletedProcess:
     proc = subprocess.run(
-        cmd, cwd=cwd, capture_output=True, text=True, env={**os.environ}
+        cmd, cwd=cwd, capture_output=True, text=True,
+        env=_git_env() if cmd and cmd[0] == "git" else {**os.environ},
     )
     if check and proc.returncode != 0:
         raise CommandError(cmd, proc.returncode, proc.stdout, proc.stderr)
