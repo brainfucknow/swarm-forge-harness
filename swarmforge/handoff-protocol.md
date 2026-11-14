@@ -31,28 +31,38 @@ The hook rejects reserved `SwarmForge-*` trailers in role commits. Git's
 
 ### Backend
 
-sf stores on each record the backend that ran the `sf` command, in the
-sf-only trailers `SwarmForge-Backend` and `SwarmForge-Dispatched`. The
-backend is `claude`, `codex` or `copilot`. It names the harness that ran
-`sf`, not who decided: the operator's records carry it too.
+sf stores on each record the backend that ran the `sf` command, in two
+sf-only trailers: `SwarmForge-Backend` (`claude`, `codex` or `copilot`) and
+`SwarmForge-Dispatched` (`dispatched` or `session`). A record has both or
+neither. The backend names the harness that ran `sf`, not who decided: the
+operator's records carry it too.
 
 | Environment of the `sf` command | Record carries |
 |---|---|
-| `SWARMFORGE_DISPATCHED` set, `SWARMFORGE_BACKEND` a backend name | that backend, dispatched |
-| `SWARMFORGE_DISPATCHED` set, `SWARMFORGE_BACKEND` anything else | nothing |
-| Not dispatched, only `CLAUDECODE=1` | `claude`, session |
-| Not dispatched, only `CODEX_THREAD_ID` not empty | `codex`, session |
-| Not dispatched, both markers or neither | nothing |
+| `SWARMFORGE_DISPATCHED` not blank, `SWARMFORGE_BACKEND` a backend name | that backend, `dispatched` |
+| `SWARMFORGE_DISPATCHED` not blank, `SWARMFORGE_BACKEND` anything else | nothing |
+| `SWARMFORGE_DISPATCHED` blank or unset, `CLAUDECODE` is `1` | `claude`, `session` |
+| Any other | nothing |
 
-`sf dispatch` and `sf run` start each role and gate with `SWARMFORGE_BACKEND`
-set to the backend they run. The session markers are not read under
-dispatch. Outside dispatch `SWARMFORGE_BACKEND` is not read. A Copilot
-session, a Vibe session and a plain terminal have no marker.
+- `sf dispatch` and `sf run` start each role and gate with
+  `SWARMFORGE_BACKEND` set to the backend they run. Outside dispatch sf does
+  not read `SWARMFORGE_BACKEND`. Under dispatch it does not read `CLAUDECODE`.
+- Only a Claude Code session is detected. A Codex, Copilot or Vibe session
+  and a plain terminal carry nothing.
+- A process started from a Claude Code session inherits `CLAUDECODE`. Its
+  records read `claude`, `session`, whatever tool it is.
+- The handoff record that `sf approve` writes for the role carries what the
+  review record it approves carries, not the backend of the `sf approve`
+  command. The approval record carries the backend of the command.
+- A `sf finish` merge that stops on conflicts carries the backend of the
+  `sf finish` run that wrote its message, whoever commits it.
+- sf reads a record with one trailer missing, or with a value not listed
+  above, as carrying nothing. Records written before the trailers existed
+  carry nothing.
 
 `sf show` and `sf start` print `backend: <name> dispatched` or
 `backend: <name> session` as the last line of a record that carries a
-backend, and no line for one that carries nothing. Records written before
-the trailers existed carry nothing.
+backend, and no line for one that carries nothing.
 
 ## Lore lines
 
