@@ -143,7 +143,7 @@ to the affected targets, and property checks remain separate and role-owned.
 | Shared wrapper behavior | `bb --config swarmforge/tools/core/bb.edn test`, then affected language-wrapper unit suites. |
 | .NET wrapper | `bb --config swarmforge/tools/csharp/bb.edn test`, plus the shared architecture check; use combined coverage below when coverage evidence needs refreshing. |
 | Task state or CLI behavior | Affected sf specs and public-CLI checks in `test/sf_test.sh` or named `test/features/task_store/` features. |
-| Installer | Installer specs and named `test/features/install/` acceptance features. |
+| Installer | Installer specs, named `test/features/install/` features and `test/features/adapters/` preservation/collision checks. |
 | Tool installation or argument rewriting | Relevant sf specs, `test/sf_tool_test.sh`, and affected tool compatibility checks. |
 | Acceptance fixtures | `bash test/acceptance.sh <feature>...`; for identity changes include `test/features/task_store/init.feature`. |
 | Documentation only | Manual review and existing configuration/link checks relevant to the edit. |
