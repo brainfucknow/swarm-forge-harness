@@ -54,6 +54,7 @@
   (when (config/spec-judge? role)
     (shell/die "'" role "' is the spec-judge: it needs the spec revision's gate reports and runs only as a subagent of the session"))
   (let [id (store/resolve-id id-arg)
+        _ (store/refuse-unclosed! id)
         backend (or (not-empty backend) (detect-backend))
         command (vec (command-for backend role (role-prompt role id)))
         dir (task/worktree! id)
@@ -89,7 +90,8 @@
   runs the gates on that specification. It stops when a stage it dispatched
   added a record of the operator's."
   [[id-arg backend]]
-  (let [id (store/resolve-id id-arg)]
+  (let [id (store/resolve-id id-arg)
+        _ (store/refuse-unclosed! id)]
     (loop [dispatched? false]
       (let [{:keys [stage needs] :as state} (store/state id)]
         (cond

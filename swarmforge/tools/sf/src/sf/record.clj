@@ -98,6 +98,15 @@
   "The record types written before a rename, with the type that took each one's place."
   {"verdict" "spec-verdict"})
 
+(def ^:private record-types
+  #{"created" "question" "answer" "review" "approval" "changes-requested"
+    "route" "handoff" "spec-verdict" "finished" "moved"})
+
+(defn recognized?
+  "Whether parsed, legacy-normalized trailers identify a known task record."
+  [{:keys [task record]}]
+  (and (not (str/blank? task)) (contains? record-types record)))
+
 (defn rejected-refusal
   "Why value cannot be the value of a `Rejected: <finding> | <reason>` trailer,
   or nil: it must be one line, split at its last ` | ` into a finding and a
