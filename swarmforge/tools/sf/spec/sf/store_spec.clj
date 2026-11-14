@@ -1,9 +1,26 @@
 (ns sf.store-spec
-  (:require [speclj.core :refer [around describe it should should-not should=]]
+  (:require [speclj.core :refer [around describe it should should-not should= should-throw]]
             [sf.flow :as flow]
             [sf.record :as record]
             [sf.repo-support :as repo :refer [*dir* with-repo]]
+            [sf.shell :as shell]
             [sf.store :as store]))
+
+(describe "resolve-id discovery cost"
+  (it "resolves exact live and finished ids without scanning unclosed history"
+    (with-redefs [store/branch-ids (constantly ["live-1234567"])
+                  store/finished-ids (constantly ["closed-7654321"])
+                  store/unclosed-tasks #(throw (ex-info "unnecessary history scan" {}))]
+      (should= "live-1234567" (store/resolve-id "live-1234567"))
+      (should= "closed-7654321" (store/resolve-id "closed-7654321"))))
+
+  (it "includes unclosed histories when resolving an ambiguous prefix"
+    (with-redefs [store/branch-ids (constantly ["same-1234567"])
+                  store/finished-ids (constantly [])
+                  store/unclosed-tasks (constantly [{:task "same-7654321"}])]
+      (should-throw clojure.lang.ExceptionInfo
+                    "task id 'same' is ambiguous: same-1234567 same-7654321"
+                    (store/resolve-id "same")))))
 
 (describe "with-files"
   (around [it] (with-repo it))
@@ -17,7 +34,43 @@
         (should= ["-" "a.txt"]
                  (map :files (rest (store/with-files [{:record "created" :commit base}
                                                       {:record "review" :commit base}
-                                                      {:record "handoff" :commit tip}]))))))))
+                                                      {:record "handoff" :commit tip}])))))))
+
+  (it "leaves out files that only a merge in the range brought in"
+    (let [base (repo/git *dir* "rev-parse" "HEAD")]
+      (spit (str *dir* "/a.txt") "a")
+      (repo/git *dir* "add" "a.txt")
+      (repo/git *dir* "commit" "-q" "-m" "Add a")
+      (let [tip (repo/git *dir* "rev-parse" "HEAD")]
+        (repo/git *dir* "checkout" "-q" "-b" "other")
+        (spit (str *dir* "/b.txt") "b")
+        (repo/git *dir* "add" "b.txt")
+        (repo/git *dir* "commit" "-q" "-m" "Add b")
+        (repo/git *dir* "checkout" "-q" "main")
+        (repo/git *dir* "merge" "-q" "--no-ff" "-m" "Merge other" "other")
+        (repo/git *dir* "commit" "-q" "--allow-empty" "-m" "Empty")
+        (let [top (repo/git *dir* "rev-parse" "HEAD")]
+          (should= ["a.txt" "-"]
+                   (map :files (rest (store/with-files [{:record "created" :commit base}
+                                                        {:record "review" :commit tip}
+                                                        {:record "handoff" :commit top}]))))))))
+
+  (it "keeps the source path of a rename that a later commit in the range rewrote"
+    (let [base (repo/git *dir* "rev-parse" "HEAD")]
+      (spit (str *dir* "/a.txt") "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n")
+      (repo/git *dir* "add" "a.txt")
+      (repo/git *dir* "commit" "-q" "-m" "Add a")
+      (let [tip (repo/git *dir* "rev-parse" "HEAD")]
+        (repo/git *dir* "mv" "a.txt" "b.txt")
+        (repo/git *dir* "commit" "-q" "-m" "Rename a to b")
+        (spit (str *dir* "/b.txt") "completely\nrewritten\ncontent\n")
+        (repo/git *dir* "add" "b.txt")
+        (repo/git *dir* "commit" "-q" "-m" "Rewrite b")
+        (let [top (repo/git *dir* "rev-parse" "HEAD")]
+          (should= ["a.txt" "a.txt,b.txt"]
+                   (map :files (rest (store/with-files [{:record "created" :commit base}
+                                                        {:record "review" :commit tip}
+                                                        {:record "handoff" :commit top}])))))))))
 
 (defn- create! [id]
   (store/create! id (record/message (assoc (flow/created "Add login" "Users log in." "coder") :task id))))
@@ -73,6 +126,27 @@
       (should= files (tree-files "t-1"))
       (store/write! "t-1" (fn [_] (assoc rec :stage "done")))
       (should= (disj files "t-1.md" "tasks/t-1.md") (tree-files "t-1")))))
+
+(describe "records-at"
+  (around [it] (with-repo it))
+
+  (it "gives each record the author date of its commit in UTC and its author name"
+    (shell/must {:dir *dir* :env {"GIT_AUTHOR_DATE" "2026-03-01T10:00:00+02:00" "GIT_AUTHOR_NAME" "Codex"
+                                  "GIT_AUTHOR_EMAIL" "c@x" "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@x"}}
+                "git" "commit" "-q" "--allow-empty" "-m" "sf created: t-1\n\nT\n\nSwarmForge-Task: t-1\nSwarmForge-Record: created\n")
+    (should= [["2026-03-01T08:00:00Z" "Codex"]]
+             (map (juxt :time :recorded-by) (store/records-at "HEAD" "t-1"))))
+
+  (it "reads an author name that holds 0x1f and a message that holds 0x1e whole"
+    (shell/must {:dir *dir* :env {"GIT_AUTHOR_NAME" "Co\u001fdex" "GIT_AUTHOR_EMAIL" "c@x"
+                                  "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@x"}}
+                "git" "commit" "-q" "--allow-empty" "-m" "sf created: t-1\n\nT\n\nSwarmForge-Task: t-1\nSwarmForge-Record: created\n")
+    (shell/must {:dir *dir* :env {"GIT_AUTHOR_NAME" "Codex" "GIT_AUTHOR_EMAIL" "c@x"
+                                  "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@x"}}
+                "git" "commit" "-q" "--allow-empty" "-m"
+                "sf handoff: t-1\n\nwork\u001edone\n\nSwarmForge-Task: t-1\nSwarmForge-Record: handoff\nSwarmForge-From: coder\n")
+    (should= [["created" "Co\u001fdex" "T"] ["handoff" "Codex" "work\u001edone"]]
+             (map (juxt :record :recorded-by :text) (store/records-at "HEAD" "t-1")))))
 
 (describe "title-and-request"
   (around [it] (with-repo it))

@@ -56,7 +56,7 @@
     sf.options #{sf.record sf.shell}
     sf.audit #{sf.config sf.flow sf.shell sf.store}
     sf.history #{sf.flow sf.lore sf.record sf.spec-revisions sf.shell sf.store}
-    sf.dispatch #{sf.config sf.flow sf.shell sf.store sf.task}
+    sf.dispatch #{sf.config sf.flow sf.record sf.shell sf.store sf.task}
     sf.missing-tools #{sf.record}
     sf.task #{sf.audit sf.config sf.flow sf.git sf.harvest sf.history sf.hook sf.lore sf.metrics sf.missing-tools sf.options sf.record sf.spec-revisions sf.shell sf.store sf.tool sf.verify}
     sf.cli #{sf.adapters sf.config sf.dispatch sf.hook sf.shell sf.task sf.tool}})

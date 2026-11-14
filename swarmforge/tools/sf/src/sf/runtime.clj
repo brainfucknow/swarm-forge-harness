@@ -4,8 +4,10 @@
 
 (def minimum
   "The oldest Babashka sf is tested on: the sf-min-bb job of
-  .github/workflows/test.yml runs test/sf_test.sh on it."
-  "1.12.200")
+  .github/workflows/test.yml runs test/sf_test.sh on it. 1.12.215 is the first
+  Babashka with the clojure.test.junit namespace and the tools.reader
+  indexing-push-back-reader that the crap4clj coverage gate needs."
+  "1.12.215")
 
 (defn- parts
   "The major, minor and patch numbers of version, 0 when missing."
@@ -13,7 +15,7 @@
   (vec (take 3 (concat (map parse-long (re-seq #"\d+" (str version))) (repeat 0)))))
 
 (defn too-old?
-  "True when version, a Babashka version such as 1.12.200, is older than minimum."
+  "True when version, a Babashka version such as 1.12.214, is older than minimum."
   [version]
   (neg? (compare (parts version) (parts minimum))))
 

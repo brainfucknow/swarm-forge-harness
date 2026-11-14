@@ -91,7 +91,8 @@
   (it "tells the backend which role it runs, so operator commands refuse it"
     (doseq [backend dispatch/backends]
       (let [id (new-id (str "Mark " backend))]
-        (should= [{"SWARMFORGE_DISPATCHED" "coder"}] (map :extra-env (dispatched "coder" id backend))))))
+        (should= [{"SWARMFORGE_DISPATCHED" "coder" "SWARMFORGE_BACKEND" backend}]
+                 (map :extra-env (dispatched "coder" id backend))))))
 
   (it "runs every backend in the task worktree, created on the task branch when missing"
     (doseq [backend dispatch/backends]

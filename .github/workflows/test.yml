@@ -9,8 +9,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install the oldest Babashka sf supports
         env:
-          BB_VERSION: 1.12.200
-          BB_SHA256: c38adba2954b52f2ba410e24c94ef42c3f7285335f253e9f8125c47ae0b4aeae
+          BB_VERSION: 1.12.215
+          BB_SHA256: 8248ed0bf9cac6f118613d034f1def14fc6db88c6d6aec785b2da7245c58e225
         run: |
           mkdir -p "$HOME/bin"
           echo "$HOME/bin" >> "$GITHUB_PATH"

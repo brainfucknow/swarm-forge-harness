@@ -274,6 +274,11 @@
         (fs/set-posix-file-permissions path "rwxr-xr-x"))
       world)]
 
+   [#"task \"(\w)\" is the task that command created"
+    (fn [world name]
+      (let [world (assoc-in world [:ids name] (str/trim (str (:ran-out world))))]
+        (assoc-in world [:created name] (git world "rev-parse" "--short" (branch-ref world name)))))]
+
    [#"the command environment sets \"([^\"]+)\" to \"([^\"]*)\""
     (fn [world name value] (assoc-in world [:env name] value))]
 
@@ -283,13 +288,14 @@
       (let [dir (if name (worktree world name) (:repo world))
             cmd (cond-> (str/split (fill world command) #" ") text (conj (unescape text)))]
         (if (= "ran" tense)
-          (do (run-in world dir cmd) world)
+          (assoc world :ran-out (:out (run-in world dir cmd)))
           (when-step world #(run-in % dir cmd)))))]
 
-   [#"I run sf new with the title \"([^\"]*)\"(?:, the request \"([^\"]*)\" and the route \"([^\"]*)\")?"
-    (fn [world title request route]
+   [#"I run sf new with the title \"([^\"]*)\"(?:, the request \"([^\"]*)\"(?:,| and) the route \"([^\"]*)\")?(?: and the options \"([^\"]*)\")?"
+    (fn [world title request route options]
       (let [world (when-step world #(run-in % (:repo %) (concat ["sf" "new" title]
-                                                                 (when request ["-m" (unescape request) "--route" route]))))]
+                                                                 (when request ["-m" (unescape request) "--route" route])
+                                                                 (when options (str/split (fill % options) #" ")))))]
         (assoc world :new (str/trim (:out world)))))]
 
    [#"I commit \"([^\"]*)\" in the (?:worktree of task \"(\w)\"|main checkout)(?: with SWARMFORGE_ROLE \"([^\"]*)\")?"

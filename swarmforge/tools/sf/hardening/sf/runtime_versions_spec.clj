@@ -4,19 +4,19 @@
 
 (describe "too-old?"
   (it "compares major, minor and patch numerically"
-    (should (runtime/too-old? "1.12.199"))
+    (should (runtime/too-old? "1.12.214"))
     (should (runtime/too-old? "1.11.999"))
     (should (runtime/too-old? "0.99.999"))
-    (should-not (runtime/too-old? "1.12.200"))
-    (should-not (runtime/too-old? "1.12.201"))
+    (should-not (runtime/too-old? "1.12.215"))
+    (should-not (runtime/too-old? "1.12.216"))
     (should-not (runtime/too-old? "1.13.0"))
     (should-not (runtime/too-old? "2.0.0")))
 
   (it "reads a missing part as 0, and a longer version by its first three parts"
     (should (runtime/too-old? "1.12"))
     (should (runtime/too-old? "1"))
-    (should-not (runtime/too-old? "1.12.200.9"))
-    (should-not (runtime/too-old? "1.12.200-SNAPSHOT"))
+    (should-not (runtime/too-old? "1.12.215.9"))
+    (should-not (runtime/too-old? "1.12.215-SNAPSHOT"))
     (should-not (runtime/too-old? "1.13"))))
 
 (describe "refusal"

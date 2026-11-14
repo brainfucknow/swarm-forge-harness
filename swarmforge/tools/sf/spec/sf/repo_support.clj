@@ -28,9 +28,19 @@
   (doseq [role ["specifier" "coder" "cleaner"]]
     (spit (str (fs/path dir "swarmforge" "roles" (str role ".md"))) (str "# " role "\n\nDoes " role " work.\n"))))
 
+(def ^:private harness-variables
+  "The variables that decide the backend on a record; a spec run inside a
+  harness or a dispatch must not see them."
+  #{"CLAUDECODE" "SWARMFORGE_BACKEND" "SWARMFORGE_DISPATCHED"})
+
+(defn- without-harness [env]
+  (fn [name default]
+    (if (harness-variables name) default (env name default))))
+
 (defn with-repo
   "Runs run-spec in a new repository whose catalogue is default-conf merged
-  with conf, with sf's repo-root pointing at it."
+  with conf, with sf's repo-root pointing at it and the harness variables
+  hidden."
   ([run-spec] (with-repo {} run-spec))
   ([conf run-spec]
    (let [dir (str (fs/create-temp-dir {:prefix "sf-spec-"}))]
@@ -40,7 +50,8 @@
        (git dir "add" ".")
        (git dir "commit" "-q" "-m" "Base")
        (with-redefs [shell/repo-root (constantly dir)
-                     shell/checkout-root (constantly dir)]
+                     shell/checkout-root (constantly dir)
+                     shell/env (without-harness shell/env)]
          (binding [*dir* dir] (run-spec)))
        (finally (fs/delete-tree dir))))))
 

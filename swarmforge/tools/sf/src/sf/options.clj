@@ -15,16 +15,19 @@
 
 (defn parse
   "Reads flags into a map. values maps a flag that takes a value to its key, or
-  to [key transform]; switches maps a flag without a value to its key."
-  [command args values switches]
-  (loop [opts {} [flag value :as args] args]
-    (cond
-      (empty? args) opts
-      (switches flag) (recur (assoc opts (switches flag) true) (rest args))
-      (values flag) (let [[key transform] (if (vector? (values flag)) (values flag) [(values flag) identity])]
-                      (require-value args)
-                      (recur (assoc opts key (transform value)) (drop 2 args)))
-      :else (shell/die "unknown " command " option '" flag "'"))))
+  to [key transform]; switches maps a flag without a value to its key. A flag
+  in once may not be given twice; any other keeps its last value."
+  ([command args values switches] (parse command args values switches #{}))
+  ([command args values switches once]
+   (loop [opts {} seen #{} [flag value :as args] args]
+     (cond
+       (empty? args) opts
+       (switches flag) (recur (assoc opts (switches flag) true) seen (rest args))
+       (values flag) (let [[key transform] (if (vector? (values flag)) (values flag) [(values flag) identity])]
+                       (require-value args)
+                       (when (and (once flag) (seen flag)) (shell/die flag " given twice"))
+                       (recur (assoc opts key (transform value)) (conj seen flag) (drop 2 args)))
+       :else (shell/die "unknown " command " option '" flag "'")))))
 
 (defn free-text
   "The arguments as one text; stops with complaint when there are none."

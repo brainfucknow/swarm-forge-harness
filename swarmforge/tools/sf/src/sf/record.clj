@@ -86,9 +86,36 @@
 (def ^:private trailers
   [["SwarmForge-Task" :task] ["SwarmForge-Record" :record] ["SwarmForge-From" :from]
    ["SwarmForge-Stage" :stage] ["SwarmForge-Route" :route] ["SwarmForge-Needs" :needs]
+   ["SwarmForge-Fixes" :fixes] ["SwarmForge-Found-By" :found-by]
    ["SwarmForge-Merged-Into" :merged-into] ["SwarmForge-Reviewed" :reviewed]
    ["SwarmForge-Audit-Refusals" :audit-refusals] ["SwarmForge-Spec-Verdict" :spec-verdict]
-   ["SwarmForge-Missing-Tools" :missing-tools]])
+   ["SwarmForge-Missing-Tools" :missing-tools]
+   ["SwarmForge-Backend" :backend] ["SwarmForge-Dispatched" :dispatched]])
+
+(def backends
+  "The backends that sf dispatch runs and that a record can name."
+  ["claude" "codex" "copilot"])
+
+(defn backend
+  "The backend that a record written in an environment carries, as :backend
+  and :dispatched, or nil for nothing. dispatched, backend and claudecode are
+  the values of SWARMFORGE_DISPATCHED, SWARMFORGE_BACKEND and CLAUDECODE, nil
+  when unset. A blank dispatched is not a dispatch, as in
+  flow/operator-refusal."
+  [dispatched backend claudecode]
+  (cond (not (str/blank? dispatched))
+        (when (some #{backend} backends) {:backend backend :dispatched "dispatched"})
+
+        (= "1" claudecode)
+        {:backend "claude" :dispatched "session"}))
+
+(defn- carried-backend
+  "The fields without :backend and :dispatched unless both hold a value that
+  a record can carry."
+  [{:keys [backend dispatched] :as fields}]
+  (if (and (some #{backend} backends) (#{"dispatched" "session"} dispatched))
+    fields
+    (dissoc fields :backend :dispatched)))
 
 (def ^:private old-trailers
   "The trailers that records written before a rename hold, with the trailer
@@ -98,6 +125,15 @@
 (def ^:private old-records
   "The record types written before a rename, with the type that took each one's place."
   {"verdict" "spec-verdict"})
+
+(def ^:private record-types
+  #{"created" "question" "answer" "review" "approval" "changes-requested"
+    "route" "handoff" "spec-verdict" "finished" "moved"})
+
+(defn recognized?
+  "Whether parsed, legacy-normalized trailers identify a known task record."
+  [{:keys [task record]}]
+  (and (not (str/blank? task)) (contains? record-types record)))
 
 (defn rejected-refusal
   "Why value cannot be the value of a `Rejected: <finding> | <reason>` trailer,
@@ -119,6 +155,26 @@
         finding (if at (subs value 0 at) value)
         [_ kind severity] (re-find #"^(DEFECT|PREMISE), (CRITICAL|HIGH|MEDIUM|LOW): " finding)]
     {:finding finding :reason (when at (subs value (+ at 3))) :kind kind :severity severity}))
+
+(def ^:private detectors #{"pr-review" "ci" "operator"})
+
+(defn link-refusal
+  "Why :fixes and :found-by cannot name what a new task repairs, or nil. The
+  detector must be pr-review, ci or operator and needs a target; the target
+  is #<number> without a leading 0, or any other text that does not start
+  with # to resolve as a task id."
+  [{:keys [fixes found-by]}]
+  (cond (and found-by (not (detectors found-by)))
+        (str "--found-by needs pr-review, ci or operator, got '" found-by "'")
+        (and found-by (nil? fixes)) "--found-by needs --fixes"
+        (and fixes (or (str/blank? fixes)
+                       (and (str/starts-with? fixes "#") (not (re-matches #"#[1-9][0-9]*" fixes)))))
+        (str "--fixes needs a task id or '#<number>', got '" fixes "'")))
+
+(defn pull-request?
+  "True when a --fixes target names a pull request, not a task."
+  [target]
+  (str/starts-with? target "#"))
 
 (defn- lore-trailers
   "The Lore-id and Rejected trailer lines of a record that has a :lore-id."
@@ -144,13 +200,22 @@
         gap (str/last-index-of body "\n\n")]
     (when gap (str/trim (subs body 0 gap)))))
 
+(defn utc-time
+  "Epoch seconds, as text, in UTC as YYYY-MM-DDTHH:MM:SSZ; nil for nil."
+  [epoch-seconds]
+  (when epoch-seconds
+    (str (java.time.Instant/ofEpochSecond (parse-long epoch-seconds)))))
+
 (defn parse
-  "The record in a commit, given as :sha, :parents, :message and :trailers
-  (the unfolded trailer lines). Its :commit is its own sha for a created
-  record, else its first parent: the role's commit it was made on. An
-  approval also has the values of its `Rejected:` trailers, in order, as
-  :rejected. A record in an old form reads as one in the new form."
-  [{:keys [sha parents message] :as commit}]
+  "The record in a commit, given as :sha, :parents, :message, :trailers (the
+  unfolded trailer lines), :author-time (epoch seconds) and :author-name. Its
+  :commit is its own sha for a created record, else its first parent: the
+  role's commit it was made on. Its :time is the author time in UTC and its
+  :recorded-by the author name. Its :backend and :dispatched hold the
+  backend it carries, both or neither. An approval also has the values of its
+  `Rejected:` trailers, in order, as :rejected. A record in an old form reads
+  as one in the new form."
+  [{:keys [sha parents message author-time author-name] :as commit}]
   (let [pairs (for [line (:trailers commit)
                     :let [[_ k v] (re-matches #"([^:]+): ?(.*)" line)]
                     :when k]
@@ -158,11 +223,13 @@
         by-key (merge (into {} (for [[k v] pairs :when (old-trailers k)] [(old-trailers k) v]))
                       (into {} pairs))
         record-type (by-key "SwarmForge-Record")
-        fields (cond-> (into {} (for [[key field] trailers :when (by-key key)] [field (by-key key)]))
+        fields (cond-> (carried-backend (into {} (for [[key field] trailers :when (by-key key)] [field (by-key key)])))
                  record-type (assoc :record (get old-records record-type record-type)))
         text (message-text message)]
     (cond-> (assoc fields :sha sha
                    :commit (if (= "created" (:record fields)) sha (first parents)))
+      author-time (assoc :time (utc-time author-time))
+      author-name (assoc :recorded-by author-name)
       (not (str/blank? text)) (assoc :text text)
       (= "approval" (:record fields)) (assoc :rejected (vec (for [[k v] pairs :when (= "Rejected" k)] v))))))
 
@@ -229,22 +296,32 @@
     (concat (when audit-refusals [["audit-refusals" audit-refusals]])
             (when missing-tools [["missing-tools" missing-tools]]))))
 
-(defn- fields [{:keys [task record from spec-verdict text stage route commit files merged-into] :as rec}]
+(defn link-fields
+  "The fixes and found-by key-value pairs of a record that has them."
+  [{:keys [fixes found-by]}]
+  (concat (when fixes [["fixes" fixes]]) (when found-by [["found-by" found-by]])))
+
+(defn- body-fields [{:keys [task record text stage route commit files merged-into] :as rec}]
+  (case record
+    "created" (concat [["branch" (branch task)] ["commit" commit] ["route" route]]
+                      (link-fields rec))
+    "question" [["question" text]]
+    "answer" [["answer" text]]
+    "review" [["commit" commit] ["files" files] ["summary" text]]
+    ("changes-requested" "spec-verdict") [["reason" text]]
+    "route" [["route" route]]
+    "handoff" [["to" stage] ["branch" (branch task)] ["commit" commit] ["files" files] ["summary" text]]
+    "finished" [["merged-into" merged-into]]
+    "moved" [["path" text]]
+    []))
+
+(defn- fields [{:keys [record from spec-verdict backend dispatched] :as rec}]
   (concat
    [["type" record] ["from" from]]
    (when spec-verdict [["spec-verdict" spec-verdict]])
-   (case record
-     "created" [["branch" (branch task)] ["commit" commit] ["route" route]]
-     "question" [["question" text]]
-     "answer" [["answer" text]]
-     "review" [["commit" commit] ["files" files] ["summary" text]]
-     ("changes-requested" "spec-verdict") [["reason" text]]
-     "route" [["route" route]]
-     "handoff" [["to" stage] ["branch" (branch task)] ["commit" commit] ["files" files] ["summary" text]]
-     "finished" [["merged-into" merged-into]]
-     "moved" [["path" text]]
-     [])
-   (gate-fields rec)))
+   (body-fields rec)
+   (gate-fields rec)
+   (when backend [["backend" (str backend " " dispatched)]])))
 
 (defn block
   "The record as key: value lines; later lines of a value are indented by two spaces."
