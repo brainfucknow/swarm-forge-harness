@@ -200,8 +200,8 @@
 (defn write!
   "Appends the record that (make records) returns to the task branch, records
   being the branch's records, oldest first. The record carries the recording
-  backend unless it holds :backend and :dispatched itself. It changes no file, except
-  that a record at done removes the task file of an older task.
+  backend unless it holds :backend and :dispatched itself. It changes no
+  file, except that a record at done removes the task file of an older task.
   The branch moves only when its tip is still the one read; otherwise sf
   reads it again and retries once. No worktree is touched. Returns the record."
   [id make]

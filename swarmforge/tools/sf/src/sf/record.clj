@@ -267,22 +267,24 @@
     {:records (keep-indexed #(when-not (dropped %1) %2) records)
      :omitted omitted}))
 
-(defn- fields [{:keys [task record from spec-verdict text stage route commit files merged-into audit-refusals
-                       backend dispatched]}]
+(defn- body-fields [{:keys [task record text stage route commit files merged-into]}]
+  (case record
+    "created" [["branch" (branch task)] ["commit" commit] ["route" route]]
+    "question" [["question" text]]
+    "answer" [["answer" text]]
+    "review" [["commit" commit] ["files" files] ["summary" text]]
+    ("changes-requested" "spec-verdict") [["reason" text]]
+    "route" [["route" route]]
+    "handoff" [["to" stage] ["branch" (branch task)] ["commit" commit] ["files" files] ["summary" text]]
+    "finished" [["merged-into" merged-into]]
+    "moved" [["path" text]]
+    []))
+
+(defn- fields [{:keys [record from spec-verdict audit-refusals backend dispatched] :as rec}]
   (concat
    [["type" record] ["from" from]]
    (when spec-verdict [["spec-verdict" spec-verdict]])
-   (case record
-     "created" [["branch" (branch task)] ["commit" commit] ["route" route]]
-     "question" [["question" text]]
-     "answer" [["answer" text]]
-     "review" [["commit" commit] ["files" files] ["summary" text]]
-     ("changes-requested" "spec-verdict") [["reason" text]]
-     "route" [["route" route]]
-     "handoff" [["to" stage] ["branch" (branch task)] ["commit" commit] ["files" files] ["summary" text]]
-     "finished" [["merged-into" merged-into]]
-     "moved" [["path" text]]
-     [])
+   (body-fields rec)
    (when (and audit-refusals (#{"review" "handoff"} record))
      [["audit-refusals" audit-refusals]])
    (when backend [["backend" (str backend " " dispatched)]])))
