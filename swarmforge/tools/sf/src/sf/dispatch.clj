@@ -122,34 +122,40 @@
                      (shell/fail 2 nil))
       :else (shell/fail (if (pos? exit) exit 1) nil))))
 
-(defn run
+(defn- run-stages
   "Dispatches stage after stage until the task is done (exit 0) or waits on the
   operator (exit 2). When a stage it dispatched asked for approval, it first
   runs the gates on that specification. It stops when a stage it dispatched
-  added a record of the operator's. With the mistral backend one pipeline
-  execution runs the loop on the Mistral platform instead."
+  added a record of the operator's."
+  [id backend]
+  (loop [dispatched? false]
+    (let [{:keys [stage needs] :as state} (store/state id)]
+      (cond
+        (= "done" stage)
+        (println (str "DONE: " id "; run: sf finish " id))
+
+        (flow/waiting? state)
+        (do (when (and dispatched? (= "approval" needs))
+              (run-gates id backend))
+            (println (str "BLOCKED: " id " needs:" needs))
+            (shell/fail 2 nil))
+
+        :else
+        (let [before (count (store/open-records id))]
+          (dispatch [stage id backend])
+          (when-let [{:keys [record]} (flow/operator-record (drop before (store/open-records id)))]
+            (shell/die "stage:" stage " added the operator's " record " record; only the operator approves, rejects, answers and routes"))
+          (when (let [after (store/state id)]
+                  (and (= stage (:stage after)) (not (flow/waiting? after))))
+            (shell/die "stage:" stage " made no progress"))
+          (recur true))))))
+
+(defn run
+  "Dispatches stage after stage until the task is done (exit 0) or waits on the
+  operator (exit 2). With the mistral backend one pipeline execution runs the
+  loop on the Mistral platform instead."
   [[id-arg backend]]
   (let [id (store/resolve-id id-arg)]
     (if (= "mistral" backend)
       (run-mistral id)
-      (loop [dispatched? false]
-      (let [{:keys [stage needs] :as state} (store/state id)]
-        (cond
-          (= "done" stage)
-          (println (str "DONE: " id "; run: sf finish " id))
-
-          (flow/waiting? state)
-          (do (when (and dispatched? (= "approval" needs))
-                (run-gates id backend))
-              (println (str "BLOCKED: " id " needs:" needs))
-              (shell/fail 2 nil))
-
-          :else
-          (let [before (count (store/open-records id))]
-            (dispatch [stage id backend])
-            (when-let [{:keys [record]} (flow/operator-record (drop before (store/open-records id)))]
-              (shell/die "stage:" stage " added the operator's " record " record; only the operator approves, rejects, answers and routes"))
-            (when (let [after (store/state id)]
-                    (and (= stage (:stage after)) (not (flow/waiting? after))))
-              (shell/die "stage:" stage " made no progress"))
-            (recur true))))))))
+      (run-stages id backend))))
