@@ -70,7 +70,9 @@ Environment
                        set by dispatch and run to the role or gate they start;
                        new, approve, reject, spec-verdict, answer, route changes and finish
                        refuse to run under it
-  SWARMFORGE_BACKEND   default backend for dispatch/run
+  SWARMFORGE_BACKEND   default backend for dispatch/run; set by dispatch and run to the
+                       backend they start; under dispatch, records carry it
+                       (handoff-protocol.md, Backend)
   SWARMFORGE_USER, SWARMFORGE_EMAIL
                        author of record commits when git has no identity
                        (default: operator, <user>@swarmforge.local)

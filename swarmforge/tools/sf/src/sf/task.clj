@@ -108,7 +108,8 @@
         route (if route (config/resolve-route route) (config/default-route))
         title (record/one-line title)
         id (store/new-id title)]
-    (store/create! id (record/message (assoc (flow/created title body route) :task id)))
+    (store/create! id (record/message (merge (assoc (flow/created title body route) :task id)
+                                             (store/recording-backend))))
     (println id)))
 
 (defn- recorded-value [id field]
@@ -175,9 +176,10 @@
       (history/print-brief id view))))
 
 (defn handoff
-  "Records HEAD and moves the task on. role overrides the acting role, and
-  audit-passed? skips the audit gate."
-  [[id-arg & args] {:keys [role audit-passed?]}]
+  "Records HEAD and moves the task on. role overrides the acting role,
+  audit-passed? skips the audit gate, and carried, the :backend and
+  :dispatched of another record, replaces the recording backend."
+  [[id-arg & args] {:keys [role audit-passed? carried]}]
   (let [id (open-task id-arg)
         {:keys [to summary]} (options/handoff args)
         state (store/state id)
@@ -193,7 +195,9 @@
                          (let [state (last records)
                                rec (flow/handoff state from to head summary)]
                            (refuse (flow/handoff-refusal state (role-head id)))
-                           (cond-> rec refusals (assoc :audit-refusals refusals)))))
+                           (cond-> rec
+                             refusals (assoc :audit-refusals refusals)
+                             carried (merge carried)))))
       (when refusals (audit/clear! id from)))
     (metrics/save! id (worktree-of id))
     (when (and (= "done" to) (fs/directory? (worktree-of id)))
@@ -232,6 +236,12 @@
   (cond-> {:needs "none"}
     (seq rejected) (assoc :lore-id (lore/new-id) :rejected rejected)))
 
+(defn- approved-review
+  "The newest review record, with :backend and :dispatched nil when it carries
+  nothing."
+  [records]
+  (merge {:backend nil :dispatched nil} (last (filter #(= "review" (:record %)) records))))
+
 (defn approve [[id-arg & args]]
   (operator-only! "approve")
   (let [id (open-task id-arg)
@@ -248,8 +258,10 @@
                       (refuse (flow/approval-refusal state (flow/reviewed-commit records) (role-head id)))
                       (flow/follow state "approval" "operator" (approval-fields rejected)))))
     ;; The review that asked for approval passed the audit gate at this commit.
-    ;; Thus the handoff must not run the gate again.
-    (handoff [id] {:role (acting-role state) :audit-passed? true})))
+    ;; Thus the handoff must not run the gate again. The handoff is the role's,
+    ;; so it carries the backend of the role's review, not the operator's.
+    (handoff [id] {:role (acting-role state) :audit-passed? true
+                   :carried (select-keys (approved-review (store/open-records id)) [:backend :dispatched])})))
 
 (defn reject [[id-arg & args]]
   (operator-only! "reject")
@@ -292,7 +304,7 @@
                                          (= ["--full"] flags)))))
 
 (defn- finished-message [id state target]
-  (record/message (assoc (flow/finished state target) :task id)))
+  (record/message (merge (assoc (flow/finished state target) :task id) (store/recording-backend))))
 
 (defn- verified!
   "Stops when the verification of the checkout at dir fails."
