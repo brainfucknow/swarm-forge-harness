@@ -33,7 +33,8 @@
 
 (def ^:private null-record
   {"type" nil "from" nil "stage" nil "needs" nil "route" nil "commit" nil "text" nil
-   "merged_into" nil "rejected" nil "audit_refusals" nil "spec_verdict" nil})
+   "merged_into" nil "rejected" nil "audit_refusals" nil "spec_verdict" nil "time" nil "recorded_by" nil
+   "backend" nil "dispatched" nil})
 
 (describe "line"
   (it "is one line of JSON"
@@ -75,6 +76,23 @@
                                        {:record "changes-requested" :from "operator" :text "no"}]))
                        "records"))))
 
+  (it "ends each record with its time and the name that recorded it"
+    (let [line (harvest/line (assoc task :records [(assoc (records 4) :time "2026-03-01T08:00:00Z" :recorded-by "Codex")]))
+          entry (get-in (json/parse-string line) ["records" 0])
+          raw (second (re-find #"\"records\":\[\{([^}]*)\}" line))]
+      (should= ["type" "from" "stage" "needs" "route" "commit" "text" "merged_into" "rejected" "audit_refusals"
+                "spec_verdict" "time" "recorded_by" "backend" "dispatched"]
+               (map second (re-seq #"\"(\w+)\":" raw)))
+      (should= ["2026-03-01T08:00:00Z" "Codex"] [(get entry "time") (get entry "recorded_by")])))
+
+  (it "ends each record with its backend, dispatched true or false, both null when it carries nothing"
+    (let [line (harvest/line (assoc task :records [(assoc (records 4) :backend "codex" :dispatched "dispatched")
+                                                   (assoc (records 3) :backend "claude" :dispatched "session")
+                                                   (records 5)]))]
+      (should= [["codex" true] ["claude" false] [nil nil]]
+               (map (juxt #(get % "backend") #(get % "dispatched"))
+                    (get (json/parse-string line) "records")))))
+
   (it "gives an approval without findings an empty rejected list"
     (should= [] (get-in (parsed (assoc task :records [(assoc (records 3) :rejected [])])) ["records" 0 "rejected"])))
 
@@ -91,6 +109,21 @@
     (should= [{"commit" "s1" "role" "specifier" "key" "Constraint" "value" "keep it" "lore_id" "0badc0de"}
               {"commit" "a1" "role" nil "key" "Rejected" "value" "C | d" "lore_id" "1234abcd"}]
              (get (parsed task) "lore"))))
+
+(describe "line keys fixes and found_by"
+  (it "follow route and precede records"
+    (should= ["id" "title" "request" "status" "truncated" "stage" "needs" "route" "fixes" "found_by" "records"]
+             (map second (re-seq #"\"(\w+)\":" (re-find #"^.*?\"records\":" (harvest/line task)))))))
+
+  (it "hold the target and the detector of the created record"
+    (let [created (assoc (records 0) :fixes "#115" :found-by "ci")]
+      (should= {"fixes" "#115" "found_by" "ci"}
+               (select-keys (parsed (assoc task :records (assoc records 0 created))) ["fixes" "found_by"]))))
+
+  (it "are null for a task without a link and for a truncated task"
+    (should= {"fixes" nil "found_by" nil} (select-keys (parsed task) ["fixes" "found_by"]))
+    (should= {"fixes" nil "found_by" nil}
+             (select-keys (parsed (assoc task :truncated true :records (vec (rest records)))) ["fixes" "found_by"])))
 
 (describe "line of a truncated task"
   (it "has a blank title and request"

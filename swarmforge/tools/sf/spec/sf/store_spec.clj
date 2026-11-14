@@ -3,6 +3,7 @@
             [sf.flow :as flow]
             [sf.record :as record]
             [sf.repo-support :as repo :refer [*dir* with-repo]]
+            [sf.shell :as shell]
             [sf.store :as store]))
 
 (describe "resolve-id discovery cost"
@@ -125,6 +126,16 @@
       (should= files (tree-files "t-1"))
       (store/write! "t-1" (fn [_] (assoc rec :stage "done")))
       (should= (disj files "t-1.md" "tasks/t-1.md") (tree-files "t-1")))))
+
+(describe "records-at"
+  (around [it] (with-repo it))
+
+  (it "gives each record the author date of its commit in UTC and its author name"
+    (shell/must {:dir *dir* :env {"GIT_AUTHOR_DATE" "2026-03-01T10:00:00+02:00" "GIT_AUTHOR_NAME" "Codex"
+                                  "GIT_AUTHOR_EMAIL" "c@x" "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@x"}}
+                "git" "commit" "-q" "--allow-empty" "-m" "sf created: t-1\n\nT\n\nSwarmForge-Task: t-1\nSwarmForge-Record: created\n")
+    (should= [["2026-03-01T08:00:00Z" "Codex"]]
+             (map (juxt :time :recorded-by) (store/records-at "HEAD" "t-1")))))
 
 (describe "title-and-request"
   (around [it] (with-repo it))

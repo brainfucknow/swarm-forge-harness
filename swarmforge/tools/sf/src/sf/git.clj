@@ -26,6 +26,11 @@
   (let [result (run {} "rev-parse" "--verify" "--quiet" ref)]
     (when (shell/ok? result) (shell/chomp (:out result)))))
 
+(defn shallow?
+  "True when the main checkout's repository is a shallow clone."
+  []
+  (= "true" (git "rev-parse" "--is-shallow-repository")))
+
 (defn author
   "git's user.name and user.email, or SWARMFORGE_USER and SWARMFORGE_EMAIL
   when git has none."

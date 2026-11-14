@@ -29,6 +29,41 @@ The hook rejects reserved `SwarmForge-*` trailers in role commits. Git's
 `user.name` and `user.email` supply the author, with `SWARMFORGE_USER` and
 `SWARMFORGE_EMAIL` as fallbacks.
 
+### Backend
+
+sf stores on each record the backend that ran the `sf` command, in two
+sf-only trailers: `SwarmForge-Backend` (`claude`, `codex` or `copilot`) and
+`SwarmForge-Dispatched` (`dispatched` or `session`). A record has both or
+neither. The backend names the harness that ran `sf`, not who decided: the
+operator's records carry it too.
+
+| Environment of the `sf` command | Record carries |
+|---|---|
+| `SWARMFORGE_DISPATCHED` not blank, `SWARMFORGE_BACKEND` a backend name | that backend, `dispatched` |
+| `SWARMFORGE_DISPATCHED` not blank, `SWARMFORGE_BACKEND` anything else | nothing |
+| `SWARMFORGE_DISPATCHED` blank or unset, `CLAUDECODE` is `1` | `claude`, `session` |
+| Any other | nothing |
+
+- `sf dispatch` and `sf run` start each role and gate with
+  `SWARMFORGE_BACKEND` set to the backend they run. Outside dispatch sf does
+  not read `SWARMFORGE_BACKEND`. Under dispatch it does not read `CLAUDECODE`.
+- Only a Claude Code session is detected. A Codex, Copilot or Vibe session
+  and a plain terminal carry nothing.
+- A process started from a Claude Code session inherits `CLAUDECODE`. Its
+  records read `claude`, `session`, whatever tool it is.
+- The handoff record that `sf approve` writes for the role carries what the
+  review record it approves carries, not the backend of the `sf approve`
+  command. The approval record carries the backend of the command.
+- A `sf finish` merge that stops on conflicts carries the backend of the
+  `sf finish` run that wrote its message, whoever commits it.
+- sf reads a record with one trailer missing, or with a value not listed
+  above, as carrying nothing. Records written before the trailers existed
+  carry nothing.
+
+`sf show` and `sf start` print `backend: <name> dispatched` or
+`backend: <name> session` as the last line of a record that carries a
+backend, and no line for one that carries nothing.
+
 ## Lore lines
 
 `sf show` prints every [Lore trailer](constitution/articles/workflow.md#lore-trailers),
@@ -64,7 +99,7 @@ Use `sf show <id>` when the brief omits needed history or evidence.
 
 | Command | Transition or requirement |
 |---|---|
-| `sf new` | Creates a route and starts its first role. Route precedence: `--route`, `SWARMFORGE_ROUTE`, named `feature`, then all non-optional catalogue roles. |
+| `sf new` | Creates a route and starts its first role. Route precedence: `--route`, `SWARMFORGE_ROUTE`, named `feature`, then all non-optional catalogue roles. `--fixes <target>` names what the task repairs: a task id, stored as the full id, or a pull request, quoted: `--fixes '#115'`. `--found-by` needs `--fixes` and says how the defect was found: `pr-review` (a pull request review after the task left the swarm), `ci` (a CI run) or `operator` (the operator reports it). The created record keeps them; `sf show` prints them as `fixes:` and `found-by:`, and `sf start` as `FIXES:` and `FOUND-BY:` after `ROUTE:`. |
 | `sf review` | Specifier requests operator approval of its committed specification. |
 | `sf approve` / `sf reject` | Approve advances the specifier; reject requests changes. Approval must match the reviewed role commit; a new specification needs review again. An answer or rejection is not approval. Each `--rejected "<finding> \| <reason>"` on approve records a gate finding the operator approved over as a `Rejected:` trailer of the approval record. |
 | `sf spec-verdict <id> <spec-verdict> <text>` | Records the spec-judge's spec verdict on the newest spec revision ([rules](#spec-revisions)). |
@@ -184,7 +219,9 @@ skipped with an `sf: ` line on stderr.
 
 Each line has `id`, `title`, `request`, `status` (`open`, `finished`, or `unclosed`),
 `truncated`, `stage`, `needs` and `route` (an array) from the newest record,
-plus `records` and `lore`:
+`fixes` and `found_by` from the created record (null when it has none, or
+the task is truncated), plus `records` and `lore`. A `fixes` value that
+starts with `#` is a pull request; any other is a task id.
 
 - `records`, oldest first, as `sf show` prints them. Every element has
   `type`, `from`, `stage`, `needs`, `route`, `commit` (created, review and
@@ -196,6 +233,15 @@ plus `records` and `lore`:
   trailer, split at the last ` | `; `kind` and `severity` come from a
   `DEFECT|PREMISE, CRITICAL|HIGH|MEDIUM|LOW: ` prefix, else null. `files:`
   are not exported.
+  Every element also has `time` and `recorded_by`, never null: the author
+  date of the record commit in UTC, as `YYYY-MM-DDTHH:MM:SSZ`, and the git
+  author name of that commit. The name is the backend (`Claude`, `Codex`)
+  only where each backend has its own git identity. For a finished record
+  the record commit is the `sf finish` merge.
+  Every element ends with `backend` and `dispatched`, from the record's
+  [backend](#backend): `backend` is the name and `dispatched` is `true` for
+  a dispatched record and `false` for a session record. Both are null for
+  a record that carries nothing.
 - `lore`: every Lore trailer `sf show` prints, evidence and superseded
   commits included, except `Lore-id`, as `{commit, role, key, value,
   lore_id}`, `role` null for `-`. `lore[].commit` is the commit that carries
@@ -218,6 +264,10 @@ A task whose readable history lacks its `created` record (a shallow clone)
 is `truncated`: `title` and `request` are empty, its readable records are
 listed, a commit outside the history is null, and its Lore starts after its
 oldest readable record.
+
+In a shallow repository `sf harvest` first prints this line on stderr and
+changes nothing else:
+`sf: shallow repository: older tasks are truncated or missing; run git fetch --unshallow`.
 
 ## Audit
 

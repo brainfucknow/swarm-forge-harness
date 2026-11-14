@@ -574,4 +574,77 @@
     (let [a (new-id "Add login")
           b (new-id "Add logout")]
       (should= (sort [a b]) (map #(second (re-find #"\"id\":\"([^\"]+)\"" %))
-                                 (str/split-lines (out task/harvest [])))))))
+                                 (str/split-lines (out task/harvest []))))))
+
+  (it "warns first, after the argument check, in a shallow repository, and only there"
+    (new-id "Add login")
+    (let [full (captured #(task/harvest []))
+          shallow-line "sf: shallow repository: older tasks are truncated or missing; run git fetch --unshallow"]
+      (should= "" (:err full))
+      (spit (str *dir* "/.git/shallow") (str (git *dir* "rev-list" "--max-parents=0" "HEAD") "\n"))
+      (should= (assoc full :err shallow-line) (captured #(task/harvest [])))
+      (should= "harvest takes no arguments" (:err (captured #(task/harvest ["x"])))))))
+
+(defn- under
+  "Calls (f args...) with sf seeing env as the whole environment."
+  [env f & args]
+  (with-redefs [shell/env (fn [name default] (get env name default))]
+    (apply f args)))
+
+(def ^:private claude-session {"CLAUDECODE" "1"})
+
+(defn- dispatched-on [backend role]
+  {"SWARMFORGE_DISPATCHED" role "SWARMFORGE_BACKEND" backend "CLAUDECODE" "1"})
+
+(defn- carried
+  "The backend and dispatched trailer values of commit, as backend|dispatched."
+  [commit]
+  (git *dir* "log" "-1" (str "--format=%(trailers:key=SwarmForge-Backend,valueonly,separator=)"
+                             "|%(trailers:key=SwarmForge-Dispatched,valueonly,separator=)") commit))
+
+(describe "the backend on records"
+  (around [it] (with-repo it))
+
+  (it "records nothing when sf sees no harness, whatever the specs run in"
+    (let [id (new-id "Add login")]
+      (should= "|" (carried (str "swarm/" id)))
+      (should-not-contain "backend:" (out task/show [id]))))
+
+  (it "records the Claude Code session on the created record and shows it last"
+    (let [id (under claude-session new-id "Add login")]
+      (should= "claude|session" (carried (str "swarm/" id)))
+      (should (str/ends-with? (out task/show [id]) "route: specifier,coder,cleaner\nbackend: claude session"))))
+
+  (it "records the backend that dispatch names on a role's record"
+    (let [id (new-id "Add login")]
+      (under (dispatched-on "codex" "specifier") out task/ask [id "Which?"])
+      (should= "codex|dispatched" (carried (str "swarm/" id)))
+      (under (dispatched-on "vibe" "specifier") out task/ask [id "Again?"])
+      (should= "|" (carried (str "swarm/" id)))))
+
+  (it "gives the approve handoff what the approved review carries, and the approval the operator's"
+    (let [id (new-id "Add login")]
+      (under (dispatched-on "codex" "specifier") out task/review [id])
+      (under claude-session out task/approve [id])
+      (should= "codex|dispatched" (carried (str "swarm/" id)))
+      (should= "claude|session" (carried (str "swarm/" id "^")))))
+
+  (it "gives the approve handoff nothing when the review carries nothing"
+    (let [id (new-id "Add login")]
+      (out task/review [id])
+      (under claude-session out task/approve [id])
+      (should= "|" (carried (str "swarm/" id)))
+      (should= "claude|session" (carried (str "swarm/" id "^")))))
+
+  (it "records the backend of sf finish on the finished merge"
+    (let [id (done-task)]
+      (under claude-session out task/finish [id])
+      (should= "claude|session" (carried "HEAD"))))
+
+  (it "keeps the backend of the sf finish run that wrote a conflicted merge's message"
+    (let [id (conflicting-task)]
+      (under claude-session captured #(task/finish [id]))
+      (resolve-conflicts)
+      (git *dir* "commit" "-q" "--no-verify" "--no-edit")
+      (out task/finish [id])
+      (should= "claude|session" (carried "HEAD")))))

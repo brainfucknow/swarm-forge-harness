@@ -92,6 +92,14 @@
              (record/message {:task "t-1" :record "approval" :from "operator" :stage "coder" :route "coder"
                               :needs "none" :lore-id "0a1b2c3d" :rejected ["A | b" "C | x | d"]})))
 
+  (it "puts Fixes and Found-By after Needs"
+    (should= (str "sf created: t-1\n\nFix\n\nx\n\n"
+                  "SwarmForge-Task: t-1\nSwarmForge-Record: created\nSwarmForge-From: operator\n"
+                  "SwarmForge-Stage: coder\nSwarmForge-Route: coder\nSwarmForge-Needs: none\n"
+                  "SwarmForge-Fixes: #115\nSwarmForge-Found-By: ci\n")
+             (record/message {:task "t-1" :record "created" :from "operator" :text "Fix\n\nx" :stage "coder"
+                              :route "coder" :needs "none" :fixes "#115" :found-by "ci"})))
+
   (it "ends with Merged-Into for the finished record"
     (should= (str "sf finished: t-1\n\n"
                   "SwarmForge-Task: t-1\nSwarmForge-Record: finished\nSwarmForge-From: operator\n"
@@ -137,6 +145,55 @@
                ((juxt :record :spec-verdict)
                 (record/parse {:sha "s" :parents ["p"] :message "sf changes-requested: t-1\n" :trailers trailers}))))))
 
+(describe "backend"
+  (it "is the backend that dispatch names, dispatched, whatever CLAUDECODE says"
+    (doseq [name ["claude" "codex" "copilot"]]
+      (should= {:backend name :dispatched "dispatched"} (record/backend "coder" name "1"))
+      (should= {:backend name :dispatched "dispatched"} (record/backend "coder" name nil))))
+
+  (it "is nothing under dispatch without a known backend name"
+    (should-be-nil (record/backend "coder" nil "1"))
+    (should-be-nil (record/backend "coder" "vibe" "1"))
+    (should-be-nil (record/backend "coder" " claude" nil)))
+
+  (it "is a claude session outside dispatch when CLAUDECODE is exactly 1"
+    (should= {:backend "claude" :dispatched "session"} (record/backend nil nil "1"))
+    (should= {:backend "claude" :dispatched "session"} (record/backend " " "codex" "1"))
+    (should= {:backend "claude" :dispatched "session"} (record/backend "" "codex" "1")))
+
+  (it "is nothing in any other environment"
+    (should-be-nil (record/backend nil nil nil))
+    (should-be-nil (record/backend nil "codex" nil))
+    (should-be-nil (record/backend nil nil "0"))
+    (should-be-nil (record/backend nil nil "true"))))
+
+(describe "a record that carries a backend"
+  (it "writes the backend and dispatched trailers last and reads them back"
+    (let [rec (assoc question :backend "codex" :dispatched "dispatched")
+          message (record/message rec)
+          lines (clojure.string/split-lines message)]
+      (should= ["SwarmForge-Backend: codex" "SwarmForge-Dispatched: dispatched"] (take-last 2 lines))
+      (should= (assoc rec :sha "abc1234" :commit "par1234")
+               (record/parse {:sha "abc1234" :parents ["par1234"] :message message :trailers (drop 4 lines)}))))
+
+  (it "writes neither trailer for a record that carries nothing"
+    (should-not (re-find #"Backend|Dispatched" (record/message question))))
+
+  (it "reads a session record"
+    (should= ["claude" "session"]
+             ((juxt :backend :dispatched)
+              (record/parse {:sha "s" :parents ["p"] :message ""
+                             :trailers ["SwarmForge-Record: answer" "SwarmForge-Backend: claude" "SwarmForge-Dispatched: session"]}))))
+
+  (it "reads a record with one trailer missing or a value not listed as carrying nothing"
+    (doseq [trailers [["SwarmForge-Backend: claude"]
+                      ["SwarmForge-Dispatched: session"]
+                      ["SwarmForge-Backend: vibe" "SwarmForge-Dispatched: session"]
+                      ["SwarmForge-Backend: claude" "SwarmForge-Dispatched: yes"]]]
+      (let [rec (record/parse {:sha "s" :parents ["p"] :message "" :trailers (cons "SwarmForge-Record: handoff" trailers)})]
+        (should-be-nil (:backend rec))
+        (should-be-nil (:dispatched rec))))))
+
 (describe "same-commit?"
   (it "matches a full sha and its abbreviation either way round"
     (should (record/same-commit? "0123456789abcdef" "0123456"))
@@ -157,6 +214,19 @@
   (it "takes the commit of a created record as its own"
     (should= "abc1234" (:commit (record/parse {:sha "abc1234" :parents ["p"] :message "sf created: t\n\nT\n\nSwarmForge-Record: created\n"
                                                :trailers ["SwarmForge-Record: created"]}))))
+
+  (it "gives the record the author date of its commit in UTC and the author name"
+    (let [rec (record/parse {:sha "s" :parents ["p"] :message "" :trailers ["SwarmForge-Record: handoff"]
+                             :author-time "1772352000" :author-name "Codex Ünï"})]
+      (should= "2026-03-01T08:00:00Z" (:time rec))
+      (should= "Codex Ünï" (:recorded-by rec))))
+
+  (it "reads the target and the detector of a created record"
+    (should= ["add-1234567" "pr-review"]
+             ((juxt :fixes :found-by)
+              (record/parse {:sha "s" :parents [] :message ""
+                             :trailers ["SwarmForge-Record: created" "SwarmForge-Fixes: add-1234567"
+                                        "SwarmForge-Found-By: pr-review"]}))))
 
   (it "keeps a value with a colon"
     (should= "a: b" (:route (record/parse {:sha "s" :parents [] :message "" :trailers ["SwarmForge-Route: a: b"]}))))
@@ -239,6 +309,13 @@
     (should= "type: created\nfrom: operator\nbranch: swarm/t-1\ncommit: c0\nroute: coder"
              (record/block {:task "t-1" :record "created" :from "operator" :commit "c0" :route "coder"})))
 
+  (it "renders the target and the detector of a created record after its route"
+    (should= "type: created\nfrom: operator\nbranch: swarm/t-1\ncommit: c0\nroute: coder\nfixes: #7\nfound-by: ci"
+             (record/block {:task "t-1" :record "created" :from "operator" :commit "c0" :route "coder"
+                            :fixes "#7" :found-by "ci"}))
+    (should= "type: created\nfrom: operator\nbranch: swarm/t-1\ncommit: c0\nroute: coder\nfixes: #7"
+             (record/block {:task "t-1" :record "created" :from "operator" :commit "c0" :route "coder" :fixes "#7"})))
+
   (it "renders a finished record"
     (should= "type: finished\nfrom: operator\nmerged-into: main"
              (record/block {:record "finished" :from "operator" :merged-into "main"})))
@@ -257,6 +334,13 @@
     (should= "type: handoff\nfrom: coder\nto: qa\nbranch: swarm/t-1\ncommit: c1\nfiles: -\nsummary: done\naudit-refusals: 1"
              (record/block {:task "t-1" :record "handoff" :from "coder" :stage "qa" :commit "c1"
                             :files "-" :text "done" :audit-refusals "1"})))
+
+  (it "ends the block of a record that carries a backend with a backend line"
+    (should= "type: answer\nfrom: operator\nanswer: yes\nbackend: claude session"
+             (record/block {:record "answer" :from "operator" :text "yes" :backend "claude" :dispatched "session"}))
+    (should= "type: review\nfrom: specifier\ncommit: c1\nfiles: -\nsummary: ready\naudit-refusals: 2\nbackend: codex dispatched"
+             (record/block {:record "review" :from "specifier" :commit "c1" :files "-" :text "ready" :audit-refusals "2"
+                            :backend "codex" :dispatched "dispatched"})))
 
   (it "renders only the type and the sender of a record without fields"
     (should= "type: approval\nfrom: operator"
@@ -342,3 +426,23 @@
   (it "refuses a value of more than one line"
     (doseq [value ["A | b\nc" "A\n | b" "A | b\rc"]]
       (should= "--rejected takes one line" (record/rejected-refusal value)))))
+
+(describe "link-refusal"
+  (it "is nil without a link, for a pull request and for a task id"
+    (should= nil (record/link-refusal {}))
+    (should= nil (record/link-refusal {:fixes "#115" :found-by "ci"}))
+    (should= nil (record/link-refusal {:fixes "add" :found-by "pr-review"}))
+    (should= nil (record/link-refusal {:fixes "add" :found-by "operator"}))
+    (should= nil (record/link-refusal {:fixes "#7"})))
+
+  (it "refuses another detector before a missing target and a bad target"
+    (should= "--found-by needs pr-review, ci or operator, got 'lint'" (record/link-refusal {:found-by "lint"}))
+    (should= "--found-by needs pr-review, ci or operator, got 'lint'" (record/link-refusal {:fixes "#0" :found-by "lint"})))
+
+  (it "refuses a detector without a target before a bad target"
+    (should= "--found-by needs --fixes" (record/link-refusal {:found-by "ci"})))
+
+  (it "refuses an empty target and a # target that is not a number without a leading 0"
+    (doseq [target ["" "#" "#0" "#012" "#12a" "#-1"]]
+      (should= (str "--fixes needs a task id or '#<number>', got '" target "'")
+               (record/link-refusal {:fixes target})))))
