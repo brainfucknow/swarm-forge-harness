@@ -68,11 +68,32 @@
 (defn has-branch? [id]
   (some? (tip id)))
 
+(defn unclosed-tasks
+  "The newest reachable record per task without a branch or finished record,
+  sorted by id. These histories have no lifecycle closure."
+  []
+  (let [known (set (concat (branch-ids) (finished-ids)))
+        records (->> (git/git "log" "--topo-order" "--grep=^SwarmForge-Task: "
+                             (str "--format=" log-format) "HEAD" "--")
+                     read-commits
+                     (map record/parse)
+                     (filter :task))]
+    (->> records
+         (remove #(known (:task %)))
+         (group-by :task)
+         (sort-by key)
+         (map (comp first val)))))
+
+(defn unclosed-record [id]
+  (first (filter #(= id (:task %)) (unclosed-tasks))))
+
 (defn resolve-id
-  "The task that arg names, among the task branches and the finished tasks."
+  "The task that arg names, among branches, finished tasks and reachable unclosed histories."
   [arg]
   (when (str/blank? arg) (shell/die "task id required"))
-  (let [[status found] (record/resolve arg (concat (branch-ids) (finished-ids)))]
+  (let [known (concat (branch-ids) (finished-ids))
+        ids (if (some #{arg} known) known (concat known (map :task (unclosed-tasks))))
+        [status found] (record/resolve arg ids)]
     (case status
       :ok found
       :ambiguous (shell/die "task id '" arg "' is ambiguous: " (str/join " " found))
@@ -82,7 +103,7 @@
   "slug-hex, with a random hex part that no task has."
   [title]
   (record/new-id title
-                 (map record/hex-part (concat (branch-ids) (finished-ids)))
+                 (map record/hex-part (concat (branch-ids) (finished-ids) (map :task (unclosed-tasks))))
                  (repeatedly #(format "%07x" (rand-int 0x10000000)))))
 
 (defn records-at

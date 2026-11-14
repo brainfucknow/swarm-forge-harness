@@ -38,10 +38,11 @@
   (refuse (flow/operator-refusal command (shell/env "SWARMFORGE_DISPATCHED" nil))))
 
 (defn- open-task
-  "The task that arg names; stops when it is finished."
+  "The task that arg names; requires a live task branch."
   [arg]
   (let [id (store/resolve-id arg)]
     (when (store/finished? id) (shell/die "task " id " is finished"))
+    (when-not (store/has-branch? id) (shell/die "task " id " has no local branch; history is unclosed"))
     id))
 
 (defn- write!
