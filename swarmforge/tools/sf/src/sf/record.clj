@@ -89,6 +89,7 @@
    ["SwarmForge-Fixes" :fixes] ["SwarmForge-Found-By" :found-by]
    ["SwarmForge-Merged-Into" :merged-into] ["SwarmForge-Reviewed" :reviewed]
    ["SwarmForge-Audit-Refusals" :audit-refusals] ["SwarmForge-Spec-Verdict" :spec-verdict]
+   ["SwarmForge-Missing-Tools" :missing-tools]
    ["SwarmForge-Backend" :backend] ["SwarmForge-Dispatched" :dispatched]])
 
 (def backends
@@ -288,6 +289,13 @@
     {:records (keep-indexed #(when-not (dropped %1) %2) records)
      :omitted omitted}))
 
+(defn- gate-fields
+  "The audit-refusals and missing-tools lines of a review or handoff record."
+  [{:keys [record audit-refusals missing-tools]}]
+  (when (#{"review" "handoff"} record)
+    (concat (when audit-refusals [["audit-refusals" audit-refusals]])
+            (when missing-tools [["missing-tools" missing-tools]]))))
+
 (defn link-fields
   "The fixes and found-by key-value pairs of a record that has them."
   [{:keys [fixes found-by]}]
@@ -307,13 +315,12 @@
     "moved" [["path" text]]
     []))
 
-(defn- fields [{:keys [record from spec-verdict audit-refusals backend dispatched] :as rec}]
+(defn- fields [{:keys [record from spec-verdict backend dispatched] :as rec}]
   (concat
    [["type" record] ["from" from]]
    (when spec-verdict [["spec-verdict" spec-verdict]])
    (body-fields rec)
-   (when (and audit-refusals (#{"review" "handoff"} record))
-     [["audit-refusals" audit-refusals]])
+   (gate-fields rec)
    (when backend [["backend" (str backend " " dispatched)]])))
 
 (defn block

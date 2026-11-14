@@ -45,15 +45,23 @@
     "-F" (do (require-value args) (read-file value))
     (str/join " " args)))
 
-(defn handoff
-  "--to and its role anywhere in args; the rest is the summary."
+(defn allow-missing-tool
+  "Whether --allow-missing-tool is anywhere in args, and the other args."
   [args]
-  (let [at (.indexOf (vec args) "--to")]
-    (if (neg? at)
-      {:summary (message nil args)}
-      (do (when (= at (dec (count args))) (shell/die "--to needs a value"))
-          {:to (nth args (inc at))
-           :summary (message nil (concat (take at args) (drop (+ at 2) args)))}))))
+  [(boolean (some #{"--allow-missing-tool"} args)) (remove #{"--allow-missing-tool"} args)])
+
+(defn handoff
+  "--to and its role and --allow-missing-tool anywhere in args; the rest is
+  the summary."
+  [args]
+  (let [[allow? args] (allow-missing-tool args)
+        at (.indexOf (vec args) "--to")]
+    (assoc (if (neg? at)
+             {:summary (message nil args)}
+             (do (when (= at (dec (count args))) (shell/die "--to needs a value"))
+                 {:to (nth args (inc at))
+                  :summary (message nil (concat (take at args) (drop (+ at 2) args)))}))
+           :allow? allow?)))
 
 (defn rejections
   "The values of the `--rejected <finding> | <reason>` options that make up

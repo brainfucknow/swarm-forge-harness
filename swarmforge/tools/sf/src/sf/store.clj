@@ -125,6 +125,16 @@
        reverse
        record/role-commits))
 
+(defn trailers-between
+  "The trailer lines of each first-parent commit after from up to to, oldest
+  first, without the record commits. A merge on that chain counts; what it
+  brings in from its other parents does not."
+  [from to]
+  (->> (git/git "log" "-z" "--reverse" "--first-parent" (str "--format=" log-format) (str from ".." to) "--")
+       read-commits
+       (map :trailers)
+       (remove (fn [trailers] (some #(str/starts-with? % "SwarmForge-Task:") trailers)))))
+
 (defn- range-files
   "The files that from..to changed, without what a merge in the range brought
   in: only the files of the range's first-parent non-merge commits."

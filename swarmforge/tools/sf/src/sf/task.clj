@@ -11,11 +11,13 @@
             [sf.hook :as hook]
             [sf.lore :as lore]
             [sf.metrics :as metrics]
+            [sf.missing-tools :as missing-tools]
             [sf.options :as options]
             [sf.record :as record]
             [sf.spec-revisions :as spec-revisions]
             [sf.shell :as shell]
             [sf.store :as store]
+            [sf.tool :as tool]
             [sf.verify :as verify]))
 
 (defn- git [dir & args]
@@ -89,6 +91,22 @@
   (check-worktree! id)
   (flow/role-commit (git (shell/repo-root) "rev-parse" "--short" (store/ref-of id))
                     (last (store/records-at (store/ref-of id) id))))
+
+(defn- missing-tools!
+  "Stops with exit 4 when a Not-tested trailer of the role's commits up to head
+  since the newest milestone names a missing tool, unless allow? and an
+  answered question accepts each one. Returns the missing tools that the
+  record carries, or nil."
+  [id head allow?]
+  (let [records (store/records-at (store/ref-of id) id)
+        commits (store/trailers-between (flow/last-milestone-commit records) head)
+        missing (filterv tool/missing? (missing-tools/named-in-commits (tool/wrapped-names) commits))
+        refused (when allow? (remove (missing-tools/accepted missing records) missing))]
+    (when (seq missing)
+      (when (or (not allow?) (seq refused))
+        (run! println (missing-tools/refusal id missing refused))
+        (shell/fail 4 nil))
+      (str/join " " missing))))
 
 (defn init [_]
   (shell/quietly config/check)
@@ -185,11 +203,12 @@
 
 (defn handoff
   "Records HEAD and moves the task on. role overrides the acting role,
-  audit-passed? skips the audit gate, and carried, the :backend and
-  :dispatched of another record, replaces the recording backend."
-  [[id-arg & args] {:keys [role audit-passed? carried]}]
+  reviewed? skips the missing-tool check and the audit gate, which the review
+  ran at the same commit, and carried, the :backend and :dispatched of another
+  record, replaces the recording backend."
+  [[id-arg & args] {:keys [role reviewed? carried]}]
   (let [id (open-task id-arg)
-        {:keys [to summary]} (options/handoff args)
+        {:keys [to summary allow?]} (options/handoff args)
         state (store/state id)
         _ (refuse (flow/handoff-refusal state))
         _ (refuse (flow/to-refusal state to))
@@ -198,13 +217,15 @@
         _ (when (not= "done" to) (config/require-role to))
         head (role-head id)]
     (refuse (flow/handoff-refusal state head))
-    (let [refusals (when-not audit-passed? (audit/gate id from head))]
+    (let [missing (when-not reviewed? (missing-tools! id head allow?))
+          refusals (when-not reviewed? (audit/gate id from head))]
       (store/write! id (fn [records]
                          (let [state (last records)
                                rec (flow/handoff state from to head summary)]
                            (refuse (flow/handoff-refusal state (role-head id)))
                            (cond-> rec
                              refusals (assoc :audit-refusals refusals)
+                             missing (assoc :missing-tools missing)
                              carried (merge carried)))))
       (when refusals (audit/clear! id from)))
     (metrics/save! id (worktree-of id))
@@ -227,13 +248,16 @@
 
 (defn review [[id-arg & args]]
   (let [id (open-task id-arg)
+        [allow? args] (options/allow-missing-tool args)
         summary (str/trim (options/message "specification ready for review" args))
         head (role-head id)
         role (acting-role (store/state id))]
-    (let [refusals (audit/gate id role head)]
+    (let [missing (missing-tools! id head allow?)
+          refusals (audit/gate id role head)]
       (write! id "review" role (constantly (cond-> {:text summary :needs "approval"
                                                     :reviewed (git (shell/repo-root) "rev-parse" head)}
-                                             refusals (assoc :audit-refusals refusals))))
+                                             refusals (assoc :audit-refusals refusals)
+                                             missing (assoc :missing-tools missing))))
       (when refusals (audit/clear! id role)))
     (println (str "REVIEW: " id " waits for operator approval"))))
 
@@ -265,10 +289,11 @@
                     (let [state (last records)]
                       (refuse (flow/approval-refusal state (flow/reviewed-commit records) (role-head id)))
                       (flow/follow state "approval" "operator" (approval-fields rejected)))))
-    ;; The review that asked for approval passed the audit gate at this commit.
-    ;; Thus the handoff must not run the gate again. The handoff is the role's,
-    ;; so it carries the backend of the role's review, not the operator's.
-    (handoff [id] {:role (acting-role state) :audit-passed? true
+    ;; The review that asked for approval passed the missing-tool check and the
+    ;; audit gate at this commit. Thus the handoff must not run them again. The
+    ;; handoff is the role's, so it carries the backend of the role's review,
+    ;; not the operator's.
+    (handoff [id] {:role (acting-role state) :reviewed? true
                    :carried (select-keys (approved-review (store/open-records id)) [:backend :dispatched])})))
 
 (defn reject [[id-arg & args]]

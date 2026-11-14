@@ -316,6 +316,49 @@ sf handoff "$id6" >/dev/null || true
 git -C ".worktrees/$id6" commit -q --allow-empty -m "Second"
 set +e; sf handoff "$id6" >/dev/null; rc=$?; set -e
 assert_eq "a new commit restarts the audit" "$rc" "3"
+idm="$(sf new "Audited missing tool" -m "x" --route "coder,qa")"
+sf start "$idm" >/dev/null
+git -C ".worktrees/$idm" commit -q --allow-empty -m "Code" -m "Not-tested: DRY: dry4clj is not installed"
+set +e; out="$(sf handoff "$idm")"; rc=$?; set -e
+assert_eq "the missing-tool check runs before the audit gate" "$rc" "4"
+assert_match "the missing-tool refusal names the tool" "$out" "^MISSING_TOOL: $idm dry4clj "
+assert_eq "a missing-tool refusal leaves no audit state" "$(test -e ".swarmforge/audit/$idm/coder" && echo kept || echo none)" "none"
+# The missing-tool scan reads only the task branch's first-parent chain.
+merge_base_with_trailer() {
+  git commit -q --allow-empty -m "Base" -m "Not-tested: DRY: dry4clj is not installed"
+  git -C ".worktrees/$1" commit -q --allow-empty -m "Code"
+  git -C ".worktrees/$1" merge -q --no-ff --no-edit main
+}
+merge_with_trailer() {
+  git commit -q --allow-empty -m "Base"
+  git -C ".worktrees/$1" merge -q --no-ff -m "Merge main" -m "Not-tested: DRY: dry4clj is not installed" main
+  assert_eq "$2: HEAD is a merge commit" "$(git -C ".worktrees/$1" rev-parse -q --verify HEAD^2 >/dev/null && echo merge || echo single)" "merge"
+}
+idfp1="$(sf new "Merged base trailer" -m "x" --route "coder,qa")"
+sf start "$idfp1" >/dev/null
+merge_base_with_trailer "$idfp1"
+set +e; out="$(sf handoff "$idfp1")"; rc=$?; set -e
+assert_eq "a merged base trailer leaves handoff at the audit gate" "$rc" "3"
+assert_match "a merged base trailer gives the audit refusal" "$out" "^AUDIT_REQUIRED: $idfp1 "
+assert_eq "a merged base trailer prints no MISSING_TOOL" "$(echo "$out" | grep -c '^MISSING_TOOL' || true)" "0"
+idfp2="$(sf new "Merge commit trailer" -m "x" --route "coder,qa")"
+sf start "$idfp2" >/dev/null
+merge_with_trailer "$idfp2" "handoff"
+set +e; out="$(sf handoff "$idfp2")"; rc=$?; set -e
+assert_eq "a trailer on the role's merge commit refuses handoff" "$rc" "4"
+assert_match "the merge-commit trailer names the tool on handoff" "$out" "^MISSING_TOOL: $idfp2 dry4clj "
+idfp3="$(sf new "Merged base trailer review" -m "x" --route "specifier,coder")"
+sf start "$idfp3" >/dev/null
+merge_base_with_trailer "$idfp3"
+set +e; out="$(sf review "$idfp3")"; rc=$?; set -e
+assert_eq "a merged base trailer does not refuse review" "$rc" "0"
+assert_match "a merged base trailer lets review record" "$out" "^REVIEW: $idfp3 waits for operator approval"
+idfp4="$(sf new "Merge commit trailer review" -m "x" --route "specifier,coder")"
+sf start "$idfp4" >/dev/null
+merge_with_trailer "$idfp4" "review"
+set +e; out="$(sf review "$idfp4")"; rc=$?; set -e
+assert_eq "a trailer on the role's merge commit refuses review" "$rc" "4"
+assert_match "the merge-commit trailer names the tool on review" "$out" "^MISSING_TOOL: $idfp4 dry4clj "
 sed -i 's/^specifier frontier subagent$/specifier frontier subagent audit/' swarmforge/roles.conf
 id7="$(sf new "Audited spec" -m "x" --route "specifier,coder")"
 sf start "$id7" >/dev/null
@@ -712,6 +755,8 @@ assert_eq "the truncated task keeps its readable records, finished last" "$(echo
 assert_eq "no commit of the truncated task is blank" "$(echo "$shallow" | jq '[.records[].commit] | index("")')" "null"
 cd "$hv"
 assert_match "help lists harvest" "$(sf --help)" "^  harvest  "
+assert_match "help lists --allow-missing-tool for handoff" "$(sf --help)" "^  handoff <id> \[--to ROLE\] \[--allow-missing-tool\] \[-m text\]"
+assert_match "help lists --allow-missing-tool for review" "$(sf --help)" "^  review <id> \[--allow-missing-tool\] \[-m text\]"
 cd "$repo"
 
 # spec-judge loop: sf spec-verdict and sf spec-revisions through the CLI

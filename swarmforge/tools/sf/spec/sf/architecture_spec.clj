@@ -24,7 +24,7 @@
 
 (def ^:private pure
   "The high-level namespaces: plain values in and out, no IO."
-  '#{sf.lore sf.record sf.flow sf.spec-revisions sf.harvest sf.feature-block sf.coverage-args sf.catalogue sf.runtime})
+  '#{sf.lore sf.record sf.flow sf.spec-revisions sf.harvest sf.feature-block sf.coverage-args sf.catalogue sf.runtime sf.missing-tools})
 
 (def ^:private allowed
   "The sf namespaces each sf namespace may require. Dependencies point from the
@@ -57,7 +57,8 @@
     sf.audit #{sf.config sf.flow sf.shell sf.store}
     sf.history #{sf.flow sf.lore sf.record sf.spec-revisions sf.shell sf.store}
     sf.dispatch #{sf.config sf.flow sf.record sf.shell sf.store sf.task}
-    sf.task #{sf.audit sf.config sf.flow sf.git sf.harvest sf.history sf.hook sf.lore sf.metrics sf.options sf.record sf.spec-revisions sf.shell sf.store sf.verify}
+    sf.missing-tools #{sf.record}
+    sf.task #{sf.audit sf.config sf.flow sf.git sf.harvest sf.history sf.hook sf.lore sf.metrics sf.missing-tools sf.options sf.record sf.spec-revisions sf.shell sf.store sf.tool sf.verify}
     sf.cli #{sf.adapters sf.config sf.dispatch sf.hook sf.shell sf.task sf.tool}})
 
 (defn- source-namespaces []

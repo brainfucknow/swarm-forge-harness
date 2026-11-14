@@ -37,10 +37,15 @@ Operator commands
 Role commands
   next <role>                     print ids of tasks waiting at stage <role>, or NO_TASK
   start <id>                      create or enter the task worktree; print the task
-  handoff <id> [--to ROLE] [-m text]
-                                  record HEAD and move the task to the next stage
+  handoff <id> [--to ROLE] [--allow-missing-tool] [-m text]
+                                  record HEAD and move the task to the next stage; refused
+                                  (exit 4) when a Not-tested trailer names a missing tool,
+                                  unless --allow-missing-tool and an answered question
+                                  names each one
   ask <id> <text>                 record a question and stop: needs operator
-  review <id> [-m text]           ask the operator to approve the specification
+  review <id> [--allow-missing-tool] [-m text]
+                                  ask the operator to approve the specification; checks
+                                  missing tools as handoff does
 
 Catalogue commands
   roles                           print the role catalogue in canonical order

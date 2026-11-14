@@ -41,12 +41,28 @@ out, and printed without @.")
 (defn- wrapper-path [tool]
   (str (fs/path (bin-dir) tool)))
 
+(defn- missing-wrapper
+  "The first of the tools the tool needs, then the tool, whose wrapper is not
+  executable; nil when none."
+  [tool]
+  (first (remove #(fs/executable? (wrapper-path %)) (conj (:needs (spec-of tool)) tool))))
+
+(defn missing?
+  "True when sf tool require would exit 1 for the tool."
+  [tool]
+  (some? (missing-wrapper tool)))
+
+(defn wrapped-names
+  "The names of the catalogue tools that sf tool ensure wraps: all but the
+  local rows, which are tracked scripts."
+  []
+  (map :name (remove #(= "local" (:kind %)) (tools))))
+
 (defn- require-tool [tool]
-  (doseq [dep (conj (:needs (spec-of tool)) tool)]
-    (when-not (fs/executable? (wrapper-path dep))
-      (println (str "MISSING: " dep))
-      (println (str "Run: sf tool ensure " dep))
-      (shell/fail 1 nil)))
+  (when-let [dep (missing-wrapper tool)]
+    (println (str "MISSING: " dep))
+    (println (str "Run: sf tool ensure " dep))
+    (shell/fail 1 nil))
   (println (str "OK: " tool " " (wrapper-path tool))))
 
 (defn- pinned-source

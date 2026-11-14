@@ -34,7 +34,7 @@
       (doseq [file ["a" "b"]] (spit (str at "/" file) text))
       (git at "add" "a" "b")
       (git at "commit" "-q" "--no-verify" "-m" text))
-    (out task/handoff [id] {:audit-passed? true})
+    (out task/handoff [id] {:reviewed? true})
     id))
 
 (defn- worktree [id]
@@ -46,7 +46,7 @@
   (let [id (new-id "Quick" "--route" "coder")]
     (out task/start [id])
     (commit-in-worktree id "a")
-    (task/handoff [id] {:audit-passed? true})
+    (task/handoff [id] {:reviewed? true})
     id))
 
 (defn- commit-on-main [path text]
@@ -154,7 +154,7 @@
           unchanged #(git *dir* "rev-parse" (str "swarm/" id))]
       (doseq [args [[id] [id "--to" "coder"] [id "--to" "done"]]]
         (let [tip (unchanged)]
-          (fails-with "requires operator approval" #(task/handoff args {:role "coder" :audit-passed? true}))
+          (fails-with "requires operator approval" #(task/handoff args {:role "coder" :reviewed? true}))
           (should= tip (unchanged))))
       (out task/review [id])
       (out task/reject [id "Revise"])
@@ -199,11 +199,11 @@
           dir (str *dir* "/.worktrees/" id)]
       (out task/start [id])
       (spit (str dir "/dirty") "x")
-      (fails-with "uncommitted changes" #(task/handoff [id] {:audit-passed? true}))
+      (fails-with "uncommitted changes" #(task/handoff [id] {:reviewed? true}))
       (git dir "add" "dirty")
       (git dir "commit" "-q" "--no-verify" "-m" "Dirty")
       (git dir "checkout" "-q" "-b" "elsewhere")
-      (fails-with "expected" #(task/handoff [id] {:audit-passed? true}))))
+      (fails-with "expected" #(task/handoff [id] {:reviewed? true}))))
 
   (it "asks the audit once per commit before it records a handoff"
     (let [id (new-id "Quick" "--route" "coder,cleaner")]
@@ -226,7 +226,7 @@
           dir (str *dir* "/.worktrees/" id)]
       (should-contain (str "DIR: " dir) (out task/start [id]))
       (commit-in-worktree id "a")
-      (task/handoff [id] {:audit-passed? true})
+      (task/handoff [id] {:reviewed? true})
       (should= "done" (out task/stage [id]))
       (should= "" (git dir "status" "--porcelain"))
       (should-contain "FINISHED" (out task/finish [id]))
@@ -344,7 +344,7 @@
       (write-conf! dir "verify.conf" "touch made\ntest -e a\ntest -e c\n")
       (git dir "add" "a" "swarmforge/verify.conf")
       (git dir "commit" "-q" "--no-verify" "-m" "Verify")
-      (task/handoff [id] {:audit-passed? true})
+      (task/handoff [id] {:reviewed? true})
       (should= (str "VERIFY: passed: touch made\nVERIFY: passed: test -e a\nVERIFY: passed: test -e c\n"
                     "FINISHED: " id " merged into main")
                (out task/finish [id]))
@@ -364,7 +364,7 @@
       (spit (str dir "/a") "task\n")
       (git dir "add" "a")
       (git dir "commit" "-q" "--no-verify" "-m" "Task")
-      (task/handoff [id] {:audit-passed? true})
+      (task/handoff [id] {:reviewed? true})
       (should= (str "VERIFY: passed: grep -qx main a\nFINISHED: " id " merged into main")
                (out task/finish [id]))
       (should= "main\n" (slurp (str *dir* "/a")))))
@@ -382,7 +382,7 @@
 
   (it "finishes a task that has no worktree"
     (let [id (new-id "Quick" "--route" "coder")]
-      (task/handoff [id "--to" "done"] {:audit-passed? true})
+      (task/handoff [id "--to" "done"] {:reviewed? true})
       (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id]))
       (should-not (fs/exists? (worktree id)))
       (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
@@ -411,19 +411,19 @@
           tip #(git *dir* "rev-parse" (str "swarm/" id))
           before (tip)]
       (fails-with "--to done skips the rest of route 'coder,cleaner' after stage:coder"
-                  #(task/handoff [id "--to" "done"] {:audit-passed? true}))
+                  #(task/handoff [id "--to" "done"] {:reviewed? true}))
       (fails-with "--to qa is not on route 'coder,cleaner' at or after stage:coder"
-                  #(task/handoff [id "--to" "qa"] {:audit-passed? true}))
+                  #(task/handoff [id "--to" "qa"] {:reviewed? true}))
       (should= before (tip))
-      (should-contain "coder -> cleaner" (out task/handoff [id "--to" "cleaner"] {:audit-passed? true}))
+      (should-contain "coder -> cleaner" (out task/handoff [id "--to" "cleaner"] {:reviewed? true}))
       (fails-with "--to coder is not on route 'coder,cleaner' at or after stage:cleaner"
-                  #(task/handoff [id "--to" "coder"] {:audit-passed? true}))
-      (should-contain "cleaner -> done" (out task/handoff [id "--to" "done"] {:audit-passed? true}))))
+                  #(task/handoff [id "--to" "coder"] {:reviewed? true}))
+      (should-contain "cleaner -> done" (out task/handoff [id "--to" "done"] {:reviewed? true}))))
 
   (it "hands a non-specifier task to done and refuses to finish an unfinished one"
     (let [id (new-id "Add login" "--route" "coder")]
       (fails-with "not done" #(task/finish [id]))
-      (task/handoff [id "--to" "done" "-F" (str *dir* "/swarmforge/roles.conf")] {:audit-passed? true})
+      (task/handoff [id "--to" "done" "-F" (str *dir* "/swarmforge/roles.conf")] {:reviewed? true})
       (should= "done" (out task/stage [id]))))
 
   (it "moves a task onto a route that holds its stage and refuses one that does not"
@@ -459,10 +459,10 @@
       (fs/create-dirs (fs/parent (manifest a)))
       (spit (manifest a) "v1\n")
       (out task/ask [a "Which?"])
-      (fails-with "waiting on the operator" #(task/handoff [a] {:audit-passed? true}))
+      (fails-with "waiting on the operator" #(task/handoff [a] {:reviewed? true}))
       (should-not= 0 (cached))
       (out task/answer [a "This"])
-      (should-contain (str "HANDOFF: " a " coder -> cleaner") (out task/handoff [a] {:audit-passed? true}))
+      (should-contain (str "HANDOFF: " a " coder -> cleaner") (out task/handoff [a] {:reviewed? true}))
       (should= 0 (cached))
       (let [b (new-id "Other" "--route" "coder")]
         (should-not-contain "metrics" (out task/start [b]))
