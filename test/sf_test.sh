@@ -571,7 +571,7 @@ assert_eq "harvest prints the same lines under another time zone" "$(TZ=Asia/Tok
 assert_eq "harvest prints one line per task" "$(echo "$out" | wc -l | tr -d ' ')" "2"
 assert_eq "every harvest line is JSON" "$(echo "$out" | jq -e -c 'type' | sort -u)" '"object"'
 assert_eq "harvest prints the finished task first" "$(echo "$out" | jq -r '.id' | paste -sd ' ' -)" "$hf $ho"
-assert_eq "harvest keys every line" "$(echo "$out" | jq -c 'keys' | sort -u)" '["id","lore","needs","records","request","route","stage","status","title","truncated"]'
+assert_eq "harvest keys every line" "$(echo "$out" | jq -c 'keys' | sort -u)" '["fixes","found_by","id","lore","needs","records","request","route","stage","status","title","truncated"]'
 for t in "$hf" "$ho"; do
   line="$(echo "$out" | jq -c --arg id "$t" 'select(.id == $id)')"
   assert_eq "harvest title equals sf show ($t)" "$(echo "$line" | jq -r '.title')" "$(sf show "$t" | sed -n 's/^TITLE: //p')"

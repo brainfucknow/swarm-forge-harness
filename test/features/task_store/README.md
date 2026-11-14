@@ -28,7 +28,8 @@ directories, no verification commands, and Git identity
 `tester <tester@example.com>`. `I ran` sets up prior work; `I run` is the
 command whose output and status are checked. Command steps split on spaces
 after placeholder expansion; the `with the text` form appends one argument.
-Output comparisons omit the final newline.
+Output comparisons omit the final newline. `task "B" is the task that command
+created` names the task whose id the last `I ran` printed.
 
 Conflict fixtures commit different contents on both branches; resolution
 steps stage or commit the resolved files as named. Squash-merge fixtures

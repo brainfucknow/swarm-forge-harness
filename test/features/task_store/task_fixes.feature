@@ -129,3 +129,20 @@ Feature: sf task fixes
     When I run "sf new Fix -m x --route coder --fixes add-log"
     Then the exit status is 1
     And the error output has the line "sf: task id 'add-log' is ambiguous: $A $B"
+
+  # sf task fixes 9
+  Scenario: sf task fixes 9: sf start prints the target and the detector after ROUTE: also when the brief leaves out the created record
+    Given I ran "sf new Fix -m x --route coder --fixes #115 --found-by ci"
+    And task "B" is the task that command created
+    And the route of task "B" was set to "coder" 11 times
+    When I run "sf start $B"
+    Then the exit status is 0
+    And the output has the lines "ROUTE: coder\nFIXES: #115\nFOUND-BY: ci\nBRANCH: swarm/$B"
+    And the output has no line containing "type: created"
+
+  # sf task fixes 10
+  Scenario: sf task fixes 10: sf start prints no FIXES: or FOUND-BY: line for a task without them
+    When I run "sf start $A"
+    Then the exit status is 0
+    And the output has no line containing "FIXES:"
+    And the output has no line containing "FOUND-BY:"

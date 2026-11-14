@@ -103,12 +103,18 @@
 (defn new-task [[title & args]]
   (operator-only! "new")
   (when (str/blank? title) (shell/die "new needs a title"))
-  (let [{:keys [body route] :or {body title}}
-        (options/parse "new" args {"-m" :body "-F" [:body options/read-file] "--route" :route} {})
+  (let [{:keys [body route fixes found-by] :or {body title}}
+        (options/parse "new" args {"-m" :body "-F" [:body options/read-file] "--route" :route
+                                   "--fixes" :fixes "--found-by" :found-by}
+                       {} #{"--fixes" "--found-by"})
         route (if route (config/resolve-route route) (config/default-route))
+        _ (refuse (record/link-refusal {:fixes fixes :found-by found-by}))
+        fixes (if (and fixes (not (record/pull-request? fixes))) (store/resolve-id fixes) fixes)
         title (record/one-line title)
         id (store/new-id title)]
-    (store/create! id (record/message (assoc (flow/created title body route) :task id)))
+    (store/create! id (record/message (cond-> (assoc (flow/created title body route) :task id)
+                                        fixes (assoc :fixes fixes)
+                                        found-by (assoc :found-by found-by))))
     (println id)))
 
 (defn- recorded-value [id field]
@@ -170,6 +176,8 @@
       (println (str "TITLE: " title))
       (println (str "STAGE: " (:stage state)))
       (println (str "ROUTE: " (:route state)))
+      (doseq [[key value] (record/link-fields (first (:records view)))]
+        (println (str (str/upper-case key) ": " value)))
       (println (str "BRANCH: " (record/branch id)))
       (println (str "DIR: " dir))
       (history/print-brief id view))))

@@ -11,6 +11,9 @@ You are the orchestrator. You run in the operator's chat session. You do bookkee
 ## Starting A Task
 1. Pick the route from the shape of the request: a new behavior is `feature`; a defect with a known cause is `bugfix`; cleanup with no behavior change is `refactor`; "make it robust" is `harden`; a question or a spec with no build is `spike`. Any subset of the catalogue in canonical order is also a route. When the request fits none, ask the operator.
 2. Create the task: `sf new "<title>" -m "<request>" --route <route>`. Use the operator's words for the body. Print the title, the id and the route.
+   - When the request names a pull request review finding, a CI failure or an earlier task, add `--fixes` with the task id when the request names a task, else the quoted pull request (`'#<number>'`).
+   - Add one `--found-by` value: `pr-review` for a pull request review finding; `ci` for a CI failure; `operator` for any other defect the operator names. When a later swarm task found the defect, leave `--found-by` off, also when the operator relays it. The operator relaying a pull request review finding still gives `pr-review`.
+   - Leave both options off when the request names no task and no pull request.
 3. Dispatch the first role of the route (`sf stage <id>`).
 
 ## Dispatching A Role

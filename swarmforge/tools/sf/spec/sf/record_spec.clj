@@ -92,6 +92,14 @@
              (record/message {:task "t-1" :record "approval" :from "operator" :stage "coder" :route "coder"
                               :needs "none" :lore-id "0a1b2c3d" :rejected ["A | b" "C | x | d"]})))
 
+  (it "puts Fixes and Found-By after Needs"
+    (should= (str "sf created: t-1\n\nFix\n\nx\n\n"
+                  "SwarmForge-Task: t-1\nSwarmForge-Record: created\nSwarmForge-From: operator\n"
+                  "SwarmForge-Stage: coder\nSwarmForge-Route: coder\nSwarmForge-Needs: none\n"
+                  "SwarmForge-Fixes: #115\nSwarmForge-Found-By: ci\n")
+             (record/message {:task "t-1" :record "created" :from "operator" :text "Fix\n\nx" :stage "coder"
+                              :route "coder" :needs "none" :fixes "#115" :found-by "ci"})))
+
   (it "ends with Merged-Into for the finished record"
     (should= (str "sf finished: t-1\n\n"
                   "SwarmForge-Task: t-1\nSwarmForge-Record: finished\nSwarmForge-From: operator\n"
@@ -163,6 +171,13 @@
                              :author-time "1772352000" :author-name "Codex Ünï"})]
       (should= "2026-03-01T08:00:00Z" (:time rec))
       (should= "Codex Ünï" (:recorded-by rec))))
+
+  (it "reads the target and the detector of a created record"
+    (should= ["add-1234567" "pr-review"]
+             ((juxt :fixes :found-by)
+              (record/parse {:sha "s" :parents [] :message ""
+                             :trailers ["SwarmForge-Record: created" "SwarmForge-Fixes: add-1234567"
+                                        "SwarmForge-Found-By: pr-review"]}))))
 
   (it "keeps a value with a colon"
     (should= "a: b" (:route (record/parse {:sha "s" :parents [] :message "" :trailers ["SwarmForge-Route: a: b"]}))))
@@ -244,6 +259,13 @@
   (it "renders a created record"
     (should= "type: created\nfrom: operator\nbranch: swarm/t-1\ncommit: c0\nroute: coder"
              (record/block {:task "t-1" :record "created" :from "operator" :commit "c0" :route "coder"})))
+
+  (it "renders the target and the detector of a created record after its route"
+    (should= "type: created\nfrom: operator\nbranch: swarm/t-1\ncommit: c0\nroute: coder\nfixes: #7\nfound-by: ci"
+             (record/block {:task "t-1" :record "created" :from "operator" :commit "c0" :route "coder"
+                            :fixes "#7" :found-by "ci"}))
+    (should= "type: created\nfrom: operator\nbranch: swarm/t-1\ncommit: c0\nroute: coder\nfixes: #7"
+             (record/block {:task "t-1" :record "created" :from "operator" :commit "c0" :route "coder" :fixes "#7"})))
 
   (it "renders a finished record"
     (should= "type: finished\nfrom: operator\nmerged-into: main"
@@ -348,3 +370,23 @@
   (it "refuses a value of more than one line"
     (doseq [value ["A | b\nc" "A\n | b" "A | b\rc"]]
       (should= "--rejected takes one line" (record/rejected-refusal value)))))
+
+(describe "link-refusal"
+  (it "is nil without a link, for a pull request and for a task id"
+    (should= nil (record/link-refusal {}))
+    (should= nil (record/link-refusal {:fixes "#115" :found-by "ci"}))
+    (should= nil (record/link-refusal {:fixes "add" :found-by "pr-review"}))
+    (should= nil (record/link-refusal {:fixes "add" :found-by "operator"}))
+    (should= nil (record/link-refusal {:fixes "#7"})))
+
+  (it "refuses another detector before a missing target and a bad target"
+    (should= "--found-by needs pr-review, ci or operator, got 'lint'" (record/link-refusal {:found-by "lint"}))
+    (should= "--found-by needs pr-review, ci or operator, got 'lint'" (record/link-refusal {:fixes "#0" :found-by "lint"})))
+
+  (it "refuses a detector without a target before a bad target"
+    (should= "--found-by needs --fixes" (record/link-refusal {:found-by "ci"})))
+
+  (it "refuses an empty target and a # target that is not a number without a leading 0"
+    (doseq [target ["" "#" "#0" "#012" "#12a" "#-1"]]
+      (should= (str "--fixes needs a task id or '#<number>', got '" target "'")
+               (record/link-refusal {:fixes target})))))
