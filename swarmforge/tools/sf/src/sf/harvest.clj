@@ -39,7 +39,7 @@
   (array-map "commit" sha "role" (when (not= "-" role) role) "key" key "value" value "lore_id" lore-id))
 
 (defn line
-  "The JSON text, on one line, of task: its :id, :status (open or finished),
+  "The JSON text, on one line, of task: its :id, :status (open, finished or unclosed),
   :truncated, :title, :request, :records oldest first and the :commits whose
   Lore trailers make its LORE: lines, as lore/read-log reads them."
   [{:keys [id status truncated title request records commits]}]
