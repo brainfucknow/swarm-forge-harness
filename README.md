@@ -132,9 +132,30 @@ the optional reviewers. Model mappings live in
 
 Run these from the source checkout; fresh consumer installs omit harness tests and fixtures.
 
+Choose checks for the affected behavior and dependencies. Reuse passing
+evidence for the same relevant revision and targets; the full CI matrix is
+not a checklist for every handoff. Required source-quality gates still apply
+to the affected targets, and property checks remain separate and role-owned.
+
+| Changed area | Focused checks |
+|---|---|
+| Shared wrapper dependency or IO boundary | `bb --config swarmforge/tools/core/bb.edn architecture` (also retained in the JavaScript unit suite). |
+| Shared wrapper behavior | `bb --config swarmforge/tools/core/bb.edn test`, then affected language-wrapper unit suites. |
+| .NET wrapper | `bb --config swarmforge/tools/csharp/bb.edn test`, plus the shared architecture check; use combined coverage below when coverage evidence needs refreshing. |
+| Task state or CLI behavior | Affected sf specs and public-CLI checks in `test/sf_test.sh` or named `test/features/task_store/` features. |
+| Installer | Installer specs and named `test/features/install/` acceptance features. |
+| Tool installation or argument rewriting | Relevant sf specs, `test/sf_tool_test.sh`, and affected tool compatibility checks. |
+| Acceptance fixtures | `bash test/acceptance.sh <feature>...`; for identity changes include `test/features/task_store/init.feature`. |
+| Documentation only | Manual review and existing configuration/link checks relevant to the edit. |
+
+The commands below list the available suites. CI remains the broader
+integration check, including unaffected language suites.
+
 ```sh
 bash test/sf_test.sh
 bash test/sf_tool_test.sh
+bb --config swarmforge/tools/core/bb.edn architecture
+bb --config swarmforge/tools/core/bb.edn test
 bb --config swarmforge/tools/sf/bb.edn spec
 bb --config swarmforge/tools/sf/bb.edn hardening
 bb --config swarmforge/tools/sf/bb.edn property
@@ -154,3 +175,26 @@ bb --config swarmforge/tools/java/bb.edn property
 
 These suites exercise the CLI with scratch Git repositories and test the
 language wrappers against fixture reports and fake external tools.
+
+The .NET module has both Speclj and `clojure.test` tests. Its maintained
+`test/combined-coverage.clj` adapter registers both runners with genuine
+Cloverage; it computes no coverage or quality metrics. From this source
+checkout, run both populations under the pinned tool's coverage configuration:
+
+```sh
+swarmforge/bin/sf tool ensure crap4clj
+export PATH="$(swarmforge/bin/sf tool bin):$PATH"
+source_root="$PWD"
+coverage_config="$(swarmforge/bin/sf tool bin)/../tools/crap4clj-coverage/bb.edn"
+cd swarmforge/tools/csharp
+bb --config "$coverage_config" "$source_root/test/combined-coverage.clj" \
+  -r combined -p src -s test -s spec -s ../core/test --lcov
+crap4clj --use-existing-coverage
+```
+
+Confirm both frameworks
+report nonzero passing tests and the intended source namespaces appear in
+LCOV before citing the result. Either framework's failure fails the combined
+run. The explicit test roots omit property tests; do not add property paths
+to ordinary coverage. A fixture-backed wrapper suite does not establish
+compatibility with a real external tool.
