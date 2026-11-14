@@ -15,6 +15,8 @@ assert_fails() { local name="$1"; shift; if "$@" >/dev/null 2>&1; then fail "$na
 scratch="$(mktemp -d)"
 trap 'rc=$?; [ "$rc" -eq 0 ] || diagnose "exit status $rc"; rm -rf "$scratch"' EXIT
 export HOME="$scratch/home"; mkdir -p "$HOME"
+# These decide the backend on a record; this script may run inside a harness.
+unset CLAUDECODE CODEX_THREAD_ID SWARMFORGE_BACKEND SWARMFORGE_DISPATCHED
 
 # On a non-zero exit, dump the task branches so that the CI log shows the cause.
 diagnose() {
@@ -566,7 +568,7 @@ assert_eq "harvest gives an open task's records their commit times and authors" 
 assert_eq "harvest gives the record time in UTC and the author name unchanged" \
   "$(echo "$line_f" | jq -r '.records[] | select(.text == "coded") | "\(.time) \(.recorded_by)"')" "2026-03-01T08:00:00Z Codex Ü"
 assert_eq "harvest ends every record with time and recorded_by" "$(echo "$out" | jq -c '.records[] | keys_unsorted' | sort -u)" \
-  '["type","from","stage","needs","route","commit","text","merged_into","rejected","audit_refusals","spec_verdict","time","recorded_by"]'
+  '["type","from","stage","needs","route","commit","text","merged_into","rejected","audit_refusals","spec_verdict","time","recorded_by","backend","dispatched"]'
 assert_eq "harvest prints the same lines under another time zone" "$(TZ=Asia/Tokyo sf harvest)" "$out"
 assert_eq "harvest prints one line per task" "$(echo "$out" | wc -l | tr -d ' ')" "2"
 assert_eq "every harvest line is JSON" "$(echo "$out" | jq -e -c 'type' | sort -u)" '"object"'
@@ -821,6 +823,80 @@ sed -i '/^spec-judge /d' swarmforge/roles.conf
 assert_match "check passes without the spec-judge" "$(sf check)" "^CHECK: ok"
 assert_match "spec-verdict fails without the spec-judge" "$(sf spec-verdict "$jg" stuck x 2>&1 || true)" "roles.conf has no spec-judge"
 copy_swarmforge .
+
+# backend on records
+brepo="$scratch/backend"
+mkdir -p "$brepo" && cd "$brepo"
+git init -q .
+copy_swarmforge .
+echo "x" > README.md
+git add -A && git commit -q -m "seed"
+sf init >/dev/null
+carried() {
+  git log -1 --format='%(trailers:key=SwarmForge-Backend,valueonly,separator=)|%(trailers:key=SwarmForge-Dispatched,valueonly,separator=)' "$1"
+}
+b1="$(env CLAUDECODE=1 sf new "Backend one" -m x --route specifier,coder)"
+assert_eq "a Claude Code session records claude session" "$(carried "swarm/$b1")" "claude|session"
+assert_eq "show ends the record with its backend" "$(sf show "$b1" | grep -v '^$' | tail -1)" "backend: claude session"
+env CODEX_THREAD_ID=t1 sf ask "$b1" "q1" >/dev/null
+assert_eq "a Codex thread alone records nothing" "$(carried "swarm/$b1")" "|"
+assert_eq "show prints no backend line for a record that carries nothing" "$(sf show "$b1" | grep -v '^$' | tail -1)" "question: q1"
+env CLAUDECODE=1 CODEX_THREAD_ID=t1 sf answer "$b1" "a1" >/dev/null
+assert_eq "CLAUDECODE wins over a Codex thread" "$(carried "swarm/$b1")" "claude|session"
+env CLAUDECODE=0 sf ask "$b1" "q2" >/dev/null
+assert_eq "CLAUDECODE other than 1 records nothing" "$(carried "swarm/$b1")" "|"
+env SWARMFORGE_BACKEND=codex sf answer "$b1" "a2" >/dev/null
+assert_eq "SWARMFORGE_BACKEND outside dispatch records nothing" "$(carried "swarm/$b1")" "|"
+env SWARMFORGE_DISPATCHED= CLAUDECODE=1 sf ask "$b1" "q3" >/dev/null
+assert_eq "a blank SWARMFORGE_DISPATCHED is a session" "$(carried "swarm/$b1")" "claude|session"
+sf answer "$b1" "a3" >/dev/null
+env SWARMFORGE_DISPATCHED=specifier CLAUDECODE=1 sf ask "$b1" "q4" >/dev/null
+assert_eq "dispatch without a backend records nothing" "$(carried "swarm/$b1")" "|"
+sf answer "$b1" "a4" >/dev/null
+env SWARMFORGE_DISPATCHED=specifier SWARMFORGE_BACKEND=vibe sf ask "$b1" "q5" >/dev/null
+assert_eq "dispatch with an unknown backend records nothing" "$(carried "swarm/$b1")" "|"
+sf answer "$b1" "a5" >/dev/null
+
+fakes="$scratch/fake-backends"
+mkdir -p "$fakes"
+for b in claude codex copilot; do
+  printf '#!/usr/bin/env bash
+sf review "$BACKEND_TASK" -m "by %s" >/dev/null
+' "$b" > "$fakes/$b"
+  chmod +x "$fakes/$b"
+done
+env BACKEND_TASK="$b1" CLAUDECODE=1 PATH="$fakes:$PATH" sf dispatch specifier "$b1" codex
+assert_eq "a dispatched role records the backend that dispatch runs" "$(carried "swarm/$b1")" "codex|dispatched"
+env CLAUDECODE=1 sf approve "$b1" >/dev/null
+assert_eq "the approve handoff carries the review's backend" "$(carried "swarm/$b1")" "codex|dispatched"
+assert_eq "the approval carries the operator's backend" "$(carried "swarm/$b1^")" "claude|session"
+b2="$(sf new "Backend two" -m x --route specifier,coder)"
+env BACKEND_TASK="$b2" SWARMFORGE_BACKEND=claude PATH="$fakes:$PATH" sf dispatch specifier "$b2"
+assert_eq "dispatch passes on the backend it detects" "$(carried "swarm/$b2")" "claude|dispatched"
+b3="$(sf new "Backend three" -m x --route specifier,coder)"
+env CLAUDECODE=1 sf review "$b3" >/dev/null
+sf approve "$b3" >/dev/null
+assert_eq "a clean approve records nothing on the approval" "$(carried "swarm/$b3^")" "|"
+assert_eq "a clean approve hands on the review's session" "$(carried "swarm/$b3")" "claude|session"
+b4="$(sf new "Backend four" -m x --route specifier,coder)"
+sf review "$b4" >/dev/null
+env CLAUDECODE=1 sf approve "$b4" >/dev/null
+assert_eq "the approve handoff of a review that carries nothing carries nothing" "$(carried "swarm/$b4")" "|"
+b5="$(sf new "Backend five" -m x --route coder)"
+sf start "$b5" >/dev/null
+git -C ".worktrees/$b5" commit -q --allow-empty -m "Work"
+sf handoff "$b5" -m done >/dev/null
+env CLAUDECODE=1 sf finish "$b5" >/dev/null
+assert_eq "the finished merge carries the backend of sf finish" "$(carried HEAD)" "claude|session"
+bout="$(sf harvest)"
+assert_eq "harvest exports backend and dispatched" \
+  "$(echo "$bout" | jq -c --arg id "$b1" 'select(.id == $id) | [.records[] | [.backend, .dispatched]] | .[0], .[1], .[-1]')" \
+  "$(printf '["claude",false]\n[null,null]\n["codex",true]')"
+assert_eq "harvest dispatched is null exactly when backend is null" \
+  "$(echo "$bout" | jq -c '[.records[] | select((.backend == null) != (.dispatched == null))] | length' | sort -u)" "0"
+assert_fails "hook refuses a SwarmForge-Backend trailer" git -C ".worktrees/$b2" commit -q --allow-empty -m "$(printf 'Forged\n\nSwarmForge-Backend: claude')"
+assert_fails "hook refuses a SwarmForge-Dispatched trailer" git -C ".worktrees/$b2" commit -q --allow-empty -m "$(printf 'Forged\n\nSwarmForge-Dispatched: session')"
+cd "$repo"
 
 for pair in ".claude/skills/swarm/SKILL.md .agents/skills/swarm/SKILL.md"; do
   set -- $pair

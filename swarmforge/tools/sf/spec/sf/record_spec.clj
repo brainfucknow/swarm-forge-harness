@@ -137,6 +137,55 @@
                ((juxt :record :spec-verdict)
                 (record/parse {:sha "s" :parents ["p"] :message "sf changes-requested: t-1\n" :trailers trailers}))))))
 
+(describe "backend"
+  (it "is the backend that dispatch names, dispatched, whatever CLAUDECODE says"
+    (doseq [name ["claude" "codex" "copilot"]]
+      (should= {:backend name :dispatched "dispatched"} (record/backend "coder" name "1"))
+      (should= {:backend name :dispatched "dispatched"} (record/backend "coder" name nil))))
+
+  (it "is nothing under dispatch without a known backend name"
+    (should-be-nil (record/backend "coder" nil "1"))
+    (should-be-nil (record/backend "coder" "vibe" "1"))
+    (should-be-nil (record/backend "coder" " claude" nil)))
+
+  (it "is a claude session outside dispatch when CLAUDECODE is exactly 1"
+    (should= {:backend "claude" :dispatched "session"} (record/backend nil nil "1"))
+    (should= {:backend "claude" :dispatched "session"} (record/backend " " "codex" "1"))
+    (should= {:backend "claude" :dispatched "session"} (record/backend "" "codex" "1")))
+
+  (it "is nothing in any other environment"
+    (should-be-nil (record/backend nil nil nil))
+    (should-be-nil (record/backend nil "codex" nil))
+    (should-be-nil (record/backend nil nil "0"))
+    (should-be-nil (record/backend nil nil "true"))))
+
+(describe "a record that carries a backend"
+  (it "writes the backend and dispatched trailers last and reads them back"
+    (let [rec (assoc question :backend "codex" :dispatched "dispatched")
+          message (record/message rec)
+          lines (clojure.string/split-lines message)]
+      (should= ["SwarmForge-Backend: codex" "SwarmForge-Dispatched: dispatched"] (take-last 2 lines))
+      (should= (assoc rec :sha "abc1234" :commit "par1234")
+               (record/parse {:sha "abc1234" :parents ["par1234"] :message message :trailers (drop 4 lines)}))))
+
+  (it "writes neither trailer for a record that carries nothing"
+    (should-not (re-find #"Backend|Dispatched" (record/message question))))
+
+  (it "reads a session record"
+    (should= ["claude" "session"]
+             ((juxt :backend :dispatched)
+              (record/parse {:sha "s" :parents ["p"] :message ""
+                             :trailers ["SwarmForge-Record: answer" "SwarmForge-Backend: claude" "SwarmForge-Dispatched: session"]}))))
+
+  (it "reads a record with one trailer missing or a value not listed as carrying nothing"
+    (doseq [trailers [["SwarmForge-Backend: claude"]
+                      ["SwarmForge-Dispatched: session"]
+                      ["SwarmForge-Backend: vibe" "SwarmForge-Dispatched: session"]
+                      ["SwarmForge-Backend: claude" "SwarmForge-Dispatched: yes"]]]
+      (let [rec (record/parse {:sha "s" :parents ["p"] :message "" :trailers (cons "SwarmForge-Record: handoff" trailers)})]
+        (should-be-nil (:backend rec))
+        (should-be-nil (:dispatched rec))))))
+
 (describe "same-commit?"
   (it "matches a full sha and its abbreviation either way round"
     (should (record/same-commit? "0123456789abcdef" "0123456"))
@@ -263,6 +312,13 @@
     (should= "type: handoff\nfrom: coder\nto: qa\nbranch: swarm/t-1\ncommit: c1\nfiles: -\nsummary: done\naudit-refusals: 1"
              (record/block {:task "t-1" :record "handoff" :from "coder" :stage "qa" :commit "c1"
                             :files "-" :text "done" :audit-refusals "1"})))
+
+  (it "ends the block of a record that carries a backend with a backend line"
+    (should= "type: answer\nfrom: operator\nanswer: yes\nbackend: claude session"
+             (record/block {:record "answer" :from "operator" :text "yes" :backend "claude" :dispatched "session"}))
+    (should= "type: review\nfrom: specifier\ncommit: c1\nfiles: -\nsummary: ready\naudit-refusals: 2\nbackend: codex dispatched"
+             (record/block {:record "review" :from "specifier" :commit "c1" :files "-" :text "ready" :audit-refusals "2"
+                            :backend "codex" :dispatched "dispatched"})))
 
   (it "renders only the type and the sender of a record without fields"
     (should= "type: approval\nfrom: operator"

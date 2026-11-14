@@ -5,11 +5,12 @@
             [clojure.string :as str]
             [sf.config :as config]
             [sf.flow :as flow]
+            [sf.record :as record]
             [sf.shell :as shell]
             [sf.store :as store]
             [sf.task :as task]))
 
-(def backends ["claude" "codex" "copilot"])
+(def backends record/backends)
 
 (defn- role-prompt [role short]
   (if (config/gate? role)
@@ -60,7 +61,7 @@
         dir (task/worktree! id)
         _ (flush)
         {:keys [exit]} (try (p/shell {:cmd command :dir dir :continue true
-                                      :extra-env {"SWARMFORGE_DISPATCHED" role}})
+                                      :extra-env {"SWARMFORGE_DISPATCHED" role "SWARMFORGE_BACKEND" backend}})
                             (catch java.io.IOException e
                               (shell/die backend ": " (ex-message e))))]
     (when-not (zero? exit) (shell/fail exit nil))))
