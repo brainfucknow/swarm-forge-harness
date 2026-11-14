@@ -25,3 +25,21 @@
   (it "refuses a value that record/rejected-refusal refuses"
     (should= "--rejected takes one line" (refusal ["--rejected" "A | b\nc"]))
     (should= "--rejected needs '<finding> | <reason>', got ''" (refusal ["--rejected" "  "]))))
+
+(defn- parse-refusal [args]
+  (try (options/parse "new" args {"--fixes" :fixes "--route" :route} {} #{"--fixes"}) nil
+       (catch clojure.lang.ExceptionInfo e (ex-message e))))
+
+(describe "parse"
+  (it "takes the word after an option as its value, also one that starts with --"
+    (should= {:fixes "--route" :route "x"}
+             (options/parse "new" ["--fixes" "--route" "--route" "x"] {"--fixes" :fixes "--route" :route} {} #{"--fixes"})))
+
+  (it "keeps the last value of an option that may repeat"
+    (should= {:route "b"} (options/parse "new" ["--route" "a" "--route" "b"] {"--route" :route} {})))
+
+  (it "refuses an option that may not repeat when it is given twice"
+    (should= "--fixes given twice" (parse-refusal ["--fixes" "#7" "--fixes" "#8"])))
+
+  (it "refuses a missing value before a repeat"
+    (should= "--fixes needs a value" (parse-refusal ["--fixes" "#7" "--fixes"]))))

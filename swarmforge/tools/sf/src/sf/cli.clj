@@ -16,7 +16,7 @@
 
 Operator commands
   init                           install the commit-msg hook; print the identity of record commits
-  new <title> [-m text | -F file] [--route NAME|a,b,c]
+  new <title> [-m text | -F file] [--route NAME|a,b,c] [--fixes <id>|'#N' [--found-by pr-review|ci|operator]]
                                   create a task on a route; prints its id
   route <id> [NAME|a,b,c]         print or change the task's route
   ls [--stage ROLE] [--needs]     list open tasks
@@ -72,10 +72,12 @@ Environment
                        set by dispatch and run to the role or gate they start;
                        new, approve, reject, spec-verdict, answer, route changes and finish
                        refuse to run under it
-  SWARMFORGE_BACKEND   default backend for dispatch/run (claude, codex, copilot, mistral);
-                       mistral is detected when no CLI backend is on PATH and
-                       MISTRAL_API_KEY is set, and needs a git remote to share the
-                       task branch with the workflow worker
+  SWARMFORGE_BACKEND   default backend for dispatch/run; set by dispatch and run to the
+                       backend they start; under dispatch, records carry it
+                       (handoff-protocol.md, Backend). With no CLI backend on PATH,
+                       mistral is detected when MISTRAL_API_KEY is set, and needs a
+                       git remote to share the task branch with the workflow worker
+                       (swarmforge/workflows/)
   SWARMFORGE_USER, SWARMFORGE_EMAIL
                        author of record commits when git has no identity
                        (default: operator, <user>@swarmforge.local)

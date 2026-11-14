@@ -1,17 +1,25 @@
 (ns sf.dispatch
-  "Headless role runs on the claude, codex, or copilot CLI."
+  "Headless role runs on a backend CLI, or on a Mistral Workflow when no CLI is
+  on PATH and MISTRAL_API_KEY is set."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [clojure.string :as str]
             [sf.config :as config]
             [sf.flow :as flow]
+            [sf.record :as record]
             [sf.shell :as shell]
             [sf.store :as store]
             [sf.task :as task]))
 
-(def backends ["claude" "codex" "copilot" "mistral"])
+(def backends
+  "The backends dispatch runs: the CLI backends a record can name, plus the
+  Mistral Workflow backend."
+  (conj record/backends "mistral"))
 
-(def cli-backends ["claude" "codex" "copilot"])
+(def cli-backends
+  "The backends that need their CLI on PATH; mistral is detected by
+  MISTRAL_API_KEY instead."
+  (vec record/backends))
 
 (defn- sf-mistral-path []
   (str (fs/path (shell/repo-root) "swarmforge" "bin" "sf-mistral")))
@@ -75,6 +83,7 @@
   (when (config/spec-judge? role)
     (shell/die "'" role "' is the spec-judge: it needs the spec revision's gate reports and runs only as a subagent of the session"))
   (let [id (store/resolve-id id-arg)
+        _ (store/refuse-unclosed! id)
         backend (or (not-empty backend) (detect-backend))
         command (vec (if (= "mistral" backend)
                        (mistral-command role id)
@@ -82,7 +91,7 @@
         dir (task/worktree! id)
         _ (flush)
         {:keys [exit]} (try (p/shell {:cmd command :dir dir :continue true
-                                      :extra-env {"SWARMFORGE_DISPATCHED" role}})
+                                      :extra-env {"SWARMFORGE_DISPATCHED" role "SWARMFORGE_BACKEND" backend}})
                             (catch java.io.IOException e
                               (shell/die backend ": " (ex-message e))))]
     (when-not (zero? exit) (shell/fail exit nil))))
@@ -155,7 +164,8 @@
   operator (exit 2). With the mistral backend one pipeline execution runs the
   loop on the Mistral platform instead."
   [[id-arg backend]]
-  (let [id (store/resolve-id id-arg)]
+  (let [id (store/resolve-id id-arg)
+        _ (store/refuse-unclosed! id)]
     (if (= "mistral" backend)
       (run-mistral id)
       (run-stages id backend))))

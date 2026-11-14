@@ -93,7 +93,8 @@
   (it "tells the backend which role it runs, so operator commands refuse it"
     (doseq [backend dispatch/backends]
       (let [id (new-id (str "Mark " backend))]
-        (should= [{"SWARMFORGE_DISPATCHED" "coder"}] (map :extra-env (dispatched "coder" id backend))))))
+        (should= [{"SWARMFORGE_DISPATCHED" "coder" "SWARMFORGE_BACKEND" backend}]
+                 (map :extra-env (dispatched "coder" id backend))))))
 
   (it "runs every backend in the task worktree, created on the task branch when missing"
     (doseq [backend dispatch/backends]
@@ -312,7 +313,7 @@
           [{:keys [cmd dir extra-env]}] (dispatched "coder" id "mistral")]
       (should= (str *dir* "/.worktrees/" id) dir)
       (should= ["dispatch" "coder" id] (drop 2 cmd))
-      (should= {"SWARMFORGE_DISPATCHED" "coder"} extra-env)))
+      (should= {"SWARMFORGE_DISPATCHED" "coder" "SWARMFORGE_BACKEND" "mistral"} extra-env)))
 
   (it "runs one pipeline execution with sf run <id> mistral"
     (let [id (new-id "Add login" "--route" "coder,cleaner")

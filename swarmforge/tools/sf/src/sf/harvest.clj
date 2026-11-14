@@ -18,7 +18,9 @@
 
 (defn- record-entry
   "The record with every key of a harvested record, null where it does not apply."
-  [{:keys [record from stage needs route commit text merged-into rejected audit-refusals spec-verdict] :as rec}]
+  [{:keys [record from stage needs route commit text merged-into rejected audit-refusals spec-verdict time recorded-by
+           backend dispatched]
+    :as rec}]
   (array-map
    "type" record
    "from" from
@@ -30,17 +32,22 @@
    "merged_into" (when (= "finished" record) merged-into)
    "rejected" (when (= "approval" record) (mapv rejected-entry rejected))
    "audit_refusals" (when (#{"review" "handoff"} record) (refusal-count audit-refusals))
-   "spec_verdict" (when (#{"spec-verdict" "changes-requested"} record) spec-verdict)))
+   "spec_verdict" (when (#{"spec-verdict" "changes-requested"} record) spec-verdict)
+   "time" time
+   "recorded_by" recorded-by
+   "backend" backend
+   "dispatched" ({"dispatched" true "session" false} dispatched)))
 
 (defn- lore-entry [{:keys [sha role key value lore-id]}]
   (array-map "commit" sha "role" (when (not= "-" role) role) "key" key "value" value "lore_id" lore-id))
 
 (defn line
-  "The JSON text, on one line, of task: its :id, :status (open or finished),
+  "The JSON text, on one line, of task: its :id, :status (open, finished or unclosed),
   :truncated, :title, :request, :records oldest first and the :commits whose
   Lore trailers make its LORE: lines, as lore/read-log reads them."
   [{:keys [id status truncated title request records commits]}]
-  (let [state (last records)]
+  (let [state (last records)
+        created (first (filter #(= "created" (:record %)) records))]
     (json/generate-string
      (array-map
       "id" id
@@ -51,5 +58,7 @@
       "stage" (:stage state)
       "needs" (:needs state)
       "route" (route-of (:route state))
+      "fixes" (:fixes created)
+      "found_by" (:found-by created)
       "records" (mapv record-entry records)
       "lore" (mapv lore-entry (lore/entries commits))))))
