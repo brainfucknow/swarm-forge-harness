@@ -95,11 +95,19 @@
        reverse
        record/role-commits))
 
+(defn- range-files
+  "The files that from..to changed, without what a merge in the range brought
+  in: only the files of the range's first-parent non-merge commits."
+  [from to]
+  (let [changed (shell/lines (git/git "diff" "--name-only" "--no-renames" from to))
+        own (set (shell/lines (git/git "log" "--first-parent" "--no-merges" "--no-renames" "--name-only" "--format=" (str from ".." to))))]
+    (filter own changed)))
+
 (defn with-files
   "The records with the files of each review and handoff."
   [records]
   (record/with-files records (fn [from to]
-                               (when from (shell/lines (git/git "diff" "--name-only" from to))))))
+                               (when from (range-files from to)))))
 
 (defn- show-file
   "The text of path at rev."

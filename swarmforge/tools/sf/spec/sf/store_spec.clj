@@ -17,7 +17,43 @@
         (should= ["-" "a.txt"]
                  (map :files (rest (store/with-files [{:record "created" :commit base}
                                                       {:record "review" :commit base}
-                                                      {:record "handoff" :commit tip}]))))))))
+                                                      {:record "handoff" :commit tip}])))))))
+
+  (it "leaves out files that only a merge in the range brought in"
+    (let [base (repo/git *dir* "rev-parse" "HEAD")]
+      (spit (str *dir* "/a.txt") "a")
+      (repo/git *dir* "add" "a.txt")
+      (repo/git *dir* "commit" "-q" "-m" "Add a")
+      (let [tip (repo/git *dir* "rev-parse" "HEAD")]
+        (repo/git *dir* "checkout" "-q" "-b" "other")
+        (spit (str *dir* "/b.txt") "b")
+        (repo/git *dir* "add" "b.txt")
+        (repo/git *dir* "commit" "-q" "-m" "Add b")
+        (repo/git *dir* "checkout" "-q" "main")
+        (repo/git *dir* "merge" "-q" "--no-ff" "-m" "Merge other" "other")
+        (repo/git *dir* "commit" "-q" "--allow-empty" "-m" "Empty")
+        (let [top (repo/git *dir* "rev-parse" "HEAD")]
+          (should= ["a.txt" "-"]
+                   (map :files (rest (store/with-files [{:record "created" :commit base}
+                                                        {:record "review" :commit tip}
+                                                        {:record "handoff" :commit top}]))))))))
+
+  (it "keeps the source path of a rename that a later commit in the range rewrote"
+    (let [base (repo/git *dir* "rev-parse" "HEAD")]
+      (spit (str *dir* "/a.txt") "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n")
+      (repo/git *dir* "add" "a.txt")
+      (repo/git *dir* "commit" "-q" "-m" "Add a")
+      (let [tip (repo/git *dir* "rev-parse" "HEAD")]
+        (repo/git *dir* "mv" "a.txt" "b.txt")
+        (repo/git *dir* "commit" "-q" "-m" "Rename a to b")
+        (spit (str *dir* "/b.txt") "completely\nrewritten\ncontent\n")
+        (repo/git *dir* "add" "b.txt")
+        (repo/git *dir* "commit" "-q" "-m" "Rewrite b")
+        (let [top (repo/git *dir* "rev-parse" "HEAD")]
+          (should= ["a.txt" "a.txt,b.txt"]
+                   (map :files (rest (store/with-files [{:record "created" :commit base}
+                                                        {:record "review" :commit tip}
+                                                        {:record "handoff" :commit top}])))))))))
 
 (defn- create! [id]
   (store/create! id (record/message (assoc (flow/created "Add login" "Users log in." "coder") :task id))))
