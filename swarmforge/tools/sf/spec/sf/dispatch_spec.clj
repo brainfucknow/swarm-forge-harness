@@ -202,13 +202,13 @@
       (with-redefs [dispatch/dispatch (fn [[stage id _]]
                                         (swap! stages conj stage)
                                         (task/handoff [id] {:audit-passed? true}))]
-        (should-contain (str "DONE: " id) (:out (support/captured #(dispatch/run [id])))))
+        (should-contain (str "DONE: " id) (:out (support/captured #(dispatch/run [id "claude"])))))
       (should= ["coder" "cleaner"] @stages)))
 
   (it "stops with status 2 when the operator is needed"
     (let [id (new-id "Add login")]
       (task/ask [id "Which?"])
-      (let [result (support/captured #(dispatch/run [id]))]
+      (let [result (support/captured #(dispatch/run [id "claude"]))]
         (should= 2 (:status result))
         (should-contain "BLOCKED" (:out result)))))
 
@@ -219,7 +219,7 @@
       (with-redefs [dispatch/dispatch (fn [[role id _]]
                                         (swap! ran conj role)
                                         (when (= "specifier" role) (task/review [id "-m" "spec"])))]
-        (let [result (support/captured #(dispatch/run [id]))]
+        (let [result (support/captured #(dispatch/run [id "claude"]))]
           (should= 2 (:status result))
           (should-contain (str "BLOCKED: " id " needs:approval") (:out result))))
       (should= ["specifier" "falsifier"] @ran)))
@@ -230,7 +230,7 @@
           ran (atom [])]
       (task/review [id "-m" "spec"])
       (with-redefs [dispatch/dispatch (fn [[role]] (swap! ran conj role))]
-        (should= 2 (:status (support/captured #(dispatch/run [id])))))
+        (should= 2 (:status (support/captured #(dispatch/run [id "claude"])))))
       (should= [] @ran)))
 
   (it "stops when a gate records anything"
@@ -240,7 +240,7 @@
                                         (if (= "specifier" role)
                                           (task/review [id "-m" "spec"])
                                           (task/ask [id "Which?"])))]
-        (let [result (support/captured #(dispatch/run [id]))]
+        (let [result (support/captured #(dispatch/run [id "claude"]))]
           (should= 1 (:status result))
           (should-contain (str "gate falsifier changed task " id "; a gate only reports") (:err result))))))
 
@@ -253,7 +253,7 @@
                                           (if (= "specifier" role)
                                             (task/review [id "-m" "spec"])
                                             (change (str *dir* "/.worktrees/" id))))]
-          (let [result (support/captured #(dispatch/run [id]))]
+          (let [result (support/captured #(dispatch/run [id "claude"]))]
             (should= 1 (:status result))
             (should-contain (str "gate falsifier changed task " id) (:err result)))))))
 
@@ -270,7 +270,7 @@
                                           (swap! ran conj role)
                                           (when (= "specifier" role) (task/review [id "-m" "spec"]))
                                           (operator id))]
-          (let [result (support/captured #(dispatch/run [id]))]
+          (let [result (support/captured #(dispatch/run [id "claude"]))]
             (should= 1 (:status result))
             (should-contain (str "stage:" stage " added the operator's ") (:err result))))
         (should= [stage] @ran))))
@@ -278,7 +278,7 @@
   (it "stops when a stage makes no progress"
     (let [id (new-id "Add login")]
       (with-redefs [dispatch/dispatch (fn [_])]
-        (should-contain "made no progress" (:err (support/captured #(dispatch/run [id]))))))))
+        (should-contain "made no progress" (:err (support/captured #(dispatch/run [id "claude"]))))))))
 
 (describe "the mistral backend"
   (around [it] (with-repo it))
@@ -321,6 +321,15 @@
       (with-redefs [p/shell (backend-shell (fn [opts] (swap! ran conj opts) {:exit 0}))]
         (should-contain (str "DONE: " id) (:out (support/captured #(dispatch/run [id "mistral"])))))
       (should= [["run" id]] (map #(drop 2 (:cmd %)) @ran))))
+
+  (it "routes an auto-detected mistral backend to one pipeline execution"
+    (with-redefs [fs/which (constantly nil)
+                  shell/env (env-of {"MISTRAL_API_KEY" "dummy"})]
+      (let [id (new-id "Add login" "--route" "coder,cleaner")
+            ran (atom [])]
+        (with-redefs [p/shell (backend-shell (fn [opts] (swap! ran conj opts) {:exit 0}))]
+          (should-contain (str "DONE: " id) (:out (support/captured #(dispatch/run [id])))))
+        (should= [["run" id]] (map #(drop 2 (:cmd %)) @ran)))))
 
   (it "reports BLOCKED with status 2 when the pipeline execution waits on the operator"
     (let [id (new-id "Add login")

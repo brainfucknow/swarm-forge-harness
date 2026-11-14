@@ -46,15 +46,20 @@
 (defn- base-branch [main]
   (chomp (:out (git* main "rev-parse" "--abbrev-ref" "HEAD"))))
 
+(defn- fetch! [dir remote branch]
+  (let [{:keys [exit err]} (git* dir "fetch" remote branch)]
+    (when-not (zero? exit)
+      (die "could not fetch " branch " from " remote ": " (chomp err)))))
+
 (defn- push-task [main remote id]
   (let [branch (str "swarm/" id)
         wt (fs/path main ".worktrees" id)
         {:keys [exit]} (git* main "push" remote (str branch ":" branch))]
     (when-not (zero? exit)
       (if (fs/exists? wt)
-        (do (git* (str wt) "fetch" remote branch)
+        (do (fetch! (str wt) remote branch)
             (git* (str wt) "merge" "--ff-only" "FETCH_HEAD"))
-        (git* main "fetch" remote branch))
+        (fetch! main remote branch))
       (let [{:keys [exit]} (git* main "push" remote (str branch ":" branch))]
         (when-not (zero? exit) (die "could not push " branch " to " remote))))))
 
@@ -62,10 +67,11 @@
   (let [branch (str "swarm/" id)
         wt (fs/path main ".worktrees" id)]
     (if (fs/exists? wt)
-      (do (git* (str wt) "fetch" remote branch)
+      (do (fetch! (str wt) remote branch)
           (let [{:keys [exit err]} (git* (str wt) "merge" "--ff-only" "FETCH_HEAD")]
             (when-not (zero? exit) (die "task branch diverged locally: " (chomp err)))))
-      (git* main "fetch" remote (str "+" branch ":refs/heads/" branch)))))
+      (let [{:keys [exit err]} (git* main "fetch" remote (str "+" branch ":refs/heads/" branch))]
+        (when-not (zero? exit) (die "could not fetch " branch " from " remote ": " (chomp err)))))))
 
 (defn- execute [api key workflow input execution-id]
   (let [resp @(http/post (str api "/v1/workflows/" workflow "/execute")

@@ -12,8 +12,10 @@ RUN apt-get update \
     && bb --version
 
 WORKDIR /app
-COPY pyproject.toml uv.lock* ./
-RUN pip install uv && uv sync --frozen --no-dev || uv sync --no-dev
+COPY pyproject.toml uv.lock ./
+# The project is installed from src/, so the sources must exist before uv sync.
+COPY src ./src
+RUN pip install uv && uv sync --frozen --no-dev
 COPY . .
 
 CMD ["uv", "run", "python", "-m", "swarmforge_pipeline.worker"]

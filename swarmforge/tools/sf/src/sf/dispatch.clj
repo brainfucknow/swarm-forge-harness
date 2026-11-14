@@ -161,11 +161,13 @@
 
 (defn run
   "Dispatches stage after stage until the task is done (exit 0) or waits on the
-  operator (exit 2). With the mistral backend one pipeline execution runs the
-  loop on the Mistral platform instead."
+  operator (exit 2). The backend is resolved before choosing the
+  implementation, so an auto-detected mistral backend also takes the single
+  pipeline execution."
   [[id-arg backend]]
   (let [id (store/resolve-id id-arg)
-        _ (store/refuse-unclosed! id)]
+        _ (store/refuse-unclosed! id)
+        backend (or (not-empty backend) (detect-backend))]
     (if (= "mistral" backend)
       (run-mistral id)
       (run-stages id backend))))

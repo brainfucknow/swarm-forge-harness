@@ -3,6 +3,7 @@ workflow itself only sequences them."""
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from datetime import timedelta
@@ -63,12 +64,19 @@ def _load_catalogue(main: str):
     return roles, tiers
 
 
+def checkout_dir(repository: str, task_id: str) -> str:
+    """The worker-local clone path, namespaced by repository so two projects
+    with the same task id never share a checkout."""
+    repo_key = hashlib.sha256(repository.encode()).hexdigest()[:12]
+    return os.path.join(WORKSPACE, repo_key, task_id)
+
+
 @workflows.activity(start_to_close_timeout=timedelta(minutes=30))
 async def sync_checkout(params: SyncInput) -> CheckoutInfo:
     """Clone or update the repository, fetch the task branch, and let sf start
     create the task worktree."""
     ref = params.ref
-    main = sfkit.clone_or_update(ref.repository, os.path.join(WORKSPACE, ref.task_id), ref.remote, ref.base_branch)
+    main = sfkit.clone_or_update(ref.repository, checkout_dir(ref.repository, ref.task_id), ref.remote, ref.base_branch)
     sfkit.fetch_task(main, ref.remote, ref.task_id)
     worktree = sfkit.ensure_worktree(main, ref.task_id)
     return CheckoutInfo(main=main, worktree=worktree, branch=sfkit.task_branch(ref.task_id))
@@ -106,7 +114,7 @@ async def run_stage_role(params: StageRunInput) -> RoleOutcome:
         prompts.agent_instructions(role, params.co.main, tiers, writable=True),
         writable=True,
     )
-    report = await runner.run_role_agent(agent, prompts.role_prompt(role.name, params.task_id), params.co.worktree)
+    report = await runner.run_role_agent(agent, role.name, prompts.role_prompt(role.name, params.task_id), params.co.worktree)
     after = sfkit.read_state(params.co.main, params.task_id)
     if after.needs in ("operator", "approval"):
         return RoleOutcome(status="blocked", stage=after.stage, needs=after.needs, report=report)
@@ -130,7 +138,7 @@ async def run_gate(params: GateRunInput) -> GateReport:
         prompts.agent_instructions(gate, params.co.main, tiers, writable=False),
         writable=False,
     )
-    report = await runner.run_role_agent(agent, prompts.gate_prompt(gate.name, params.task_id), params.co.worktree)
+    report = await runner.run_role_agent(agent, gate.name, prompts.gate_prompt(gate.name, params.task_id), params.co.worktree)
     after = sfkit.snapshot(params.co.main, params.task_id)
     if before != after:
         raise RuntimeError(f"gate {gate.name} changed task {params.task_id}; a gate only reports")
@@ -158,7 +166,7 @@ async def run_spec_judge(params: JudgeRunInput) -> JudgeVerdict:
         writable=False,
     )
     report = await runner.run_role_agent(
-        agent, prompts.judge_prompt(params.task_id, params.reports), params.co.worktree
+        agent, judge.name, prompts.judge_prompt(params.task_id, params.reports), params.co.worktree
     )
     after = sfkit.snapshot(params.co.main, params.task_id)
     if before != after:

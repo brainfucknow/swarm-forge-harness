@@ -18,11 +18,15 @@ class CommandError(RuntimeError):
         super().__init__(f"{' '.join(cmd)} exited {exit}: {err.strip() or out.strip()}")
 
 
-def _git_env() -> dict[str, str]:
+def _git_env(cmd: list[str]) -> dict[str, str]:
     """The environment for git commands. When GITHUB_TOKEN (or
-    SWARMFORGE_GITHUB_TOKEN) is set, it authenticates github.com through a git
-    config env pair, so the token never appears in argv or error messages."""
+    SWARMFORGE_GITHUB_TOKEN) is set, push commands authenticate github.com
+    through a git config env pair, so the token never appears in argv or error
+    messages. Clone and fetch of public repositories stay anonymous: sending a
+    bad token there makes GitHub answer 401 and git prompt for a username."""
     env = {**os.environ}
+    if "push" not in cmd[1:]:
+        return env
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("SWARMFORGE_GITHUB_TOKEN")
     if token:
         env["GIT_CONFIG_COUNT"] = "1"
@@ -34,7 +38,7 @@ def _git_env() -> dict[str, str]:
 def run(cmd: list[str], cwd: str | None = None, check: bool = True) -> subprocess.CompletedProcess:
     proc = subprocess.run(
         cmd, cwd=cwd, capture_output=True, text=True,
-        env=_git_env() if cmd and cmd[0] == "git" else {**os.environ},
+        env=_git_env(cmd) if cmd and cmd[0] == "git" else {**os.environ},
     )
     if check and proc.returncode != 0:
         raise CommandError(cmd, proc.returncode, proc.stdout, proc.stderr)
@@ -55,8 +59,17 @@ def task_branch(task_id: str) -> str:
 
 def clone_or_update(repository: str, dest: str, remote: str, base_branch: str) -> str:
     """Clone the repository into dest, or fetch it when dest already is a
-    clone. Returns dest."""
+    clone of the same repository. A cached clone of a different repository is
+    removed and re-cloned. Returns dest."""
     if os.path.isdir(os.path.join(dest, ".git")):
+        cached = git(dest, "remote", "get-url", "origin", check=False)
+        if cached.returncode != 0 or cached.stdout.strip() != repository:
+            import shutil
+
+            shutil.rmtree(dest)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            run(["git", "clone", repository, dest], check=True)
+            git(dest, "remote", "rename", "origin", remote, check=False)
         git(dest, "fetch", remote, check=True)
         git(dest, "checkout", base_branch, check=True)
         git(dest, "reset", "--hard", f"{remote}/{base_branch}", check=True)
