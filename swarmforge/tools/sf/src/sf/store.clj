@@ -91,7 +91,9 @@
   "The task that arg names, among branches, finished tasks and reachable unclosed histories."
   [arg]
   (when (str/blank? arg) (shell/die "task id required"))
-  (let [[status found] (record/resolve arg (concat (branch-ids) (finished-ids) (map :task (unclosed-tasks))))]
+  (let [known (concat (branch-ids) (finished-ids))
+        ids (if (some #{arg} known) known (concat known (map :task (unclosed-tasks))))
+        [status found] (record/resolve arg ids)]
     (case status
       :ok found
       :ambiguous (shell/die "task id '" arg "' is ambiguous: " (str/join " " found))
