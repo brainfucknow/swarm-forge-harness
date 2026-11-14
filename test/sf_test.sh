@@ -542,7 +542,9 @@ sf reject "$hf" "split the criteria" >/dev/null
 sf review "$hf" -m "spec revised" >/dev/null
 sf approve "$hf" --rejected "DEFECT, LOW: a | b | reason" --rejected "plain finding | accepted" >/dev/null
 git -C ".worktrees/$hf" commit -q --allow-empty -m "Code harvest"
-sf handoff "$hf" -m "coded" >/dev/null
+git config user.name "Codex Ü"
+GIT_AUTHOR_DATE="2026-03-01T10:00:00+02:00" sf handoff "$hf" -m "coded" >/dev/null
+git config --unset user.name
 sf route "$hf" specifier,coder,cleaner,qa >/dev/null
 sf handoff "$hf" >/dev/null
 sf handoff "$hf" >/dev/null
@@ -550,9 +552,22 @@ sf finish "$hf" >/dev/null
 git clone -q --depth 3 "file://$hv" "$scratch/harvest-shallow" 2>/dev/null
 ho="$(sf new "Harvest open" -m "Open request." --route coder)"
 sf ask "$ho" "Open question?" >/dev/null
-out="$(sf harvest)"
+out="$(sf harvest 2>"$scratch/harvest.err")"
 line_f="$(echo "$out" | sed -n 1p)"
 line_o="$(echo "$out" | sed -n 2p)"
+assert_eq "harvest gives no shallow warning in the full repository" "$(grep -c '^sf: shallow repository: ' "$scratch/harvest.err" || true)" "0"
+record_times() { TZ=UTC git log --first-parent --reverse --all-match --grep='^SwarmForge-Record: ' --grep="^SwarmForge-Task: $1\$" \
+  --date=format-local:%Y-%m-%dT%H:%M:%SZ --format='%ad %an' "$2"; }
+hf_merge="$(git log --merges --format=%H -1 --grep="^SwarmForge-Task: $hf\$" HEAD)"
+assert_eq "harvest gives a finished task's records their commit times and authors" \
+  "$(echo "$line_f" | jq -r '.records[] | "\(.time) \(.recorded_by)"')" "$(record_times "$hf" "$hf_merge^2"; record_times "$hf" "$hf_merge" | tail -1)"
+assert_eq "harvest gives an open task's records their commit times and authors" \
+  "$(echo "$line_o" | jq -r '.records[] | "\(.time) \(.recorded_by)"')" "$(record_times "$ho" "swarm/$ho")"
+assert_eq "harvest gives the record time in UTC and the author name unchanged" \
+  "$(echo "$line_f" | jq -r '.records[] | select(.text == "coded") | "\(.time) \(.recorded_by)"')" "2026-03-01T08:00:00Z Codex Ü"
+assert_eq "harvest ends every record with time and recorded_by" "$(echo "$out" | jq -c '.records[] | keys_unsorted' | sort -u)" \
+  '["type","from","stage","needs","route","commit","text","merged_into","rejected","audit_refusals","spec_verdict","time","recorded_by"]'
+assert_eq "harvest prints the same lines under another time zone" "$(TZ=Asia/Tokyo sf harvest)" "$out"
 assert_eq "harvest prints one line per task" "$(echo "$out" | wc -l | tr -d ' ')" "2"
 assert_eq "every harvest line is JSON" "$(echo "$out" | jq -e -c 'type' | sort -u)" '"object"'
 assert_eq "harvest prints the finished task first" "$(echo "$out" | jq -r '.id' | paste -sd ' ' -)" "$hf $ho"
@@ -684,7 +699,12 @@ cp "$HERE/swarmforge/roles.conf" swarmforge/roles.conf
 # truncated task in a shallow clone
 cd "$scratch/harvest-shallow"
 set +e; shallow="$(sf harvest 2>"$scratch/harvest.err")"; rc=$?; set -e
-assert_eq "harvest in a shallow clone exits 0 with empty stderr" "$rc:$(cat "$scratch/harvest.err")" "0:"
+assert_eq "harvest in a shallow clone exits 0" "$rc" "0"
+assert_eq "harvest in a shallow clone warns once" "$(grep -c '^sf: shallow repository: ' "$scratch/harvest.err")" "1"
+assert_eq "harvest in a shallow clone warns first" "$(sed -n 1p "$scratch/harvest.err")" \
+  "sf: shallow repository: older tasks are truncated or missing; run git fetch --unshallow"
+assert_eq "the truncated task's records keep their time and recorder" \
+  "$(echo "$shallow" | jq '[.records[] | select(.time == null or .recorded_by == null)] | length')" "0"
 assert_eq "harvest prints the cut-off task as truncated" "$(echo "$shallow" | jq -c '[.id, .truncated, .title, .request, .status]')" "[\"$hf\",true,\"\",\"\",\"finished\"]"
 assert_eq "the truncated task keeps its readable records, finished last" "$(echo "$shallow" | jq -r '[.records[].type] | join(" ")')" "handoff handoff finished"
 assert_eq "no commit of the truncated task is blank" "$(echo "$shallow" | jq '[.records[].commit] | index("")')" "null"

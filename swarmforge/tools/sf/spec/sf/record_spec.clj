@@ -158,6 +158,12 @@
     (should= "abc1234" (:commit (record/parse {:sha "abc1234" :parents ["p"] :message "sf created: t\n\nT\n\nSwarmForge-Record: created\n"
                                                :trailers ["SwarmForge-Record: created"]}))))
 
+  (it "gives the record the author date of its commit in UTC and the author name"
+    (let [rec (record/parse {:sha "s" :parents ["p"] :message "" :trailers ["SwarmForge-Record: handoff"]
+                             :author-time "1772352000" :author-name "Codex Ünï"})]
+      (should= "2026-03-01T08:00:00Z" (:time rec))
+      (should= "Codex Ünï" (:recorded-by rec))))
+
   (it "keeps a value with a colon"
     (should= "a: b" (:route (record/parse {:sha "s" :parents [] :message "" :trailers ["SwarmForge-Route: a: b"]}))))
 

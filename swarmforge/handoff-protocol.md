@@ -196,6 +196,11 @@ plus `records` and `lore`:
   trailer, split at the last ` | `; `kind` and `severity` come from a
   `DEFECT|PREMISE, CRITICAL|HIGH|MEDIUM|LOW: ` prefix, else null. `files:`
   are not exported.
+  Every element also has `time` and `recorded_by`, never null: the author
+  date of the record commit in UTC, as `YYYY-MM-DDTHH:MM:SSZ`, and the git
+  author name of that commit. The name is the backend (`Claude`, `Codex`)
+  only where each backend has its own git identity. For a finished record
+  the record commit is the `sf finish` merge.
 - `lore`: every Lore trailer `sf show` prints, evidence and superseded
   commits included, except `Lore-id`, as `{commit, role, key, value,
   lore_id}`, `role` null for `-`. `lore[].commit` is the commit that carries
@@ -206,6 +211,10 @@ A task whose readable history lacks its `created` record (a shallow clone)
 is `truncated`: `title` and `request` are empty, its readable records are
 listed, a commit outside the history is null, and its Lore starts after its
 oldest readable record.
+
+In a shallow repository `sf harvest` first prints this line on stderr and
+changes nothing else:
+`sf: shallow repository: older tasks are truncated or missing; run git fetch --unshallow`.
 
 ## Audit
 
