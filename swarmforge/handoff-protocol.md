@@ -29,6 +29,31 @@ The hook rejects reserved `SwarmForge-*` trailers in role commits. Git's
 `user.name` and `user.email` supply the author, with `SWARMFORGE_USER` and
 `SWARMFORGE_EMAIL` as fallbacks.
 
+### Backend
+
+sf stores on each record the backend that ran the `sf` command, in the
+sf-only trailers `SwarmForge-Backend` and `SwarmForge-Dispatched`. The
+backend is `claude`, `codex` or `copilot`. It names the harness that ran
+`sf`, not who decided: the operator's records carry it too.
+
+| Environment of the `sf` command | Record carries |
+|---|---|
+| `SWARMFORGE_DISPATCHED` set, `SWARMFORGE_BACKEND` a backend name | that backend, dispatched |
+| `SWARMFORGE_DISPATCHED` set, `SWARMFORGE_BACKEND` anything else | nothing |
+| Not dispatched, only `CLAUDECODE=1` | `claude`, session |
+| Not dispatched, only `CODEX_THREAD_ID` not empty | `codex`, session |
+| Not dispatched, both markers or neither | nothing |
+
+`sf dispatch` and `sf run` start each role and gate with `SWARMFORGE_BACKEND`
+set to the backend they run. The session markers are not read under
+dispatch. Outside dispatch `SWARMFORGE_BACKEND` is not read. A Copilot
+session, a Vibe session and a plain terminal have no marker.
+
+`sf show` and `sf start` print `backend: <name> dispatched` or
+`backend: <name> session` as the last line of a record that carries a
+backend, and no line for one that carries nothing. Records written before
+the trailers existed carry nothing.
+
 ## Lore lines
 
 `sf show` prints every [Lore trailer](constitution/articles/workflow.md#lore-trailers),
@@ -201,6 +226,10 @@ plus `records` and `lore`:
   author name of that commit. The name is the backend (`Claude`, `Codex`)
   only where each backend has its own git identity. For a finished record
   the record commit is the `sf finish` merge.
+  Every element ends with `backend` and `dispatched`, from the record's
+  [backend](#backend): `backend` is the name and `dispatched` is `true` for
+  a dispatched record and `false` for a session record. Both are null for
+  a record that carries nothing.
 - `lore`: every Lore trailer `sf show` prints, evidence and superseded
   commits included, except `Lore-id`, as `{commit, role, key, value,
   lore_id}`, `role` null for `-`. `lore[].commit` is the commit that carries
