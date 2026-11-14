@@ -88,7 +88,33 @@
    ["SwarmForge-Stage" :stage] ["SwarmForge-Route" :route] ["SwarmForge-Needs" :needs]
    ["SwarmForge-Fixes" :fixes] ["SwarmForge-Found-By" :found-by]
    ["SwarmForge-Merged-Into" :merged-into] ["SwarmForge-Reviewed" :reviewed]
-   ["SwarmForge-Audit-Refusals" :audit-refusals] ["SwarmForge-Spec-Verdict" :spec-verdict]])
+   ["SwarmForge-Audit-Refusals" :audit-refusals] ["SwarmForge-Spec-Verdict" :spec-verdict]
+   ["SwarmForge-Backend" :backend] ["SwarmForge-Dispatched" :dispatched]])
+
+(def backends
+  "The backends that sf dispatch runs and that a record can name."
+  ["claude" "codex" "copilot"])
+
+(defn backend
+  "The backend that a record written in an environment carries, as :backend
+  and :dispatched, or nil for nothing. dispatched, backend and claudecode are
+  the values of SWARMFORGE_DISPATCHED, SWARMFORGE_BACKEND and CLAUDECODE, nil
+  when unset. A blank dispatched is not a dispatch, as in
+  flow/operator-refusal."
+  [dispatched backend claudecode]
+  (cond (not (str/blank? dispatched))
+        (when (some #{backend} backends) {:backend backend :dispatched "dispatched"})
+
+        (= "1" claudecode)
+        {:backend "claude" :dispatched "session"}))
+
+(defn- carried-backend
+  "The fields without :backend and :dispatched unless both hold a value that
+  a record can carry."
+  [{:keys [backend dispatched] :as fields}]
+  (if (and (some #{backend} backends) (#{"dispatched" "session"} dispatched))
+    fields
+    (dissoc fields :backend :dispatched)))
 
 (def ^:private old-trailers
   "The trailers that records written before a rename hold, with the trailer
@@ -184,7 +210,8 @@
   unfolded trailer lines), :author-time (epoch seconds) and :author-name. Its
   :commit is its own sha for a created record, else its first parent: the
   role's commit it was made on. Its :time is the author time in UTC and its
-  :recorded-by the author name. An approval also has the values of its
+  :recorded-by the author name. Its :backend and :dispatched hold the
+  backend it carries, both or neither. An approval also has the values of its
   `Rejected:` trailers, in order, as :rejected. A record in an old form reads
   as one in the new form."
   [{:keys [sha parents message author-time author-name] :as commit}]
@@ -195,7 +222,7 @@
         by-key (merge (into {} (for [[k v] pairs :when (old-trailers k)] [(old-trailers k) v]))
                       (into {} pairs))
         record-type (by-key "SwarmForge-Record")
-        fields (cond-> (into {} (for [[key field] trailers :when (by-key key)] [field (by-key key)]))
+        fields (cond-> (carried-backend (into {} (for [[key field] trailers :when (by-key key)] [field (by-key key)])))
                  record-type (assoc :record (get old-records record-type record-type)))
         text (message-text message)]
     (cond-> (assoc fields :sha sha
@@ -266,25 +293,28 @@
   [{:keys [fixes found-by]}]
   (concat (when fixes [["fixes" fixes]]) (when found-by [["found-by" found-by]])))
 
-(defn- fields [{:keys [task record from spec-verdict text stage route commit files merged-into audit-refusals]
-                :as rec}]
+(defn- body-fields [{:keys [task record text stage route commit files merged-into] :as rec}]
+  (case record
+    "created" (concat [["branch" (branch task)] ["commit" commit] ["route" route]]
+                      (link-fields rec))
+    "question" [["question" text]]
+    "answer" [["answer" text]]
+    "review" [["commit" commit] ["files" files] ["summary" text]]
+    ("changes-requested" "spec-verdict") [["reason" text]]
+    "route" [["route" route]]
+    "handoff" [["to" stage] ["branch" (branch task)] ["commit" commit] ["files" files] ["summary" text]]
+    "finished" [["merged-into" merged-into]]
+    "moved" [["path" text]]
+    []))
+
+(defn- fields [{:keys [record from spec-verdict audit-refusals backend dispatched] :as rec}]
   (concat
    [["type" record] ["from" from]]
    (when spec-verdict [["spec-verdict" spec-verdict]])
-   (case record
-     "created" (concat [["branch" (branch task)] ["commit" commit] ["route" route]]
-                       (link-fields rec))
-     "question" [["question" text]]
-     "answer" [["answer" text]]
-     "review" [["commit" commit] ["files" files] ["summary" text]]
-     ("changes-requested" "spec-verdict") [["reason" text]]
-     "route" [["route" route]]
-     "handoff" [["to" stage] ["branch" (branch task)] ["commit" commit] ["files" files] ["summary" text]]
-     "finished" [["merged-into" merged-into]]
-     "moved" [["path" text]]
-     [])
+   (body-fields rec)
    (when (and audit-refusals (#{"review" "handoff"} record))
-     [["audit-refusals" audit-refusals]])))
+     [["audit-refusals" audit-refusals]])
+   (when backend [["backend" (str backend " " dispatched)]])))
 
 (defn block
   "The record as key: value lines; later lines of a value are indented by two spaces."

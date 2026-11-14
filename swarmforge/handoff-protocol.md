@@ -29,6 +29,41 @@ The hook rejects reserved `SwarmForge-*` trailers in role commits. Git's
 `user.name` and `user.email` supply the author, with `SWARMFORGE_USER` and
 `SWARMFORGE_EMAIL` as fallbacks.
 
+### Backend
+
+sf stores on each record the backend that ran the `sf` command, in two
+sf-only trailers: `SwarmForge-Backend` (`claude`, `codex` or `copilot`) and
+`SwarmForge-Dispatched` (`dispatched` or `session`). A record has both or
+neither. The backend names the harness that ran `sf`, not who decided: the
+operator's records carry it too.
+
+| Environment of the `sf` command | Record carries |
+|---|---|
+| `SWARMFORGE_DISPATCHED` not blank, `SWARMFORGE_BACKEND` a backend name | that backend, `dispatched` |
+| `SWARMFORGE_DISPATCHED` not blank, `SWARMFORGE_BACKEND` anything else | nothing |
+| `SWARMFORGE_DISPATCHED` blank or unset, `CLAUDECODE` is `1` | `claude`, `session` |
+| Any other | nothing |
+
+- `sf dispatch` and `sf run` start each role and gate with
+  `SWARMFORGE_BACKEND` set to the backend they run. Outside dispatch sf does
+  not read `SWARMFORGE_BACKEND`. Under dispatch it does not read `CLAUDECODE`.
+- Only a Claude Code session is detected. A Codex, Copilot or Vibe session
+  and a plain terminal carry nothing.
+- A process started from a Claude Code session inherits `CLAUDECODE`. Its
+  records read `claude`, `session`, whatever tool it is.
+- The handoff record that `sf approve` writes for the role carries what the
+  review record it approves carries, not the backend of the `sf approve`
+  command. The approval record carries the backend of the command.
+- A `sf finish` merge that stops on conflicts carries the backend of the
+  `sf finish` run that wrote its message, whoever commits it.
+- sf reads a record with one trailer missing, or with a value not listed
+  above, as carrying nothing. Records written before the trailers existed
+  carry nothing.
+
+`sf show` and `sf start` print `backend: <name> dispatched` or
+`backend: <name> session` as the last line of a record that carries a
+backend, and no line for one that carries nothing.
+
 ## Lore lines
 
 `sf show` prints every [Lore trailer](constitution/articles/workflow.md#lore-trailers),
@@ -203,6 +238,10 @@ starts with `#` is a pull request; any other is a task id.
   author name of that commit. The name is the backend (`Claude`, `Codex`)
   only where each backend has its own git identity. For a finished record
   the record commit is the `sf finish` merge.
+  Every element ends with `backend` and `dispatched`, from the record's
+  [backend](#backend): `backend` is the name and `dispatched` is `true` for
+  a dispatched record and `false` for a session record. Both are null for
+  a record that carries nothing.
 - `lore`: every Lore trailer `sf show` prints, evidence and superseded
   commits included, except `Lore-id`, as `{commit, role, key, value,
   lore_id}`, `role` null for `-`. `lore[].commit` is the commit that carries

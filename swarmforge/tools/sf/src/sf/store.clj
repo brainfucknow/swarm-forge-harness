@@ -166,6 +166,13 @@
     (last (open-records id))
     (or (finished-record id) (unclosed-record id))))
 
+(defn recording-backend
+  "The backend that a record sf writes now carries, from the environment of
+  this sf command: :backend and :dispatched, or nil."
+  []
+  (record/backend (shell/env "SWARMFORGE_DISPATCHED" nil) (shell/env "SWARMFORGE_BACKEND" nil)
+                (shell/env "CLAUDECODE" nil)))
+
 (defn create!
   "Makes swarm/<id> at HEAD with one commit that changes no file."
   [id message]
@@ -192,8 +199,9 @@
 
 (defn write!
   "Appends the record that (make records) returns to the task branch, records
-  being the branch's records, oldest first. The record changes no file, except
-  that a record at done removes the task file of an older task.
+  being the branch's records, oldest first. The record carries the recording
+  backend unless it holds :backend and :dispatched itself. It changes no
+  file, except that a record at done removes the task file of an older task.
   The branch moves only when its tip is still the one read; otherwise sf
   reads it again and retries once. No worktree is touched. Returns the record."
   [id make]
@@ -201,7 +209,7 @@
         (git/advance! (ref-of id)
                       (fn [tip]
                         (let [tip (or tip (shell/die "no branch " (record/branch id)))
-                              rec (assoc (make (records-at tip id)) :task id)]
+                              rec (assoc (merge (recording-backend) (make (records-at tip id))) :task id)]
                           {:rec rec :commit (git/commit-tree (tree-for tip rec) [tip] (record/message rec))})))]
     (when error (shell/die error))
     rec))
