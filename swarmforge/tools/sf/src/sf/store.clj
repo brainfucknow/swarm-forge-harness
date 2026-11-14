@@ -15,12 +15,13 @@
 (defn branch-ids []
   (shell/lines (git/git "for-each-ref" "--format=%(refname:lstrip=3)" "refs/heads/swarm/")))
 
-(def ^:private log-format "%h%x1f%p%x1f%at%x1f%an%x1f%B%x1f%(trailers:only,unfold)%x1e")
+(def ^:private log-format
+  "With git log -z, six NUL-ended fields per commit. Neither an author name
+  nor a commit message can hold NUL, so no field can end early."
+  "%h%x00%p%x00%at%x00%an%x00%B%x00%(trailers:only,unfold)")
 
 (defn- read-commits [output]
-  (for [entry (str/split output #"\x1e")
-        :let [[sha parents author-time author-name message trailers] (str/split (str/replace entry #"^\n" "") #"\x1f" -1)]
-        :when (not (str/blank? sha))]
+  (for [[sha parents author-time author-name message trailers] (partition 6 (str/split output #"\x00" -1))]
     {:sha sha :parents (str/split parents #" ") :author-time author-time :author-name author-name
      :message message :trailers (shell/lines trailers)}))
 
@@ -29,7 +30,7 @@
   included, newest first; only those of task id when given. A finished record
   is a merge, so a squash commit that repeats its message is not one."
   [& [id]]
-  (let [result (apply git/run {} "log" "--merges" "--all-match" "--grep=^SwarmForge-Record: finished$"
+  (let [result (apply git/run {} "log" "-z" "--merges" "--all-match" "--grep=^SwarmForge-Record: finished$"
                       (concat (when id [(str "--grep=^SwarmForge-Task: " id "$")])
                               [(str "--format=" log-format) "HEAD" "--"]))]
     (when (shell/ok? result)
@@ -74,7 +75,7 @@
   sorted by id. These histories have no lifecycle closure."
   []
   (let [known (set (concat (branch-ids) (finished-ids)))
-        records (->> (git/git "log" "--topo-order" "--grep=^SwarmForge-Task: "
+        records (->> (git/git "log" "-z" "--topo-order" "--grep=^SwarmForge-Task: "
                              (str "--format=" log-format) "HEAD" "--")
                      read-commits
                      (map record/parse)
@@ -116,7 +117,7 @@
 (defn records-at
   "The records of the task on the first-parent history of rev, oldest first."
   [rev id]
-  (->> (git/git "log" "--first-parent" (str "--grep=^SwarmForge-Task: " id "$") (str "--format=" log-format) rev "--")
+  (->> (git/git "log" "-z" "--first-parent" (str "--grep=^SwarmForge-Task: " id "$") (str "--format=" log-format) rev "--")
        read-commits
        (map record/parse)
        (filter record/recognized?)
