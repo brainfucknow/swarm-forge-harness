@@ -1,13 +1,14 @@
 (ns sf.history-spec
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
-            [speclj.core :refer [describe it should= should-be-nil around]]
+            [speclj.core :refer [describe it should= should-be-nil should-throw around]]
             [sf.shell :as shell]
             [sf.history :as history]
             [sf.flow :as flow]
             [sf.lore]
             [sf.record :as record]
-            [sf.store :as store]))
+            [sf.store :as store]
+            [sf.task :as task]))
 
 (def ^:dynamic *dir* nil)
 
@@ -163,7 +164,7 @@
       (should= ["t-3" "unclosed" "Hosted merge" "Keep history."]
                ((juxt :id :status :title :request) task))
       (should= ["created" "handoff"] (map :record (:records task)))
-      (should= [["Tested: real check"]] (map :trailers (:commits task)))
+      (should= ["real check"] (map :value (sf.lore/entries (:commits task))))
       (should= [] (store/open-ids))
       (should= [] (store/finished-ids))))
 
@@ -174,6 +175,14 @@
       (should= "unclosed" status)
       (should= "done" (:stage state))
       (should= ["created" "handoff"] (map :record records))))
+
+  (it "rejects lifecycle writes and start without recreating the branch"
+    (merge-without-finish!)
+    (should-throw clojure.lang.ExceptionInfo "task t-3 has no local branch; history is unclosed"
+                  (task/start ["t-3"]))
+    (should-throw clojure.lang.ExceptionInfo "task t-3 has no local branch; history is unclosed"
+                  (task/handoff ["t-3"] {}))
+    (should= false (store/has-branch? "t-3")))
 
   (it "does not export records reachable only from another branch"
     (store/create! "t-4" (record/message (assoc (flow/created "Unmerged" "Not on HEAD." "coder") :task "t-4")))
