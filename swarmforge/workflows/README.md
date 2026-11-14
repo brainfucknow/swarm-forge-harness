@@ -54,7 +54,10 @@ MISTRAL_API_KEY=... uv run python -m swarmforge_pipeline.worker
 
 Deploy it as a managed workflow deployment so executions run without a local
 worker (see the Mistral Workflows documentation). The `Dockerfile` builds the
-worker image: Python, git, and Babashka, which `sf` needs.
+worker image: Python, git, and Babashka, which `sf` needs. A managed worker has
+no `MISTRAL_API_KEY`; `worker.py` copies the deployment service-account token
+from `MISTRAL_SA_TOKEN_PATH` into `MISTRAL_API_KEY` at startup, which is what
+the Agents SDK runtime reads.
 
 ## Tests
 
