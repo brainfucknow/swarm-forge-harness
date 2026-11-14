@@ -38,11 +38,12 @@
 (defn home [] (str (fs/path @scratch "home")))
 
 (defn clean-env
-  "The process environment without SWARMFORGE_ and GIT_ variables, with HOME
-  in the scratch directory (or home) and git-bug off PATH."
+  "The fixture environment, using only the selected scratch home's Git config."
   [home-dir]
   (-> (into {} (remove (fn [[k _]] (re-find #"^(SWARMFORGE_|GIT_)" k)) (System/getenv)))
-      (assoc "HOME" (or home-dir (home)) "PATH" @path)))
+      (assoc "HOME" (or home-dir (home)) "PATH" @path
+             "GIT_CONFIG_NOSYSTEM" "1"
+             "GIT_CONFIG_GLOBAL" (str (fs/path (or home-dir (home)) ".gitconfig")))))
 
 (defn run
   "Runs cmd in dir and returns {:exit :out :err}. extra-env is added to the

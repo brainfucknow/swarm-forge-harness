@@ -1,0 +1,10 @@
+{:paths ["src" "test"]
+ :tasks
+ {test {:doc "Run shared wrapper policy tests"
+        :task (do (require 'sfcore.core-test)
+                  (let [{:keys [fail error]} (clojure.test/run-tests 'sfcore.core-test)]
+                    (System/exit (+ fail error))))}
+  architecture {:doc "Check shared wrapper dependency and IO boundaries"
+                :task (do (require 'sfcore.architecture-test)
+                          (let [{:keys [fail error]} (clojure.test/run-tests 'sfcore.architecture-test)]
+                            (System/exit (+ fail error))))}}}
