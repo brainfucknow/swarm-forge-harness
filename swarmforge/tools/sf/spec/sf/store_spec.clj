@@ -1,9 +1,25 @@
 (ns sf.store-spec
-  (:require [speclj.core :refer [around describe it should should-not should=]]
+  (:require [speclj.core :refer [around describe it should should-not should= should-throw]]
             [sf.flow :as flow]
             [sf.record :as record]
             [sf.repo-support :as repo :refer [*dir* with-repo]]
             [sf.store :as store]))
+
+(describe "resolve-id discovery cost"
+  (it "resolves exact live and finished ids without scanning unclosed history"
+    (with-redefs [store/branch-ids (constantly ["live-1234567"])
+                  store/finished-ids (constantly ["closed-7654321"])
+                  store/unclosed-tasks #(throw (ex-info "unnecessary history scan" {}))]
+      (should= "live-1234567" (store/resolve-id "live-1234567"))
+      (should= "closed-7654321" (store/resolve-id "closed-7654321"))))
+
+  (it "includes unclosed histories when resolving an ambiguous prefix"
+    (with-redefs [store/branch-ids (constantly ["same-1234567"])
+                  store/finished-ids (constantly [])
+                  store/unclosed-tasks (constantly [{:task "same-7654321"}])]
+      (should-throw clojure.lang.ExceptionInfo
+                    "task id 'same' is ambiguous: same-1234567 same-7654321"
+                    (store/resolve-id "same")))))
 
 (describe "with-files"
   (around [it] (with-repo it))

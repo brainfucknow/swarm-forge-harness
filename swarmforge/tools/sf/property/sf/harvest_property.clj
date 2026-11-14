@@ -85,7 +85,7 @@
 
 (def ^:private task
   (gen/let [id (gen/fmap #(str "t-" %) hex7)
-            status (gen/elements ["open" "finished"])
+            status (gen/elements ["open" "finished" "unclosed"])
             truncated gen/boolean
             title (gen/one-of [(gen/return nil) sentence])
             records (gen/not-empty (gen/vector rec 1 8))

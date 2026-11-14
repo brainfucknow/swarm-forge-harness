@@ -38,10 +38,11 @@
   (refuse (flow/operator-refusal command (shell/env "SWARMFORGE_DISPATCHED" nil))))
 
 (defn- open-task
-  "The task that arg names; stops when it is finished."
+  "The task that arg names; requires a live task branch."
   [arg]
   (let [id (store/resolve-id arg)]
     (when (store/finished? id) (shell/die "task " id " is finished"))
+    (when-not (store/has-branch? id) (shell/die "task " id " has no local branch; history is unclosed"))
     id))
 
 (defn- write!
@@ -110,9 +111,15 @@
     (store/create! id (record/message (assoc (flow/created title body route) :task id)))
     (println id)))
 
+(defn- recorded-value [id field]
+  (let [value (get (store/state id) field)]
+    (when (str/blank? value)
+      (shell/die "task " id " has no available recorded " (name field)))
+    value))
+
 (defn route [[id-arg spec]]
   (if (str/blank? spec)
-    (println (:route (store/state (store/resolve-id id-arg))))
+    (println (recorded-value (store/resolve-id id-arg) :route))
     (let [_ (operator-only! "route")
           id (open-task id-arg)
           route (config/resolve-route spec)]
@@ -141,7 +148,7 @@
       (println "NO_TASK"))))
 
 (defn stage [[id-arg]]
-  (some-> (:stage (store/state (store/resolve-id id-arg))) println))
+  (println (recorded-value (store/resolve-id id-arg) :stage)))
 
 (defn show [[id-arg]]
   (let [id (store/resolve-id id-arg)
@@ -358,6 +365,7 @@
   [[id-arg & args]]
   (operator-only! "finish")
   (let [id (store/resolve-id id-arg)
+        _ (store/refuse-unclosed! id)
         {:keys [target]} (options/parse "finish" args {"--into" :target} {})
         _ (when (store/merging?) (shell/die "a merge is in progress; commit the merge first"))
         state (store/state id)

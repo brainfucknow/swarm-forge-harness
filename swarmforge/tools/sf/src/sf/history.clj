@@ -41,9 +41,11 @@
   [id]
   (if-let [finished (store/finished-record id)]
     (merge {:status "finished" :state finished} (finished-history finished))
-    (let [records (store/open-records id)]
-      (merge {:status "open" :state (last records)}
-             (record-history (store/ref-of id) records)))))
+    (let [unclosed (when-not (store/has-branch? id) (store/unclosed-record id))
+          rev (if unclosed (:sha unclosed) (store/ref-of id))
+          records (if unclosed (store/records-at rev id) (store/open-records id))]
+      (merge {:status (if unclosed "unclosed" "open") :state (last records)}
+             (record-history rev records)))))
 
 (def ^:private brief-records
   "How many records that are not question, answer or changes-requested sf start prints."
@@ -140,7 +142,10 @@
 
 (defn harvest
   "The tasks sf harvest prints, as harvest/line takes them: the finished ones,
-  the oldest finish first, then the open ones by id."
+  the oldest finish first, then open tasks and unclosed histories by id."
   []
   (concat (map finished-task (store/finished-tasks))
-          (keep open-task (store/open-ids))))
+          (keep open-task (store/open-ids))
+          (map (fn [{:keys [task sha]}]
+                 (harvested task "unclosed" sha (store/records-at sha task)))
+               (store/unclosed-tasks))))

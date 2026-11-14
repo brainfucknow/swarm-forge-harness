@@ -1,4 +1,4 @@
-(ns sfjs.architecture-test
+(ns sfcore.architecture-test
   "Dependency rules for the sf-* wrappers, read from the ns forms under
   swarmforge/tools: policy namespaces stay free of IO, shared core never
   reaches into a language, languages stay apart, and only the F# and VB.NET
