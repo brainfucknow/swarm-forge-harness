@@ -18,15 +18,17 @@ Feature: sf task fixes
   "fixes_tasks", an array of full task ids. For a task target it holds that
   id. For a pull request #N it holds, sorted, each task that has a record on
   a commit reachable from the second parent and not from the first parent of
-  a two-parent commit in the history of HEAD whose subject starts with
-  "Merge pull request #N ". From those it leaves out the task of the line
-  and every task whose created record has SwarmForge-Fixes. It is empty
-  when there is no target or no such task.
+  a two-parent commit whose subject starts with "Merge pull request #N ",
+  in the history of the HEAD of the directory where sf harvest runs. Two
+  such commits give the tasks of both. From those it leaves out the task of
+  the line, every task whose SwarmForge-Fixes is #N, and every task whose
+  SwarmForge-Fixes names another of those tasks. It is empty when there is
+  no target or no such task.
 
   sf new checks in this order and prints the first refusal: the options
-  left to right (an unknown option, a missing value, --fixes or --found-by
-  given twice), the route, the detector value, --found-by without --fixes,
-  the target form, the task named. The word after an option is its value,
+  left to right (an unknown option, then a missing value, then --fixes or
+  --found-by given twice), the route, the detector value, --found-by without --fixes,
+  the target form (an empty target fails it), the task named. The word after an option is its value,
   also when it starts with "--". -m, -F and --route given twice keep the
   last value. A refused sf new prints no id and makes no branch.
 
@@ -105,22 +107,29 @@ Feature: sf task fixes
       | 7      | #70    | operator  | #70    | \[\]         |
 
   # sf task fixes 7
-  Scenario: sf task fixes 7: fixes_tasks leaves out the task itself and other fix tasks of the pull request
+  Scenario: sf task fixes 7: fixes_tasks leaves out the task itself and the other fix tasks of the same defects
     Given task "C" titled "Add logout" was created on route "coder"
     And I ran "sf new Fix -m x --route coder --fixes #7 --found-by pr-review"
     And task "B" is the task that command created
     And I ran "sf new Mend -m x --route coder --fixes #9"
     And task "D" is the task that command created
+    And I ran "sf new Patch -m x --route coder --fixes $A"
+    And task "E" is the task that command created
+    And I ran "sf new Repair -m x --route coder --fixes #7"
+    And task "F" is the task that command created
     And I ran "git checkout -q -b pr"
     And I ran "git merge -q --no-ff swarm/$C -m one"
     And I ran "git merge -q --no-ff swarm/$A -m two"
     And I ran "git merge -q --no-ff swarm/$B -m three"
     And I ran "git merge -q --no-ff swarm/$D -m four"
+    And I ran "git merge -q --no-ff swarm/$E -m five"
+    And I ran "git merge -q --no-ff swarm/$F -m six"
     And I ran "git checkout -q main"
     And I ran "git merge -q --no-ff pr -m" with the text "Merge pull request #7 from o/pr"
     When I run "sf harvest"
     Then the exit status is 0
-    And the output matches "\"id\":\"$B\"[^\n]*\"fixes\":\"#7\",\"found_by\":\"pr-review\",\"fixes_tasks\":\[\"$A\",\"$C\"\],\"records\":"
+    And the output matches "\"id\":\"$B\"[^\n]*\"fixes\":\"#7\",\"found_by\":\"pr-review\",\"fixes_tasks\":\[\"$A\",\"$C\",\"$D\"\],\"records\":"
+    And the output matches "\"id\":\"$E\"[^\n]*\"fixes\":\"$A\",\"found_by\":null,\"fixes_tasks\":\[\"$A\"\],\"records\":"
 
   # sf task fixes 8
   Scenario Outline: sf task fixes 8: sf new prints the first refusal in the check order
@@ -132,6 +141,8 @@ Feature: sf task fixes
     Examples:
       | options                                     | refusal                                                    |
       | --fixes                                     | sf: --fixes needs a value                                  |
+      | --fixes #7 --found-by ci --found-by         | sf: --found-by needs a value                               |
+      | --fixes  --found-by ci                      | sf: --fixes needs a task id or '#<number>', got ''         |
       | --fixes #7 --fixes #8                       | sf: --fixes given twice                                    |
       | --fixes nosuch --found-by ci --found-by ci  | sf: --found-by given twice                                 |
       | --fixes --found-by ci                       | sf: unknown new option 'ci'                                |
