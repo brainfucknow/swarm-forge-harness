@@ -38,9 +38,11 @@
 (defn home [] (str (fs/path @scratch "home")))
 
 (defn clean-env
-  "The fixture environment, using only the selected scratch home's Git config."
+  "The fixture environment, using only the selected scratch home's Git config,
+  without the SWARMFORGE_, GIT_ and CLAUDECODE variables of the session that
+  runs the suite. A scenario sets those through extra-env."
   [home-dir]
-  (-> (into {} (remove (fn [[k _]] (re-find #"^(SWARMFORGE_|GIT_)" k)) (System/getenv)))
+  (-> (into {} (remove (fn [[k _]] (re-find #"^(SWARMFORGE_|GIT_|CLAUDECODE$)" k)) (System/getenv)))
       (assoc "HOME" (or home-dir (home)) "PATH" @path
              "GIT_CONFIG_NOSYSTEM" "1"
              "GIT_CONFIG_GLOBAL" (str (fs/path (or home-dir (home)) ".gitconfig")))))
