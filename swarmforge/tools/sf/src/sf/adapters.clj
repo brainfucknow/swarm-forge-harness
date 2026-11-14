@@ -61,34 +61,44 @@
         (config/spec-judge? role) :spec-judge
         :else :stage))
 
-(defn- agent-files [role tier kind]
-  (let [{:keys [template noun use]} (kinds kind)
-        read-only? (not= :stage kind)
-        body (str/replace (shell/template template) "{{role}}" role)
-        description (str "SwarmForge " role " " noun ". " (role-summary role) " " (str/replace use "{{role}}" role))]
-    {(str ".claude/agents/" role ".md")
-     (str "---\nname: " role "\ndescription: " description "\nmodel: " (config/tier-field tier 2)
-          (when read-only? (str "\ntools: " (:claude gate-tools))) "\n---\n\n" body)
+(defn- agent-name [role]
+  (str (case role
+         "falsifier" "peter-"
+         "spec-judge" "peter-"
+         "security-reviewer" "roger-"
+         "bob-")
+       role))
 
-     (str ".github/agents/" role ".agent.md")
-     (str "---\nname: " role "\ndescription: " description "\nmodel: " (config/tier-field tier 4)
-          "\ntools: " (if read-only? (:copilot gate-tools) "[\"*\"]") "\ninclude-custom-instructions: true\n---\n\n" body)
+(defn- agent-files
+  ([role tier kind] (agent-files role tier kind (agent-name role)))
+  ([role tier kind agent]
+   (let [{:keys [template noun use]} (kinds kind)
+         read-only? (not= :stage kind)
+         body (str/replace (shell/template template) "{{role}}" role)
+         description (str "SwarmForge " role " " noun ". " (role-summary role) " " (str/replace use "{{role}}" role))]
+     {(str ".claude/agents/" agent ".md")
+      (str "---\nname: " agent "\ndescription: " description "\nmodel: " (config/tier-field tier 2)
+           (when read-only? (str "\ntools: " (:claude gate-tools))) "\n---\n\n" body)
 
-     (str ".codex/agents/" role ".toml")
-     (str "name = \"" role "\"\ndescription = \"" (toml-escape description) "\"\nmodel_reasoning_effort = \""
-          (config/tier-field tier 3) "\"\ndeveloper_instructions = \"\"\"\n" body "\"\"\"\n")
+      (str ".github/agents/" agent ".agent.md")
+      (str "---\nname: " agent "\ndescription: " description "\nmodel: " (config/tier-field tier 4)
+           "\ntools: " (if read-only? (:copilot gate-tools) "[\"*\"]") "\ninclude-custom-instructions: true\n---\n\n" body)
 
-     (str ".kilo/agent/" role ".md")
-     (str "---\ndescription: " description "\nmode: subagent\n" (kilo-model tier)
-          "---\n\n" body)
+      (str ".codex/agents/" agent ".toml")
+      (str "name = \"" agent "\"\ndescription = \"" (toml-escape description) "\"\nmodel_reasoning_effort = \""
+           (config/tier-field tier 3) "\"\ndeveloper_instructions = \"\"\"\n" body "\"\"\"\n")
 
-     (str ".vibe/agents/" role ".toml")
-     (str "agent_type = \"subagent\"\n"
-          "display_name = \"" (display-name role) "\"\n"
-          "description = \"" (toml-escape description) "\"\n"
-          (vibe-model tier)
-          (when read-only? (:vibe gate-tools))
-          "instructions = \"\"\"\n" body "\"\"\"\n")}))
+      (str ".kilo/agent/" agent ".md")
+      (str "---\ndescription: " description "\nmode: subagent\n" (kilo-model tier)
+           "---\n\n" body)
+
+      (str ".vibe/agents/" agent ".toml")
+      (str "agent_type = \"subagent\"\n"
+           "display_name = \"" (display-name agent) "\"\n"
+           "description = \"" (toml-escape description) "\"\n"
+           (vibe-model tier)
+           (when read-only? (:vibe gate-tools))
+           "instructions = \"\"\"\n" body "\"\"\"\n")})))
 
 (defn- digest [text]
   (let [bytes (.digest (java.security.MessageDigest/getInstance "SHA-256")
@@ -134,7 +144,8 @@
   (into {} (for [prompt (fs/glob (fs/path (config/conf-dir) "roles") "*.md")
                  :let [role (str/replace (fs/file-name prompt) #"\.md$" "")]
                  kind (keys kinds)
-                 [path text] (agent-files role (ffirst (config/rows "tiers.conf")) kind)
+                 agent (distinct [role (agent-name role)])
+                 [path text] (agent-files role (ffirst (config/rows "tiers.conf")) kind agent)
                  :let [file (fs/path root path)]
                  :when (and (not (contains? owned path)) (not (fs/sym-link? file))
                             (fs/regular-file? file))
@@ -181,7 +192,11 @@
         main-state (fs/path (shell/repo-root) ".swarmforge" "adapters.edn")
         local (read-ownership state)
         recorded (if (fs/exists? state) local (read-ownership main-state))
-        owned (merge (legacy-ownership root recorded) (refreshed-ownership root desired recorded))]
+        legacy (legacy-ownership root {})
+        canonical (merge (into {} (for [path (keys legacy)]
+                                    [path (slurp (str (fs/path root path)))])) desired)
+        owned (merge (apply dissoc legacy (keys recorded))
+                     (refreshed-ownership root canonical recorded))]
     (preflight root (distinct (concat (keys desired) (keys owned))) owned)
     (doseq [path (remove (set (keys desired)) (keys owned))]
       (fs/delete-if-exists (fs/path root path)))

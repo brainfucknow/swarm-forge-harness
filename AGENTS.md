@@ -9,7 +9,8 @@ branches, each task on its own route through the role catalogue. Read
   feature, or when a task id is mentioned.
 - Every role, the specifier included, is defined in `.codex/agents/*.toml`,
   `.claude/agents/*.md`, `.github/agents/*.agent.md`, and `.vibe/agents/*.toml`.
-  Delegate to them by role name; do not do their work in the session.
+  Delegate to the mapped agent names in `swarmforge/roles/orchestrator.md`;
+  do not do their work in the session.
 - All task bookkeeping goes through `swarmforge/bin/sf`. Never write a
   `SwarmForge-*` trailer by hand.
 - Roles that need a decision stop and ask in chat. Do not guess.
@@ -27,3 +28,9 @@ branches, each task on its own route through the role catalogue. Read
   code comments, commit messages, Lore trailers, or `sf` records.
 - Keep that text dry and to the point. Say each rule once, where it
   belongs. Give no rationale or history that an agent cannot act on.
+
+## Local files
+
+- Keep local session files (downloaded tools, scratch binaries, caches) in
+  the gitignored `.swarmforge/` directory. Do not create other untracked
+  top-level directories in the repo.
