@@ -110,6 +110,21 @@
               {"commit" "a1" "role" nil "key" "Rejected" "value" "C | d" "lore_id" "1234abcd"}]
              (get (parsed task) "lore"))))
 
+(describe "line keys fixes and found_by"
+  (it "follow route and precede records"
+    (should= ["id" "title" "request" "status" "truncated" "stage" "needs" "route" "fixes" "found_by" "records"]
+             (map second (re-seq #"\"(\w+)\":" (re-find #"^.*?\"records\":" (harvest/line task)))))))
+
+  (it "hold the target and the detector of the created record"
+    (let [created (assoc (records 0) :fixes "#115" :found-by "ci")]
+      (should= {"fixes" "#115" "found_by" "ci"}
+               (select-keys (parsed (assoc task :records (assoc records 0 created))) ["fixes" "found_by"]))))
+
+  (it "are null for a task without a link and for a truncated task"
+    (should= {"fixes" nil "found_by" nil} (select-keys (parsed task) ["fixes" "found_by"]))
+    (should= {"fixes" nil "found_by" nil}
+             (select-keys (parsed (assoc task :truncated true :records (vec (rest records)))) ["fixes" "found_by"])))
+
 (describe "line of a truncated task"
   (it "has a blank title and request"
     (should= {"truncated" true "title" "" "request" ""}

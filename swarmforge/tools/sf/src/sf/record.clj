@@ -86,6 +86,7 @@
 (def ^:private trailers
   [["SwarmForge-Task" :task] ["SwarmForge-Record" :record] ["SwarmForge-From" :from]
    ["SwarmForge-Stage" :stage] ["SwarmForge-Route" :route] ["SwarmForge-Needs" :needs]
+   ["SwarmForge-Fixes" :fixes] ["SwarmForge-Found-By" :found-by]
    ["SwarmForge-Merged-Into" :merged-into] ["SwarmForge-Reviewed" :reviewed]
    ["SwarmForge-Audit-Refusals" :audit-refusals] ["SwarmForge-Spec-Verdict" :spec-verdict]
    ["SwarmForge-Backend" :backend] ["SwarmForge-Dispatched" :dispatched]])
@@ -153,6 +154,26 @@
         finding (if at (subs value 0 at) value)
         [_ kind severity] (re-find #"^(DEFECT|PREMISE), (CRITICAL|HIGH|MEDIUM|LOW): " finding)]
     {:finding finding :reason (when at (subs value (+ at 3))) :kind kind :severity severity}))
+
+(def ^:private detectors #{"pr-review" "ci" "operator"})
+
+(defn link-refusal
+  "Why :fixes and :found-by cannot name what a new task repairs, or nil. The
+  detector must be pr-review, ci or operator and needs a target; the target
+  is #<number> without a leading 0, or any other text that does not start
+  with # to resolve as a task id."
+  [{:keys [fixes found-by]}]
+  (cond (and found-by (not (detectors found-by)))
+        (str "--found-by needs pr-review, ci or operator, got '" found-by "'")
+        (and found-by (nil? fixes)) "--found-by needs --fixes"
+        (and fixes (or (str/blank? fixes)
+                       (and (str/starts-with? fixes "#") (not (re-matches #"#[1-9][0-9]*" fixes)))))
+        (str "--fixes needs a task id or '#<number>', got '" fixes "'")))
+
+(defn pull-request?
+  "True when a --fixes target names a pull request, not a task."
+  [target]
+  (str/starts-with? target "#"))
 
 (defn- lore-trailers
   "The Lore-id and Rejected trailer lines of a record that has a :lore-id."
@@ -267,9 +288,15 @@
     {:records (keep-indexed #(when-not (dropped %1) %2) records)
      :omitted omitted}))
 
-(defn- body-fields [{:keys [task record text stage route commit files merged-into]}]
+(defn link-fields
+  "The fixes and found-by key-value pairs of a record that has them."
+  [{:keys [fixes found-by]}]
+  (concat (when fixes [["fixes" fixes]]) (when found-by [["found-by" found-by]])))
+
+(defn- body-fields [{:keys [task record text stage route commit files merged-into] :as rec}]
   (case record
-    "created" [["branch" (branch task)] ["commit" commit] ["route" route]]
+    "created" (concat [["branch" (branch task)] ["commit" commit] ["route" route]]
+                      (link-fields rec))
     "question" [["question" text]]
     "answer" [["answer" text]]
     "review" [["commit" commit] ["files" files] ["summary" text]]

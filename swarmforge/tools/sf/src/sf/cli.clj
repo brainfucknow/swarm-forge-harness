@@ -16,7 +16,7 @@
 
 Operator commands
   init                           install the commit-msg hook; print the identity of record commits
-  new <title> [-m text | -F file] [--route NAME|a,b,c]
+  new <title> [-m text | -F file] [--route NAME|a,b,c] [--fixes <id>|'#N' [--found-by pr-review|ci|operator]]
                                   create a task on a route; prints its id
   route <id> [NAME|a,b,c]         print or change the task's route
   ls [--stage ROLE] [--needs]     list open tasks

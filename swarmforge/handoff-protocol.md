@@ -99,7 +99,7 @@ Use `sf show <id>` when the brief omits needed history or evidence.
 
 | Command | Transition or requirement |
 |---|---|
-| `sf new` | Creates a route and starts its first role. Route precedence: `--route`, `SWARMFORGE_ROUTE`, named `feature`, then all non-optional catalogue roles. |
+| `sf new` | Creates a route and starts its first role. Route precedence: `--route`, `SWARMFORGE_ROUTE`, named `feature`, then all non-optional catalogue roles. `--fixes <target>` names what the task repairs: a task id, stored as the full id, or a pull request, quoted: `--fixes '#115'`. `--found-by` needs `--fixes` and says how the defect was found: `pr-review` (a pull request review after the task left the swarm), `ci` (a CI run) or `operator` (the operator reports it). The created record keeps them; `sf show` prints them as `fixes:` and `found-by:`, and `sf start` as `FIXES:` and `FOUND-BY:` after `ROUTE:`. |
 | `sf review` | Specifier requests operator approval of its committed specification. |
 | `sf approve` / `sf reject` | Approve advances the specifier; reject requests changes. Approval must match the reviewed role commit; a new specification needs review again. An answer or rejection is not approval. Each `--rejected "<finding> \| <reason>"` on approve records a gate finding the operator approved over as a `Rejected:` trailer of the approval record. |
 | `sf spec-verdict <id> <spec-verdict> <text>` | Records the spec-judge's spec verdict on the newest spec revision ([rules](#spec-revisions)). |
@@ -219,7 +219,9 @@ skipped with an `sf: ` line on stderr.
 
 Each line has `id`, `title`, `request`, `status` (`open`, `finished`, or `unclosed`),
 `truncated`, `stage`, `needs` and `route` (an array) from the newest record,
-plus `records` and `lore`:
+`fixes` and `found_by` from the created record (null when it has none, or
+the task is truncated), plus `records` and `lore`. A `fixes` value that
+starts with `#` is a pull request; any other is a task id.
 
 - `records`, oldest first, as `sf show` prints them. Every element has
   `type`, `from`, `stage`, `needs`, `route`, `commit` (created, review and

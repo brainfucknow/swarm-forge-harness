@@ -46,7 +46,8 @@
   :truncated, :title, :request, :records oldest first and the :commits whose
   Lore trailers make its LORE: lines, as lore/read-log reads them."
   [{:keys [id status truncated title request records commits]}]
-  (let [state (last records)]
+  (let [state (last records)
+        created (first (filter #(= "created" (:record %)) records))]
     (json/generate-string
      (array-map
       "id" id
@@ -57,5 +58,7 @@
       "stage" (:stage state)
       "needs" (:needs state)
       "route" (route-of (:route state))
+      "fixes" (:fixes created)
+      "found_by" (:found-by created)
       "records" (mapv record-entry records)
       "lore" (mapv lore-entry (lore/entries commits))))))
