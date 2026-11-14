@@ -178,11 +178,11 @@ Push `swarmforge/metrics` explicitly to share it; `sf` does not push it.
 
 `sf harvest` takes no arguments and prints one JSON line per task for
 mining role failure patterns: finished tasks first, oldest finish merge
-first, then open tasks by id. It reads only: no ref, worktree, or file
-changes, and any role may run it. A `swarm/*` branch with no record is
+first, then open tasks by id, then unclosed histories by id. It reads only:
+no ref, worktree, or file changes, and any role may run it. A `swarm/*` branch with no record is
 skipped with an `sf: ` line on stderr.
 
-Each line has `id`, `title`, `request`, `status` (`open` or `finished`),
+Each line has `id`, `title`, `request`, `status` (`open`, `finished`, or `unclosed`),
 `truncated`, `stage`, `needs` and `route` (an array) from the newest record,
 plus `records` and `lore`:
 
@@ -196,16 +196,37 @@ plus `records` and `lore`:
   trailer, split at the last ` | `; `kind` and `severity` come from a
   `DEFECT|PREMISE, CRITICAL|HIGH|MEDIUM|LOW: ` prefix, else null. `files:`
   are not exported.
+  Every element also has `time` and `recorded_by`, never null: the author
+  date of the record commit in UTC, as `YYYY-MM-DDTHH:MM:SSZ`, and the git
+  author name of that commit. The name is the backend (`Claude`, `Codex`)
+  only where each backend has its own git identity. For a finished record
+  the record commit is the `sf finish` merge.
 - `lore`: every Lore trailer `sf show` prints, evidence and superseded
   commits included, except `Lore-id`, as `{commit, role, key, value,
   lore_id}`, `role` null for `-`. `lore[].commit` is the commit that carries
   the trailer; it equals a `records[].commit` only when a review or handoff
   recorded that commit, so it is not a join key.
 
+An `unclosed` history has recognized records reachable from HEAD but no local
+task branch or `sf finish` record. Recognition requires a nonblank task id and
+a known record type; incidental or unknown-type trailers do not establish a
+record. Its newest recognized record anchors the history; later unrecorded
+commits cannot be attributed to it. `sf show` and `sf harvest` expose that
+history. `sf stage` and `sf route <id>` return its last recorded values, or fail
+explicitly if the requested value is absent. These values do not prove that
+verification or lifecycle closure ran. Execution and lifecycle commands,
+including `run`, `dispatch` and `finish`, refuse this read-only history without
+recreating its branch. It does not appear in `sf ls` and is not a finished task.
+Discovery cannot recover records removed by a squash or rebase.
+
 A task whose readable history lacks its `created` record (a shallow clone)
 is `truncated`: `title` and `request` are empty, its readable records are
 listed, a commit outside the history is null, and its Lore starts after its
 oldest readable record.
+
+In a shallow repository `sf harvest` first prints this line on stderr and
+changes nothing else:
+`sf: shallow repository: older tasks are truncated or missing; run git fetch --unshallow`.
 
 ## Audit
 

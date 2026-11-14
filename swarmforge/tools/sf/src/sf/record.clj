@@ -98,6 +98,15 @@
   "The record types written before a rename, with the type that took each one's place."
   {"verdict" "spec-verdict"})
 
+(def ^:private record-types
+  #{"created" "question" "answer" "review" "approval" "changes-requested"
+    "route" "handoff" "spec-verdict" "finished" "moved"})
+
+(defn recognized?
+  "Whether parsed, legacy-normalized trailers identify a known task record."
+  [{:keys [task record]}]
+  (and (not (str/blank? task)) (contains? record-types record)))
+
 (defn rejected-refusal
   "Why value cannot be the value of a `Rejected: <finding> | <reason>` trailer,
   or nil: it must be one line, split at its last ` | ` into a finding and a
@@ -143,13 +152,21 @@
         gap (str/last-index-of body "\n\n")]
     (when gap (str/trim (subs body 0 gap)))))
 
+(defn utc-time
+  "Epoch seconds, as text, in UTC as YYYY-MM-DDTHH:MM:SSZ; nil for nil."
+  [epoch-seconds]
+  (when epoch-seconds
+    (str (java.time.Instant/ofEpochSecond (parse-long epoch-seconds)))))
+
 (defn parse
-  "The record in a commit, given as :sha, :parents, :message and :trailers
-  (the unfolded trailer lines). Its :commit is its own sha for a created
-  record, else its first parent: the role's commit it was made on. An
-  approval also has the values of its `Rejected:` trailers, in order, as
-  :rejected. A record in an old form reads as one in the new form."
-  [{:keys [sha parents message] :as commit}]
+  "The record in a commit, given as :sha, :parents, :message, :trailers (the
+  unfolded trailer lines), :author-time (epoch seconds) and :author-name. Its
+  :commit is its own sha for a created record, else its first parent: the
+  role's commit it was made on. Its :time is the author time in UTC and its
+  :recorded-by the author name. An approval also has the values of its
+  `Rejected:` trailers, in order, as :rejected. A record in an old form reads
+  as one in the new form."
+  [{:keys [sha parents message author-time author-name] :as commit}]
   (let [pairs (for [line (:trailers commit)
                     :let [[_ k v] (re-matches #"([^:]+): ?(.*)" line)]
                     :when k]
@@ -162,6 +179,8 @@
         text (message-text message)]
     (cond-> (assoc fields :sha sha
                    :commit (if (= "created" (:record fields)) sha (first parents)))
+      author-time (assoc :time (utc-time author-time))
+      author-name (assoc :recorded-by author-name)
       (not (str/blank? text)) (assoc :text text)
       (= "approval" (:record fields)) (assoc :rejected (vec (for [[k v] pairs :when (= "Rejected" k)] v))))))
 

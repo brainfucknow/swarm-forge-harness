@@ -15,13 +15,14 @@
 (defn branch-ids []
   (shell/lines (git/git "for-each-ref" "--format=%(refname:lstrip=3)" "refs/heads/swarm/")))
 
-(def ^:private log-format "%h%x1f%p%x1f%B%x1f%(trailers:only,unfold)%x1e")
+(def ^:private log-format "%h%x1f%p%x1f%at%x1f%an%x1f%B%x1f%(trailers:only,unfold)%x1e")
 
 (defn- read-commits [output]
   (for [entry (str/split output #"\x1e")
-        :let [[sha parents message trailers] (str/split (str/replace entry #"^\n" "") #"\x1f" -1)]
+        :let [[sha parents author-time author-name message trailers] (str/split (str/replace entry #"^\n" "") #"\x1f" -1)]
         :when (not (str/blank? sha))]
-    {:sha sha :parents (str/split parents #" ") :message message :trailers (shell/lines trailers)}))
+    {:sha sha :parents (str/split parents #" ") :author-time author-time :author-name author-name
+     :message message :trailers (shell/lines trailers)}))
 
 (defn- finished-records
   "The finished records in the history of the main checkout's HEAD, any parent
@@ -68,11 +69,38 @@
 (defn has-branch? [id]
   (some? (tip id)))
 
+(defn unclosed-tasks
+  "The newest reachable record per task without a branch or finished record,
+  sorted by id. These histories have no lifecycle closure."
+  []
+  (let [known (set (concat (branch-ids) (finished-ids)))
+        records (->> (git/git "log" "--topo-order" "--grep=^SwarmForge-Task: "
+                             (str "--format=" log-format) "HEAD" "--")
+                     read-commits
+                     (map record/parse)
+                     (filter record/recognized?))]
+    (->> records
+         (remove #(known (:task %)))
+         (group-by :task)
+         (sort-by key)
+         (map (comp first val)))))
+
+(defn unclosed-record [id]
+  (first (filter #(= id (:task %)) (unclosed-tasks))))
+
+(defn refuse-unclosed!
+  "Refuses execution of branchless histories; callers retain finished-task behavior."
+  [id]
+  (when (and (not (has-branch? id)) (not (finished? id)))
+    (shell/die "task " id " has no local branch; history is unclosed")))
+
 (defn resolve-id
-  "The task that arg names, among the task branches and the finished tasks."
+  "The task that arg names, among branches, finished tasks and reachable unclosed histories."
   [arg]
   (when (str/blank? arg) (shell/die "task id required"))
-  (let [[status found] (record/resolve arg (concat (branch-ids) (finished-ids)))]
+  (let [known (concat (branch-ids) (finished-ids))
+        ids (if (some #{arg} known) known (concat known (map :task (unclosed-tasks))))
+        [status found] (record/resolve arg ids)]
     (case status
       :ok found
       :ambiguous (shell/die "task id '" arg "' is ambiguous: " (str/join " " found))
@@ -82,7 +110,7 @@
   "slug-hex, with a random hex part that no task has."
   [title]
   (record/new-id title
-                 (map record/hex-part (concat (branch-ids) (finished-ids)))
+                 (map record/hex-part (concat (branch-ids) (finished-ids) (map :task (unclosed-tasks))))
                  (repeatedly #(format "%07x" (rand-int 0x10000000)))))
 
 (defn records-at
@@ -91,6 +119,7 @@
   (->> (git/git "log" "--first-parent" (str "--grep=^SwarmForge-Task: " id "$") (str "--format=" log-format) rev "--")
        read-commits
        (map record/parse)
+       (filter record/recognized?)
        (filter #(= id (:task %)))
        reverse
        record/role-commits))
@@ -131,12 +160,11 @@
   (or (not-empty (records-at (ref-of id) id)) (shell/die "swarm/" id " has no records")))
 
 (defn state
-  "The newest record of the task branch, or the finished record when the
-  branch is gone."
+  "The newest branch record, finished record, or reachable unclosed record."
   [id]
   (if (has-branch? id)
     (last (open-records id))
-    (finished-record id)))
+    (or (finished-record id) (unclosed-record id))))
 
 (defn create!
   "Makes swarm/<id> at HEAD with one commit that changes no file."
