@@ -49,6 +49,12 @@
     (task/handoff [id] {:reviewed? true})
     id))
 
+(defn- default-main!
+  "Makes the scratch repository's default branch main, as the acceptance
+  fixtures' HOME gitconfig does, whatever the runner's own config says."
+  []
+  (git *dir* "config" "init.defaultBranch" "main"))
+
 (defn- commit-on-main [path text]
   (fs/create-dirs (fs/parent (fs/path *dir* path)))
   (spit (str *dir* "/" path) text)
@@ -490,6 +496,88 @@
       (should-contain "roles: specifier coder cleaner" text)
       (should-contain "routes: feature quick" text)
       (should (fs/exists? (fs/path *dir* ".git" "hooks" "commit-msg"))))))
+
+(describe "sf finish on the default branch"
+  (around [it] (with-repo it))
+
+  (it "refuses a bare finish with the pull-request alternative and changes nothing"
+    (default-main!)
+    (let [id (done-task)
+          dir (worktree id)
+          before (snapshot id)]
+      (should= {:status 1 :out ""
+                :err (str "refusing to merge swarm/" id " into main without --into: "
+                          "main is the default branch of this repository; run sf finish " id
+                          " --into BRANCH to choose the target, or push swarm/" id
+                          " and open a pull request into main to review and merge it there")}
+               (select-keys (captured #(task/finish [id])) [:status :out :err]))
+      (should= before (snapshot id))
+      (should-not (fs/exists? (str *dir* "/a")))
+      (should= "" (git dir "status" "--porcelain"))))
+
+  (it "refuses a blank --into like a bare finish and changes nothing"
+    (default-main!)
+    (let [id (done-task)
+          dir (worktree id)
+          before (snapshot id)]
+      (should= {:status 1 :out ""
+                :err (str "refusing to merge swarm/" id " into main without --into: "
+                          "main is the default branch of this repository; run sf finish " id
+                          " --into BRANCH to choose the target, or push swarm/" id
+                          " and open a pull request into main to review and merge it there")}
+               (select-keys (captured #(task/finish [id "--into" ""])) [:status :out :err]))
+      (should= before (snapshot id))
+      (should-not (fs/exists? (str *dir* "/a")))
+      (should= "" (git dir "status" "--porcelain"))))
+
+  (it "still merges with an explicit --into into the default branch"
+    (default-main!)
+    (let [id (done-task)
+          tip (git *dir* "rev-parse" (str "swarm/" id))]
+      (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main")
+               (out task/finish [id "--into" "main"]))
+      (should= (str (git *dir* "rev-parse" "HEAD^1") " " tip) (git *dir* "log" "-1" "--format=%P"))
+      (should-not (fs/exists? (worktree id)))
+      (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
+
+  (it "merges a bare finish into a non-default current branch"
+    (default-main!)
+    (let [id (done-task)]
+      (git *dir* "checkout" "-q" "-b" "release")
+      (should= (str "VERIFY: none configured\nFINISHED: " id " merged into release") (out task/finish [id]))))
+
+  (it "refuses uncommitted worktree changes before the default-branch refusal"
+    (default-main!)
+    (let [id (done-task)
+          dir (worktree id)]
+      (spit (str dir "/notes") "draft")
+      (should= {:status 1 :err (str "uncommitted changes in " dir "; commit first")}
+               (select-keys (captured #(task/finish [id])) [:status :err]))
+      (should= "draft" (slurp (str dir "/notes")))))
+
+  (it "still records a bare finish on the default branch when HEAD already has the task tip"
+    (default-main!)
+    (let [id (done-task)
+          tip (git *dir* "rev-parse" (str "swarm/" id))]
+      (git *dir* "merge" "-q" "--no-ff" "--no-edit" (str "swarm/" id))
+      (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id]))
+      (should= tip (git *dir* "rev-parse" "HEAD^2"))
+      (should= "" (git *dir* "branch" "--list" (str "swarm/" id)))))
+
+  (it "takes the default branch from the remote's HEAD over init.defaultBranch"
+    (default-main!)
+    (let [id (done-task)]
+      (git *dir* "branch" "trunk")
+      (git *dir* "update-ref" "refs/remotes/origin/trunk" "HEAD")
+      (git *dir* "symbolic-ref" "refs/remotes/origin/HEAD" "refs/remotes/origin/trunk")
+      (git *dir* "remote" "add" "origin" ".")
+      (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id]))))
+
+  (it "takes the default branch from init.defaultBranch when there is no remote"
+    (git *dir* "config" "init.defaultBranch" "trunk")
+    (let [id (done-task)]
+      (git *dir* "branch" "trunk")
+      (should= (str "VERIFY: none configured\nFINISHED: " id " merged into main") (out task/finish [id])))))
 
 (defn- refused-handoff [id & args]
   (should= 3 (:status (captured #(task/handoff (into [id] args) {})))))

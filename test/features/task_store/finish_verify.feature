@@ -46,6 +46,11 @@ Feature: sf finish verify
   followed by "FINISHED: <id> merged into <target>". If the cleanup stops,
   the task stays recoverable: a rerun of sf finish completes it.
 
+  On the default branch, which is main in these fixtures, sf finish without
+  --into refuses before any verification runs; see sf finish default branch.
+  The scenarios that merge into main pass --into main explicitly; the ones
+  that only check the worktree or resume a committed merge run it bare.
+
   Background:
     Given a project with swarmforge initialized
     And task "A" titled "Add login" was started on route "coder"
@@ -57,7 +62,7 @@ Feature: sf finish verify
     And role "coder" committed the file "b.txt" with "Add b" in the worktree of task "A" as C1
     And I ran "sf handoff $A"
     And the HEAD of the main checkout is named M1
-    When I run "sf finish $A"
+    When I run "sf finish $A --into main"
     Then the exit status is 1
     And the error output has the line "sf: verification failed on the merge of swarm/$A into main: <failing> exited <status>"
     And the output is "<passed>"
@@ -80,7 +85,7 @@ Feature: sf finish verify
     And I ran "git add swarmforge/verify.conf b.txt" in the worktree of task "A"
     And I ran "git commit -q -m Verify" in the worktree of task "A"
     And I ran "sf handoff $A"
-    When I run "sf finish $A"
+    When I run "sf finish $A --into main"
     Then the exit status is 0
     And the output is "VERIFY: passed: touch made-by-verify\nVERIFY: passed: test -e b.txt\nFINISHED: $A merged into main"
     And the main checkout has the file "b.txt" and no file "made-by-verify"
@@ -91,7 +96,7 @@ Feature: sf finish verify
   Scenario: sf finish verify 3: a verify.conf without commands finishes unverified
     Given the main checkout committed the file "swarmforge/verify.conf" with "# no commands yet\n"
     And I ran "sf handoff $A"
-    When I run "sf finish $A"
+    When I run "sf finish $A --into main"
     Then the exit status is 0
     And the output is "VERIFY: none configured\nFINISHED: $A merged into main"
     And the branch "swarm/$A" does not exist
@@ -126,7 +131,7 @@ Feature: sf finish verify
     Given the main checkout committed the file "swarmforge/verify.conf" with "grep -qv resolved src/a.clj"
     And the worktree of task "A" and the branch "main" changed the files "src/a.clj" differently
     And I ran "sf handoff $A"
-    And I ran "sf finish $A"
+    And I ran "sf finish $A --into main"
     And the operator resolved the conflicts and committed the merge with the message "Resolve conflict"
     And the HEAD of the main checkout is named M1
     When I run "sf finish $A"
@@ -141,7 +146,7 @@ Feature: sf finish verify
     Given the main checkout committed the file "swarmforge/verify.conf" with "grep -qv resolved src/a.clj"
     And the worktree of task "A" and the branch "main" changed the files "src/a.clj" differently
     And I ran "sf handoff $A"
-    And I ran "sf finish $A"
+    And I ran "sf finish $A --into main"
     And the operator resolved the conflicts and committed the merge with the message "Resolve conflict"
     And the HEAD of the main checkout is named M1
     And the file "src/a.clj" in the main checkout is written with "fixed"

@@ -59,7 +59,9 @@ For the default `feature` route, the session orchestrates:
 2. Roles implement, review, and verify on the task branch, committing and
    handing off in sequence. Questions stop the task until you answer in chat.
 3. `sf finish` verifies the completed merge, merges into the base branch,
-   and removes the task branch and worktree.
+   and removes the task branch and worktree. On the repository's default
+   branch a bare `sf finish` refuses, and finished work lands there via a
+   pull request; an explicit `--into BRANCH` always chooses the target.
 
 `sf ls` shows open tasks and what they need from you; `sf show <id>` shows
 history. See the [installed guide](swarmforge/README.md) for commands and the

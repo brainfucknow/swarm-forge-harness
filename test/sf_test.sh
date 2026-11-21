@@ -179,8 +179,20 @@ assert_eq "the handoff to done changes no file" "$(git diff-tree --no-commit-id 
 assert_fails "finish an unknown task" sf finish "zzzzzzz"
 idn="$(sf new "Not done" -m x --route coder)"
 assert_fails "finish from a non-done task" sf finish "$idn"
-out="$(sf finish "$id")"
-assert_match "finish merges into the current branch" "$out" "merged into main"
+assert_fails "a bare finish on the default branch refuses" sf finish "$id"
+head_before="$(git rev-parse HEAD)"
+status_before="$(git status --porcelain)"
+bare_out="$(sf finish "$id" 2>"$scratch/bare.err" || true)"
+assert_eq "the refusal prints no stdout" "$bare_out" ""
+assert_eq "the refusal prints one stderr line naming the default branch and the alternatives" "$(cat "$scratch/bare.err")" "sf: refusing to merge swarm/$id into main without --into: main is the default branch of this repository; run sf finish $id --into BRANCH to choose the target, or push swarm/$id and open a pull request into main to review and merge it there"
+assert_match "the refusal prints the pull-request alternative" "$(cat "$scratch/bare.err")" "open a pull request into main"
+assert_eq "the refusal keeps the main checkout's HEAD" "$(git rev-parse HEAD)" "$head_before"
+assert_eq "the refusal leaves the main checkout untouched" "$(git status --porcelain)" "$status_before"
+assert_eq "the refusal leaves the task branch" "$(git branch --list "swarm/$id" | tr -d ' +*')" "swarm/$id"
+assert_eq "the refusal keeps the worktree" "$(test -d ".worktrees/$id" && echo present || echo gone)" "present"
+assert_eq "the refusal leaves the worktree clean" "$(git -C ".worktrees/$id" status --porcelain)" ""
+out="$(sf finish "$id" --into main)"
+assert_match "finish --into main merges into main" "$out" "merged into main"
 assert_match "finish without verification commands says so" "$out" "^VERIFY: none configured$"
 assert_match "main contains the task work" "$(git log --oneline main)" "Specify login"
 assert_eq "finish removes the worktree" "$(test -d ".worktrees/$id" && echo present || echo gone)" "gone"
@@ -590,7 +602,7 @@ assert_match "start finds no task squash-merged after finish" "$(sf start "$ids"
 idb="$(done_task "Squash before")"
 git merge -q --squash "swarm/$idb" >/dev/null && git commit -q --allow-empty -m "Squash $idb"
 assert_match "a task squash-merged before finish is listed at done" "$(sf ls)" "^$idb	done		coder	none	Squash before$"
-assert_match "finish merges a squash-merged task" "$(sf finish "$idb")" "^FINISHED: $idb merged into main$"
+assert_match "finish merges a squash-merged task" "$(sf finish "$idb" --into main)" "^FINISHED: $idb merged into main$"
 assert_match "the squash-merged task is finished" "$(sf show "$idb")" "^STATUS: finished$"
 
 idh="$(done_task "Host merge")"
@@ -620,7 +632,7 @@ assert_eq "a legacy task has no gates" "$(sf gates "$idl")" ""
 assert_match "show reads the request of a legacy task" "$(sf show "$idl")" "^Old request\.$"
 sf start "$idl" >/dev/null && sf handoff "$idl" >/dev/null
 assert_eq "the handoff to done deletes the legacy task file" "$(git diff-tree --no-commit-id --name-status -r "swarm/$idl")" "D	tasks/$idl.md"
-sf finish "$idl" >/dev/null
+sf finish "$idl" --into main >/dev/null
 assert_eq "a finished legacy task leaves no file" "$(git ls-tree -r --name-only HEAD | grep -c "$idl" || true)" "0"
 
 idt="$(sf new "$(printf 'Two\nlines')" -m x --route coder)"
@@ -661,7 +673,7 @@ git config --unset user.name
 sf route "$hf" specifier,coder,cleaner,qa >/dev/null
 sf handoff "$hf" >/dev/null
 sf handoff "$hf" >/dev/null
-sf finish "$hf" >/dev/null
+sf finish "$hf" --into main >/dev/null
 git clone -q --depth 3 "file://$hv" "$scratch/harvest-shallow" 2>/dev/null
 ho="$(sf new "Harvest open" -m "Open request." --route coder)"
 sf ask "$ho" "Open question?" >/dev/null
@@ -1078,7 +1090,7 @@ b5="$(sf new "Backend five" -m x --route coder)"
 sf start "$b5" >/dev/null
 git -C ".worktrees/$b5" commit -q --allow-empty -m "Work"
 sf handoff "$b5" -m done >/dev/null
-env CLAUDECODE=1 sf finish "$b5" >/dev/null
+env CLAUDECODE=1 sf finish "$b5" --into main >/dev/null
 assert_eq "the finished merge carries the backend of sf finish" "$(carried HEAD)" "claude|session"
 bout="$(sf harvest)"
 assert_eq "harvest exports backend and dispatched" \

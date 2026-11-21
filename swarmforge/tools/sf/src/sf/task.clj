@@ -455,13 +455,14 @@
 
 (defn finish
   "Verifies the merge of a done task into its target, merges it, and removes
-  its worktree and branch. Refuses a worktree with uncommitted changes. Run
+  its worktree and branch. Refuses a worktree with uncommitted changes, and a
+  merge into the repository's default branch without an explicit --into. Run
   again after the operator commits a conflicting merge, it completes it."
   [[id-arg & args]]
   (operator-only! "finish")
   (let [id (store/resolve-id id-arg)
         _ (store/refuse-unclosed! id)
-        {:keys [target]} (options/parse "finish" args {"--into" :target} {})
+        requested-target (not-empty (:target (options/parse "finish" args {"--into" :target} {})))
         _ (when (store/merging?) (shell/die "a merge is in progress; commit the merge first"))
         state (store/state id)
         _ (when (not= "done" (:stage state)) (shell/die "task is at stage:" (:stage state) ", not done"))
@@ -472,7 +473,12 @@
         current (git root "rev-parse" "--abbrev-ref" "HEAD")
         tip (store/tip id)
         action (flow/finish-action (store/finished? id) tip (boolean (and tip (store/in-head? tip))))
-        target (if (= :merge action) (or (not-empty target) current) current)]
+        target (if (= :merge action) (or (not-empty requested-target) current) current)
+        _ (when (and (= :merge action) (nil? requested-target) (= current (plumbing/default-branch)))
+            (shell/die "refusing to merge " (record/branch id) " into " current " without --into: "
+                       current " is the default branch of this repository; "
+                       "run sf finish " id " --into BRANCH to choose the target, or push "
+                       (record/branch id) " and open a pull request into " current " to review and merge it there"))]
     (finish-by! id state target action)
     (when (fs/directory? dir) (git root "worktree" "remove" dir))
     (git root "branch" "-D" (record/branch id))

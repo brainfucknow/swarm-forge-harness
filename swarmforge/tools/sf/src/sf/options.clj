@@ -30,7 +30,8 @@ Operator commands
                                   send-backs or growth of more than half over the baseline
   finish <id> [--into BRANCH]     refuse uncommitted work in the worktree, run swarmforge/verify.conf
                                   on the merge, then merge the task branch into BRANCH
-                                  (default: current) and remove it
+                                  (default: the current branch; refused when that
+                                  is the repository's default branch) and remove it
 
 Role commands
   next <role>                     print ids of tasks waiting at stage <role>, or NO_TASK

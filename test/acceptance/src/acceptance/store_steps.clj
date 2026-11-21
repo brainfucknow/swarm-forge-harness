@@ -176,7 +176,7 @@
    [#"task \"(\w)\" was finished"
     (fn [world name]
       (handoff-to-done world name)
-      (must-in world (:repo world) "sf" "finish" (id-of world name))
+      (must-in world (:repo world) "sf" "finish" (id-of world name) "--into" "main")
       world)]
 
    [#"task \"(\w)\" was handed off to stage \"([^\"]+)\""
@@ -440,6 +440,12 @@
    [#"the main checkout has no file \"([^\"]+)\" and no uncommitted change"
     (fn [world path]
       (check (not (fs/exists? (fs/path (:repo world) (fill world path)))) (str path " exists"))
+      (check (str/blank? (git world "status" "--porcelain")) "the main checkout has changes")
+      world)]
+
+   [#"the main checkout has the file \"([^\"]+)\" and no uncommitted change"
+    (fn [world path]
+      (check (fs/exists? (fs/path (:repo world) (fill world path))) (str path " is missing"))
       (check (str/blank? (git world "status" "--porcelain")) "the main checkout has changes")
       world)]
 

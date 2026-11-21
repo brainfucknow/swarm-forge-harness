@@ -37,6 +37,26 @@
                   shell/env (fn [name _] name)]
       (should= ["SWARMFORGE_USER" "SWARMFORGE_EMAIL"] (git/author)))))
 
+(describe "the default branch"
+  (around [it] (with-repo it))
+
+  (it "is the init.defaultBranch configuration when there is no remote"
+    (repo/git *dir* "config" "init.defaultBranch" "trunk")
+    (should= "trunk" (git/default-branch)))
+
+  (it "is the branch the first remote's HEAD names, over init.defaultBranch"
+    (repo/git *dir* "config" "init.defaultBranch" "main")
+    (repo/git *dir* "branch" "trunk")
+    (repo/git *dir* "update-ref" "refs/remotes/origin/trunk" "HEAD")
+    (repo/git *dir* "symbolic-ref" "refs/remotes/origin/HEAD" "refs/remotes/origin/trunk")
+    (repo/git *dir* "remote" "add" "origin" ".")
+    (should= "trunk" (git/default-branch)))
+
+  (it "falls to init.defaultBranch when the remote's HEAD ref does not exist"
+    (repo/git *dir* "config" "init.defaultBranch" "main")
+    (repo/git *dir* "remote" "add" "origin" ".")
+    (should= "main" (git/default-branch))))
+
 (describe "moving a ref"
   (around [it] (with-repo it))
 

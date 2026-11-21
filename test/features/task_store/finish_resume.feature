@@ -28,6 +28,11 @@ Feature: sf finish resume
   A task that was squash-merged while its branch remains is not finished;
   sf finish merges its branch as usual, which records it.
 
+  On the default branch, which is main in these fixtures, sf finish without
+  --into refuses to merge; see sf finish default branch. The scenarios that
+  start a merge into main pass --into main explicitly; the ones that resume
+  a committed merge or refuse an already finished task run it bare.
+
   Background:
     Given a project with swarmforge initialized
     And task "A" titled "Add login" was started on route "coder"
@@ -55,7 +60,7 @@ Feature: sf finish resume
   Scenario: sf finish resume 2: a merge in progress is refused
     Given the worktree of task "A" and the branch "main" changed the files "src/a.clj" differently
     And I ran "sf handoff $A"
-    And I ran "sf finish $A"
+    And I ran "sf finish $A --into main"
     And the operator resolved the conflicts and staged them
     And the tip of the branch of task "A" is named T1
     And the HEAD of the main checkout is named M1
@@ -93,7 +98,7 @@ Feature: sf finish resume
   Scenario: sf finish resume 4: a merge committed with git's prepared message stays as it is
     Given the worktree of task "A" and the branch "main" changed the files "src/a.clj" differently
     And I ran "sf handoff $A"
-    And I ran "sf finish $A"
+    And I ran "sf finish $A --into main"
     And the operator resolved the conflicts and committed the merge with git's prepared message
     And the HEAD of the main checkout is named M1
     When I run "sf finish $A"
@@ -114,7 +119,7 @@ Feature: sf finish resume
   Scenario: sf finish resume 6: sf finish merges and records a squash-merged task whose branch remains
     Given task "A" was handed off to done and squash-merged into main
     And the tip of the branch of task "A" is named T1
-    When I run "sf finish $A"
+    When I run "sf finish $A --into main"
     Then the exit status is 0
     And the output is "VERIFY: none configured\nFINISHED: $A merged into main"
     And the HEAD of the main checkout is a merge whose second parent is T1

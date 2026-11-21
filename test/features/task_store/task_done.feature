@@ -7,7 +7,9 @@ Feature: sf task done
   For a task created before this change, it removes every file named
   <id>.md from the branch, so no task file reaches the merge.
 
-  sf finish merges the task branch into the target with --no-ff. The merge
+  sf finish merges the task branch into the target with --no-ff (on the
+  default branch only with an explicit --into; see sf finish default
+  branch). The merge
   commit is the finished record: "sf finished: <id>" and the snapshot
   trailers, then SwarmForge-Merged-Into. It brings no task file into the
   target. sf finish removes the worktree and the local branch; it never
@@ -47,7 +49,7 @@ Feature: sf task done
     And role "coder" committed the file "src/a.clj" with "Code" in the worktree of task "A" as C1
     And I ran "sf handoff $A"
     And the tip of the branch of task "A" is named T1
-    When I run "sf finish $A"
+    When I run "sf finish $A --into main"
     Then the exit status is 0
     And the output is "VERIFY: none configured\nFINISHED: $A merged into main"
     And the HEAD of the main checkout is a merge whose second parent is T1

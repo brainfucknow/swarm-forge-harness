@@ -170,6 +170,12 @@ with `bash -c` from that checkout's root. `VERIFY:` reports each pass or
 `none configured`. A failed command exits 1, preserving both branches and the
 original worktree.
 
+Without `--into`, `sf finish <id>` merges into the main checkout's current
+branch, unless that is the repository's default branch (the remote's HEAD,
+else `init.defaultBranch`, else `master`): it refuses with exit 1, prints the
+pull-request alternative, and changes nothing. An explicit `--into BRANCH`
+always chooses the target, also when BRANCH is the default branch.
+
 On success, `sf finish` merges with `--no-ff`, removes the worktree without
 force, then removes the branch. Rerun it to complete interrupted cleanup.
 Finished tasks refuse `sf start` and further records.

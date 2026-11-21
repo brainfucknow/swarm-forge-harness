@@ -45,7 +45,9 @@ sf new "Spike: can X do Y?" -m "..." --route spike   # coder answers, qa checks;
 sf approve <id>    # operator; moves the task to the next role on the route
 sf gates <id> falsifier   # operator turns the falsifier on for the task
 sf ls              # id, stage, needs, route, gates, title
-sf finish <id>     # at stage done: verify the merge, merge, remove the branch
+sf finish <id>     # at stage done: verify the merge, merge, remove the branch;
+                   # on the default branch a bare finish refuses (finished work
+                   # lands there via a pull request); --into BRANCH picks the target
 ```
 
 Without harness subagents, `sf run <id>` dispatches each stage to a headless
