@@ -184,6 +184,15 @@ commits after it), `sf finish` commits the finished record on top of HEAD as
 a merge of the tip. It never rewrites a commit HEAD already has. Nobody
 writes the finished-record trailers manually.
 
+### Architecture rule changes
+
+A task whose diff touches an architecture rule file needs `architect` on its
+route. The trigger set, the check command, and the route-change rule live in
+one canonical place: the
+[Architecture Rule Changes](roles/orchestrator.md#architecture-rule-changes)
+section of `swarmforge/roles/orchestrator.md`. Do not repeat them here. This is
+a prompt rule only; no sf code enforces it.
+
 ## Spec revisions
 
 With a `spec-judge` row in `roles.conf`, the specification gate of a task with gates loops. After the task's gates run on each spec revision, the spec-judge gives a spec verdict and the orchestrator records it with `sf spec-verdict`. Remove the spec-judge line to turn the loop off. `sf spec-verdict` then refuses.
