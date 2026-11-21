@@ -42,6 +42,22 @@
       (check (= present? (fs/exists? path)) (str "unexpected adapter existence: " path))))
   world)
 
+
+(defn- subagent-roles
+  "The roles of the scratch project's roles.conf that run as subagents."
+  [world]
+  (for [line (str/split-lines (slurp (str (fs/path (:repo world) "swarmforge/roles.conf"))))
+        :let [trimmed (str/trim line)]
+        :when (and (not (str/blank? trimmed)) (not (str/starts-with? trimmed "#")))
+        :let [fields (str/split trimmed #"\s+")]
+        :when (= "subagent" (nth fields 2 nil))]
+    (first fields)))
+
+(defn- plugin-snapshot [world]
+  (into {} (for [file (fs/glob (fs/path (:repo world) "vibe-plugin") "**/*")
+                 :when (fs/regular-file? file)]
+             [(str (fs/relativize (:repo world) file)) (vec (fs/read-all-bytes file))])))
+
 (def handlers
   [[#"a scratch git project prepared for adapter generation"
     (fn [world] (assoc world :repo (support/project false)))]
@@ -137,4 +153,38 @@
    [#"no local adapter ownership state is present"
     (fn [world]
       (fs/delete-if-exists (fs/path (:repo world) ".swarmforge/adapters.edn"))
+      world)]
+
+   [#"the scratch project has no installer at its root"
+    (fn [world]
+      (check (not (fs/exists? (fs/path (:repo world) "install.sh"))) "the scratch project has an install.sh")
+      world)]
+
+   [#"the scratch project is marked as the source checkout"
+    (fn [world] (write-file! world "install.sh" "#!/usr/bin/env bash\n"))]
+
+   [#"no vibe plugin tree exists in the scratch project"
+    (fn [world]
+      (check (not (fs/exists? (fs/path (:repo world) "vibe-plugin"))) "a vibe-plugin tree exists")
+      world)]
+
+   [#"the vibe plugin has a subagent file per configured subagent role"
+    (fn [world]
+      (doseq [role (subagent-roles world)]
+        (let [path (fs/path (:repo world) "vibe-plugin/ai.mistral.vibe/agents" (str role ".toml"))]
+          (check (fs/regular-file? path) (str "missing plugin subagent: " path))))
+      world)]
+
+   [#"every plugin subagent file starts with \"schema_version = 1\""
+    (fn [world]
+      (doseq [file (fs/glob (fs/path (:repo world) "vibe-plugin/ai.mistral.vibe/agents") "*.toml")]
+        (check (str/starts-with? (slurp (str file)) "schema_version = 1")
+               (str "missing schema_version in " file)))
+      world)]
+
+   [#"a second \"sf adapters\" run succeeds without changing plugin files"
+    (fn [world]
+      (let [before (plugin-snapshot world)]
+        (generate! world)
+        (check (= before (plugin-snapshot world)) "repeat generation changed plugin files"))
       world)]])

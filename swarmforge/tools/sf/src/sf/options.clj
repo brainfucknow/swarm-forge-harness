@@ -64,7 +64,8 @@ Catalogue commands
                                   task's gates when the specification it dispatched waits for approval;
                                   with mistral one swarmforge-pipeline workflow execution per
                                   call runs the loop on the Mistral platform (swarmforge/workflows/)
-  adapters                        regenerate .claude/.codex/.github/.vibe agent files
+  adapters                        regenerate .claude/.codex/.github/.vibe agent files; in
+                                  the source checkout also the vibe-plugin/ tree
   tool require|ensure|list|bin    install constitution tools project-locally (sf tool --help)
   check                           validate roles.conf, tiers.conf, routes.conf, tools.conf, role prompts
 

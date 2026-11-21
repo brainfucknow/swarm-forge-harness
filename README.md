@@ -83,6 +83,24 @@ the `./.vibe/skills/` skill only when the project folder is trusted, and it
 spawns the role subagents itself; its subagents cannot use MCP tools, which the
 roles do not need.
 
+### Vibe plugin
+
+The source checkout also builds a Vibe plugin in `vibe-plugin/`: a
+`plugin.json` manifest, the `swarmforge:swarm` skill, and one
+`swarmforge:<role>` subagent per role. Run `swarmforge/bin/sf adapters` in the
+source checkout to regenerate the subagent files there, like the other harness
+files. Install the tree user-wide or into one trusted project:
+
+```sh
+cp -r vibe-plugin ~/.vibe/plugins/swarmforge   # every project
+cp -r vibe-plugin .vibe/plugins/swarmforge     # one project
+```
+
+Then `/reload-plugins` (or start a new session) and run
+`/swarmforge:swarm <request>`. The plugin carries only the Vibe entry points;
+the `swarmforge/` runtime still comes from `install.sh`. Vibe plugin support
+is experimental.
+
 Codex: custom agent roles need the multi-agent feature. If `codex` does not
 offer the roles, enable it in `~/.codex/config.toml` per the Codex subagents
 documentation, or fall back to `sf run <id>` below.

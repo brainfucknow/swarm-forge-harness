@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "swarmforge",
+  "version": "1.0.0",
+  "description": "SwarmForge role pipeline for Vibe: the /swarmforge:swarm skill and one swarmforge:<role> subagent per role in swarmforge/roles.conf, passing work through git task branches with swarmforge/bin/sf. Install the swarmforge/ runtime into the project first (install.sh).",
+  "author": {
+    "name": "swarm-forge-harness contributors",
+    "url": "https://github.com/brainfucknow/swarm-forge-harness"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/brainfucknow/swarm-forge-harness",
+  "keywords": ["swarmforge", "roles", "workflow", "git"],
+  "extensions": {
+    "ai.mistral.vibe": {
+      "schemaVersion": 1,
+      "displayName": "SwarmForge"
+    }
+  }
+}

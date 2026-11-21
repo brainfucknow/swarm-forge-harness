@@ -71,3 +71,19 @@ Feature: sf adapters preserve project agents
     Then the exit status is 0
     And adapters exist for the configured subagent roles in all five harnesses
     And a second "sf adapters" run succeeds without changing agent files
+
+  # sf adapters build the vibe plugin 1
+  Scenario: sf adapters build the vibe plugin 1: an installed project gets no plugin tree
+    Given the scratch project has no installer at its root
+    When I run "sf adapters" in the scratch project
+    Then the exit status is 0
+    And no vibe plugin tree exists in the scratch project
+
+  # sf adapters build the vibe plugin 2
+  Scenario: sf adapters build the vibe plugin 2: the source checkout gets the plugin subagents
+    Given the scratch project is marked as the source checkout
+    When I run "sf adapters" in the scratch project
+    Then the exit status is 0
+    And the vibe plugin has a subagent file per configured subagent role
+    And every plugin subagent file starts with "schema_version = 1"
+    And a second "sf adapters" run succeeds without changing plugin files

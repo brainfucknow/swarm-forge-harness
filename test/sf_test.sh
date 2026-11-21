@@ -475,14 +475,19 @@ assert_match "vibe adapter is a subagent" "$(cat .vibe/agents/cleaner.toml)" '^a
 assert_eq "vibe adapter uses the tier model" \
   "$(sed -n 's/^active_model = \"//p' .vibe/agents/cleaner.toml | sed 's/\"$//')" "$(awk '$1 == "fast" {print $6}' swarmforge/tiers.conf)"
 
+assert_eq "no vibe-plugin tree in an installed project" "$(test ! -e vibe-plugin && echo none)" "none"
+
 # committed adapters are current
 work="$(mktemp -d "$scratch/adapters.XXXX")"
-cp -R "$HERE/.claude" "$HERE/.github" "$HERE/.codex" "$HERE/.vibe" "$work/" \
+cp -R "$HERE/.claude" "$HERE/.github" "$HERE/.codex" "$HERE/.vibe" "$HERE/vibe-plugin" "$work/" \
+  && cp "$HERE/install.sh" "$work/" \
   && mkdir -p "$work/.kilo" && cp -R "$HERE/.kilo/agent" "$HERE/.kilo/command" "$work/.kilo/" \
   && copy_swarmforge "$work"
 (cd "$work" && git init -q . && git add -A && git commit -q -m seed && ./swarmforge/bin/sf adapters >/dev/null && git diff --quiet) \
   && pass "committed adapters match sf adapters" \
   || fail "committed adapters are stale; run swarmforge/bin/sf adapters"
+assert_match "plugin subagents carry the plugin schema version" \
+  "$(cat "$work/vibe-plugin/ai.mistral.vibe/agents/cleaner.toml")" "^schema_version = 1$"
 
 # configuration check
 copy_swarmforge .

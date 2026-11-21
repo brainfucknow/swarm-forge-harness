@@ -7,7 +7,16 @@
             [sf.shell :as shell]))
 
 (def ^:private targets
-  [".claude/agents" ".github/agents" ".codex/agents" ".kilo/agent" ".vibe/agents"])
+  [".claude/agents" ".github/agents" ".codex/agents" ".kilo/agent" ".vibe/agents"
+   "vibe-plugin/ai.mistral.vibe/agents"])
+
+(def ^:private plugin-agent-dir "vibe-plugin/ai.mistral.vibe/agents")
+
+(defn- source-checkout?
+  "The harness source checkout, recognized by its installer at the root. An
+  installed project has no install.sh and gets no plugin tree."
+  [root]
+  (fs/exists? (fs/path root "install.sh")))
 
 (defn- role-summary
   "The first non-blank line after the title of the role prompt."
@@ -67,34 +76,39 @@
         (config/spec-judge? role) :spec-judge
         :else :stage))
 
-(defn- agent-files [role tier kind]
-  (let [{:keys [template noun use]} (kinds kind)
-        read-only? (not= :stage kind)
-        body (str/replace (shell/template template) "{{role}}" role)
-        description (str "SwarmForge " role " " noun ". " (role-summary role) " " (str/replace use "{{role}}" role))]
-    {(str ".claude/agents/" role ".md")
-     (str "---\nname: " role "\ndescription: " description "\nmodel: " (config/tier-field tier 2)
-          (when read-only? (str "\ntools: " (:claude gate-tools))) "\n---\n\n" body)
+(defn- agent-files
+  ([role tier kind] (agent-files role tier kind false))
+  ([role tier kind plugin?]
+   (let [{:keys [template noun use]} (kinds kind)
+         read-only? (not= :stage kind)
+         body (str/replace (shell/template template) "{{role}}" role)
+         description (str "SwarmForge " role " " noun ". " (role-summary role) " " (str/replace use "{{role}}" role))
+         vibe (str "agent_type = \"subagent\"\n"
+                   "display_name = \"" (display-name role) "\"\n"
+                   "description = \"" (toml-escape description) "\"\n"
+                   (vibe-model tier)
+                   (when read-only? (:vibe gate-tools))
+                   "instructions = \"\"\"\n" (str body vibe-trailer-instruction) "\"\"\"\n")]
+     (cond-> {(str ".claude/agents/" role ".md")
+              (str "---\nname: " role "\ndescription: " description "\nmodel: " (config/tier-field tier 2)
+                   (when read-only? (str "\ntools: " (:claude gate-tools))) "\n---\n\n" body)
 
-     (str ".github/agents/" role ".agent.md")
-     (str "---\nname: " role "\ndescription: " description "\nmodel: " (config/tier-field tier 4)
-          "\ntools: " (if read-only? (:copilot gate-tools) "[\"*\"]") "\ninclude-custom-instructions: true\n---\n\n" body)
+              (str ".github/agents/" role ".agent.md")
+              (str "---\nname: " role "\ndescription: " description "\nmodel: " (config/tier-field tier 4)
+                   "\ntools: " (if read-only? (:copilot gate-tools) "[\"*\"]") "\ninclude-custom-instructions: true\n---\n\n" body)
 
-     (str ".codex/agents/" role ".toml")
-     (str "name = \"" role "\"\ndescription = \"" (toml-escape description) "\"\nmodel_reasoning_effort = \""
-          (config/tier-field tier 3) "\"\ndeveloper_instructions = \"\"\"\n" body "\"\"\"\n")
+              (str ".codex/agents/" role ".toml")
+              (str "name = \"" role "\"\ndescription = \"" (toml-escape description) "\"\nmodel_reasoning_effort = \""
+                   (config/tier-field tier 3) "\"\ndeveloper_instructions = \"\"\"\n" body "\"\"\"\n")
 
-     (str ".kilo/agent/" role ".md")
-     (str "---\ndescription: " description "\nmode: subagent\n" (kilo-model tier)
-          "---\n\n" body)
+              (str ".kilo/agent/" role ".md")
+              (str "---\ndescription: " description "\nmode: subagent\n" (kilo-model tier)
+                   "---\n\n" body)
 
-     (str ".vibe/agents/" role ".toml")
-     (str "agent_type = \"subagent\"\n"
-          "display_name = \"" (display-name role) "\"\n"
-          "description = \"" (toml-escape description) "\"\n"
-          (vibe-model tier)
-          (when read-only? (:vibe gate-tools))
-          "instructions = \"\"\"\n" (str body vibe-trailer-instruction) "\"\"\"\n")}))
+              (str ".vibe/agents/" role ".toml")
+              vibe}
+       plugin? (assoc (str plugin-agent-dir "/" role ".toml")
+                      (str "schema_version = 1\n" vibe))))))
 
 (defn- digest [text]
   (let [bytes (.digest (java.security.MessageDigest/getInstance "SHA-256")
@@ -103,7 +117,7 @@
 
 (defn- adapter-path? [path]
   (boolean (and (string? path)
-                (re-matches #"\.(?:claude/agents/[a-z][a-z0-9-]*\.md|github/agents/[a-z][a-z0-9-]*\.agent\.md|codex/agents/[a-z][a-z0-9-]*\.toml|kilo/agent/[a-z][a-z0-9-]*\.md|vibe/agents/[a-z][a-z0-9-]*\.toml)" path))))
+                (re-matches #"(?:\.(?:claude/agents/[a-z][a-z0-9-]*\.md|github/agents/[a-z][a-z0-9-]*\.agent\.md|codex/agents/[a-z][a-z0-9-]*\.toml|kilo/agent/[a-z][a-z0-9-]*\.md|vibe/agents/[a-z][a-z0-9-]*\.toml)|vibe-plugin/ai\.mistral\.vibe/agents/[a-z][a-z0-9-]*\.toml)" path))))
 
 (defn- read-ownership [file]
   (when (or (fs/sym-link? file) (fs/sym-link? (fs/parent file)))
@@ -123,6 +137,9 @@
 (defn- legacy-shape [path text]
   (str/replace text
                (cond
+                 (str/starts-with? path "vibe-plugin/")
+                 #"(?m)^(?:schema_version = 1|active_model = \"[^\"\r\n]*\"|enabled_tools = \[[^\r\n]*\])\n"
+
                  (str/starts-with? path ".vibe/")
                  #"(?m)^(?:active_model = \"[^\"\r\n]*\"|enabled_tools = \[[^\r\n]*\])\n"
 
@@ -136,11 +153,11 @@
 (defn- legacy-ownership
   "The adapters on disk that sf adapters wrote for a role prompt, as a stage,
   a gate or the spec-judge, whatever roles.conf now says about the role."
-  [root owned]
+  [root owned plugin?]
   (into {} (for [prompt (fs/glob (fs/path (config/conf-dir) "roles") "*.md")
                  :let [role (str/replace (fs/file-name prompt) #"\.md$" "")]
                  kind (keys kinds)
-                 [path text] (agent-files role (ffirst (config/rows "tiers.conf")) kind)
+                 [path text] (agent-files role (ffirst (config/rows "tiers.conf")) kind plugin?)
                  :let [file (fs/path root path)]
                  :when (and (not (contains? owned path)) (not (fs/sym-link? file))
                             (fs/regular-file? file))
@@ -181,13 +198,14 @@
 (defn adapters [_]
   (shell/quietly config/check)
   (let [root (shell/checkout-root)
+        plugin? (source-checkout? root)
         roles (filter #(= "subagent" (nth % 2)) (config/rows "roles.conf"))
-        desired (into {} (mapcat (fn [[role tier]] (agent-files role tier (kind-of role))) roles))
+        desired (into {} (mapcat (fn [[role tier]] (agent-files role tier (kind-of role) plugin?)) roles))
         state (fs/path root ".swarmforge" "adapters.edn")
         main-state (fs/path (shell/repo-root) ".swarmforge" "adapters.edn")
         local (read-ownership state)
         recorded (if (fs/exists? state) local (read-ownership main-state))
-        owned (merge (legacy-ownership root recorded) (refreshed-ownership root desired recorded))]
+        owned (merge (legacy-ownership root recorded plugin?) (refreshed-ownership root desired recorded))]
     (preflight root (distinct (concat (keys desired) (keys owned))) owned)
     (doseq [path (remove (set (keys desired)) (keys owned))]
       (fs/delete-if-exists (fs/path root path)))
